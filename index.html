@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vault Explorer</title>
+  <!-- v1.1.5 -->
+  <link href="themes.css" rel="stylesheet">
+  <link href="index.css" rel="stylesheet">
+  <script src="themes.js" defer></script>
+  <!-- Load client-side JS modular services -->
+  <script src="js/translations.en.js" defer></script>
+  <script src="js/translations.qc.js" defer></script>
+  <script src="js/translations.js" defer></script>
+  <script src="js/utils.js" defer></script>
+  <script src="js/icons.js" defer></script>
+  <script src="js/settings/theme.js" defer></script>
+  <script src="js/settings/pill-tags.js" defer></script>
+  <script src="js/settings/benchmark.js" defer></script>
+  <script src="js/settings/debrid-downloader.js" defer></script>
+  <script src="js/settings/core.js" defer></script>
+  <script src="js/navigation/card-events.js" defer></script>
+  <script src="js/navigation/card.js" defer></script>
+  <script src="js/player/subtitles.js" defer></script>
+  <script src="js/player/upscale.js" defer></script>
+  <script src="js/player/clip.js" defer></script>
+  <script src="js/player/player.js" defer></script>
+  <script src="js/progress.js" defer></script>
+  <script src="js/streaming/ranking.js" defer></script>
+  <script src="js/streaming/badges.js" defer></script>
+  <script src="js/streaming/trailer.js" defer></script>
+  <script src="js/streaming/details-modal.js" defer></script>
+  <script src="js/streaming/rd-flow.js" defer></script>
+  <script src="js/hover-card.js" defer></script>
+  <script src="js/favorites.js" defer></script>
+  <script src="js/tmdb.js" defer></script>
+  <script src="js/navigation/tabs.js" defer></script>
+  <script src="js/navigation/keybindings.js" defer></script>
+  <script src="js/navigation/idle.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script src="js/tooltip.js" defer></script>
+</head>
+<body class="vw-console-shell">
+  <div class="titlebar">
+    <svg height="14" width="14" viewBox="0 0 110 120" style="margin-right:8px; flex-shrink:0;">
+      <path fill="var(--vault-gold)" d="M10 20 L30 20 L55 85 L80 20 L100 20 L63 108 L47 108 Z"/>
+      <circle fill="none" stroke="var(--vault-gold)" stroke-width="3" cx="55" cy="62" r="10"/>
+      <circle fill="var(--vault-gold)" cx="55" cy="62" r="4"/>
+    </svg>
+    <span style="font-size: 11px; font-weight: 500; letter-spacing: 0.1em; opacity: 0.75; margin-right: 16px;">Explorer</span>
+    
+
+
+    <span id="task-badge" style="display:none; font-size:10px; font-weight:700; color:var(--vt-primary); background:var(--vault-accent); padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.05em; align-items:center; gap:5px; margin-left: 10px; animation: fadeInScale 0.2s ease; vertical-align: middle;">
+      <span style="width:8px; height:8px; border:1px solid rgba(0,0,0,0.3); border-top-color:#000; border-radius:50%; display:inline-block; animation:spin 0.8s linear infinite;"></span>
+      <span>Generating Previews: <span id="task-percent">0%</span></span>
+    </span>
+    <span id="titlebar-video-title" style="margin-left: 20px; font-size:11px; font-weight:600; color:var(--vault-accent); display:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px; text-transform: none; font-family: var(--font-body); letter-spacing: 0.02em;"></span>
+    <div id="titlebar-menus" style="display: flex; gap: 8px; align-items: center; -webkit-app-region: no-drag; margin-left: auto; transition: opacity 0.25s ease;">
+      <button id="lang-trigger" class="theme-trigger" aria-label="Switch Language">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;">
+          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <span id="lang-text">EN</span>
+      </button>
+      <div style="position:relative;">
+        <button id="settings-trigger" class="theme-trigger" aria-label="Open Settings">
+          <span class="settings-led"></span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span id="settings-btn-text">Settings</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+    
+    <!-- Unified Secondary Sub-Navigation Pill Bar -->
+    <div id="sub-nav-bar" class="sub-nav-bar" style="display: flex; gap: 8px; align-items: center; padding: 10px 24px; background: var(--vault-acrylic); border-bottom: 1px solid var(--vault-border); z-index: 9; flex-shrink: 0; -webkit-app-region: no-drag;">
+      <!-- Streaming Tab Subcategories -->
+      <div id="sub-nav-streaming" style="display: flex; gap: 8px; align-items: center; width: 100%;">
+         <button id="subtab-streaming-discover" class="sub-nav-pill active" style="font-size: 10.5px; font-weight: 700; color: var(--vt-primary); background: var(--vault-accent); border: none; padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s;">Discover</button>
+         <button id="subtab-streaming-library" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8;">Library</button>
+      </div>
+    </div>
+    
+    <div class="main-area" id="main-area">
+
+
+      <!-- Persistent Library Tab Grid (streaming + watchlist) -->
+      <div id="library-grid" class="file-grid" style="display:none;">
+        <div class="empty-state">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 48px; height: 48px; margin-bottom: 12px; color: var(--vault-gold);">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+           </svg>
+           <h3>Your Library is Empty</h3>
+           <p>Add films or series to your library from the Movies/Series tab.</p>
+        </div>
+      </div>
+
+      <!-- Persistent TMDB Browser Tab Container -->
+      <div id="tmdb-container" style="display:none; color: var(--vault-text); font-family: var(--font-sans); width:100%; height:100%; overflow-y:auto;">
+         <!-- Single-row compact toolbar: type · providers · search -->
+         <div id="streaming-toolbar" style="display:flex; gap:8px; align-items:center; padding:6px 12px; border-bottom:1px solid var(--vault-warm-border-subtle); flex-wrap:nowrap; min-height:42px; background: rgba(0,0,0,0.12);">
+            <button id="subtab-movies" class="top-tab active" style="background:var(--vault-accent); color:var(--vt-primary); font-family:var(--font-body); font-size:9.5px; font-weight:700; text-transform:uppercase; border:none; padding:4.5px 11px; border-radius:4px; cursor:pointer; letter-spacing:0.05em; transition:all 0.2s; flex-shrink:0;">Movies</button>
+            <button id="subtab-series" class="top-tab" style="background:transparent; color:var(--vault-text); font-family:var(--font-body); font-size:9.5px; font-weight:700; text-transform:uppercase; border:1px solid var(--vault-border); padding:4.5px 11px; border-radius:4px; cursor:pointer; opacity:0.8; letter-spacing:0.05em; transition:all 0.2s; flex-shrink:0;">Series</button>
+            <span style="width:1px; height:22px; background:var(--vault-warm-border-subtle); margin:0 4px; flex-shrink:0;"></span>
+            <div id="streaming-providers" style="display:flex; gap:6px; align-items:center; flex-wrap:nowrap; overflow:hidden;">
+               <button class="provider-btn active" data-provider="all" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">All</button>
+               <button class="provider-btn" data-provider="8" style="background:transparent; color:#E50914; border:1px solid rgba(229,9,20,0.4); padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">Netflix</button>
+               <button class="provider-btn" data-provider="337" style="background:transparent; color:#0063e5; border:1px solid rgba(0,99,229,0.4); padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">Disney+</button>
+               <button class="provider-btn" data-provider="350" style="background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.3); padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">Apple TV+</button>
+               <button class="provider-btn" data-provider="9" style="background:transparent; color:#00A8E1; border:1px solid rgba(0,168,225,0.4); padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">Prime</button>
+            </div>
+            <div style="margin-left:auto; display:flex; gap:6px; flex-shrink:0;">
+               <input type="text" id="tmdb-search-input" class="search-box" placeholder="Search Movies & TV…" style="width:240px; padding:4px 10px; height:28px; font-size:12px; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); outline:none; border-radius:4px;" />
+               <button id="tmdb-search-btn" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:0 14px; border-radius:4px; font-weight:600; cursor:pointer; height:28px; font-size:11px;">Search</button>
+            </div>
+         </div>
+         <div id="tmdb-results-grid" class="file-grid tmdb-grid" style="padding:16px; flex:1 1 auto;">
+            <!-- Trending movies displayed here -->
+         </div>
+         <!-- Load More Button Container -->
+         <div id="tmdb-load-more-container" style="display: none; justify-content: center; margin-top: 24px; padding-bottom: 24px; width: 100%;">
+            <button id="tmdb-load-more-btn" style="background: transparent; border: 1px solid var(--vault-accent); color: var(--vault-accent); padding: 8px 24px; border-radius: 4px; font-weight: bold; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                <span id="tmdb-load-more-text">Load More</span>
+            </button>
+         </div>
+      </div>
+
+    </div>
+    </div>
+
+
+
+    <div class="status-bar">
+      <span id="status-items">0 items</span>
+      <span class="status-delimiter" id="status-progress-delimiter" style="margin: 0 12px; color: var(--vault-slate); opacity: 0.5; display: none;">|</span>
+      <div id="status-progress-zone" style="display: none; align-items: center; gap: 8px;">
+        <span id="status-progress-spinner" class="status-spinner" style="display: none;"></span>
+        <span id="status-progress-text" style="font-size: 11px; color: var(--vault-slate);"></span>
+        <div id="status-progress-bar-container" style="display: none; width: 80px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+          <div id="status-progress-bar-fill" style="width: 0%; height: 100%; background: var(--vault-accent); transition: width 0.1s ease;"></div>
+        </div>
+      </div>
+      <span id="status-size" style="margin-left:auto; margin-right:20px;"></span>
+      <span id="status-selected"></span>
+    </div>
+  </div>
+
+
+
+  <div id="crypto-dialog" class="vw-warm-card" role="dialog" aria-modal="true" aria-label="Encryption Password Dialog" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:20px 24px; border:1px solid var(--vault-border); z-index: 3000; box-shadow: 0 10px 30px rgba(0,0,0,0.15); font-family: var(--font-sans); width: 320px; color: var(--vault-text);">
+    <label for="crypto-password" style="display:block; margin-bottom:10px;" id="crypto-dialog-label">Enter Password:</label>
+    <input type="password" id="crypto-password" class="search-box" placeholder="••••••••" style="width:100%; margin-bottom:15px; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none;" />
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button id="btn-cancel-crypto" style="background:transparent; border:1px solid var(--vault-border); padding:6px 12px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer; color:var(--vault-text);">Cancel</button>
+      <button id="btn-confirm-crypto" style="background:var(--vault-accent); color:var(--vault-accent-text); border:none; padding:6px 12px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer;">Confirm</button>
+    </div>
+  </div>
+
+
+
+  <!-- Custom Console Mode Deletion/Confirmation Dialog -->
+  <div id="custom-confirm-dialog" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Confirmation Dialog" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:20px 24px; border:1px solid var(--vault-console-border-subtle); background: var(--vault-console-bg); color: var(--vault-console-text); z-index: 3100; box-shadow: 0 20px 50px rgba(0,0,0,0.5); font-family: var(--font-sans); width: 360px; border-radius: 6px;">
+    <div style="font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; color: var(--vault-signal-alert); margin-bottom: 12px; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <span id="confirm-title">System Action Required</span>
+    </div>
+    <div id="confirm-message" style="font-size: 13px; line-height: 1.5; margin-bottom: 20px; color: var(--vault-console-text-secondary); word-break: break-all;">Are you sure you want to proceed?</div>
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button id="btn-confirm-cancel" style="background:transparent; border:1px solid var(--vault-console-raised); color: var(--vault-console-text); padding:6px 12px; border-radius:4px; font-weight:600; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; cursor:pointer; transition: background 0.2s;">Cancel</button>
+      <button id="btn-confirm-ok" style="background:var(--vault-signal-alert); color:#0b0813; border:none; padding:6px 12px; border-radius:4px; font-weight:700; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; cursor:pointer; transition: filter 0.2s;">Confirm</button>
+    </div>
+  </div>
+
+  <!-- Settings Panel Console Modal -->
+  <div id="settings-panel" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Settings Panel" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 2147483647; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: 440px; border-radius: 8px; max-height: 85vh; flex-direction: column; overflow-y: auto;">
+    <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-accent); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-border); padding-bottom: 10px; user-select: none;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+         ⚙️ <span class="settings-panel-header">Settings / Paramètres</span>
+      </div>
+      <button onclick="document.getElementById('settings-panel').style.display = 'none';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+
+
+      <div style="display:none;">
+        <label for="settings-default-theme" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Default Theme:</label>
+        <select id="settings-default-theme" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;"></select>
+      </div>
+
+      <div>
+        <label for="settings-default-lang" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Default Language:</label>
+        <select id="settings-default-lang" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+          <option value="en">English</option>
+          <option value="fr">Québécois</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="settings-default-sub-lang" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Default Subtitle:</label>
+        <select id="settings-default-sub-lang" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+          <option value="original">Original Language (Default)</option>
+          <option value="und">None / Off</option>
+          <option value="en">English (EN)</option>
+          <option value="fr">French (FR)</option>
+          <option value="es">Spanish (ES)</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="settings-sub-font-size" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Subtitle Font Size:</label>
+        <select id="settings-sub-font-size" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+          <option value="16px">16px (Small)</option>
+          <option value="20px">20px (Medium)</option>
+          <option value="26px">26px (Large)</option>
+          <option value="32px">32px (Extra Large)</option>
+        </select>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Remember Playback Pos:</span>
+        <input type="checkbox" id="settings-remember-position" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+        <span id="label-mute-previews" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Mute Hover Previews:</span>
+        <input type="checkbox" id="settings-mute-previews" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Minimize to System Tray:</span>
+        <input type="checkbox" id="settings-minimize-to-tray" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;" title="Show all toasts and console logs. When off, only errors and essential notifications appear.">
+        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Dev Mode (verbose toasts/logs):</span>
+        <input type="checkbox" id="settings-dev-mode" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;" title="Add Spanish to the default OpenSubtitles search.">
+        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Include Spanish Subtitles:</span>
+        <input type="checkbox" id="settings-subs-include-es" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
+      </div>
+
+      <div>
+        <label for="settings-opensubtitles-key" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">OpenSubtitles API Key:</label>
+        <input type="password" id="settings-opensubtitles-key" class="search-box" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6.5px 8px; font-family:var(--font-body); outline:none; border-radius:4px; font-size:12px;" placeholder="Paste OpenSubtitles API Key here..." />
+      </div>
+
+
+
+      <div style="border-top: 1px solid var(--vault-warm-border-subtle); margin-top: 8px; padding-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+        <span id="label-stream-heading" style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--vault-accent); display: block; margin-bottom: 2px; letter-spacing: 0.05em;">Streaming Settings / Flux</span>
+        
+        <div>
+          <label for="settings-stream-quality" id="label-stream-quality" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Max Stream Quality:</label>
+          <select id="settings-stream-quality" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+            <option value="2160p">4K / 2160p</option>
+            <option value="1080p">1080p (FHD)</option>
+            <option value="720p">720p (HD)</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="settings-stream-lang" id="label-stream-lang" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Preferred Language:</label>
+          <select id="settings-stream-lang" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+            <option value="en">English (EN)</option>
+            <option value="fr">French / VF (FR)</option>
+            <option value="multi">Multilingual / Dual</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--vault-warm-border-subtle); margin-top: 8px; padding-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--vault-accent); display: block; margin-bottom: 2px; letter-spacing: 0.05em;">RTX VSR Settings</span>
+
+        <div>
+          <label for="settings-vsr-quality" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Quality Preset:</label>
+          <select id="settings-vsr-quality" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+            <option value="LOW">LOW</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="HIGH" selected>HIGH</option>
+            <option value="ULTRA">ULTRA</option>
+            <option value="DENOISE_LOW">DENOISE LOW</option>
+            <option value="DENOISE_MEDIUM">DENOISE MEDIUM</option>
+            <option value="DENOISE_HIGH">DENOISE HIGH</option>
+            <option value="DENOISE_ULTRA">DENOISE ULTRA</option>
+            <option value="DEBLUR_LOW">DEBLUR LOW</option>
+            <option value="DEBLUR_MEDIUM">DEBLUR MEDIUM</option>
+            <option value="DEBLUR_HIGH">DEBLUR HIGH</option>
+            <option value="DEBLUR_ULTRA">DEBLUR ULTRA</option>
+            <option value="HIGHBITRATE_LOW">HIGHBITRATE LOW</option>
+            <option value="HIGHBITRATE_MEDIUM">HIGHBITRATE MEDIUM</option>
+            <option value="HIGHBITRATE_HIGH">HIGHBITRATE HIGH</option>
+            <option value="HIGHBITRATE_ULTRA">HIGHBITRATE ULTRA</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="settings-vsr-scale" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Scale Factor:</label>
+          <select id="settings-vsr-scale" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+            <option value="1.5">1.5×</option>
+            <option value="2" selected>2×</option>
+            <option value="3">3×</option>
+            <option value="4">4×</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="settings-vsr-bitrate" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Stream Bitrate:</label>
+          <select id="settings-vsr-bitrate" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+            <option value="8M">8 Mbps</option>
+            <option value="12M" selected>12 Mbps</option>
+            <option value="16M">16 Mbps</option>
+            <option value="20M">20 Mbps</option>
+            <option value="25M">25 Mbps</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="settings-vsr-chroma" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Chroma Format:</label>
+          <select id="settings-vsr-chroma" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;">
+            <option value="yuv420p" selected>4:2:0 (smaller files)</option>
+            <option value="yuv444p">4:4:4 (better color fidelity)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top: 8px; border-top: 1px solid var(--vault-warm-border-subtle); padding-top: 10px;">
+        <button id="settings-btn-debrid-downloader" style="width: 100%; background: var(--vault-console-surface, #13101c); color: var(--vault-accent, #B07CFF); border: 1px solid var(--vault-accent, #B07CFF); padding: 7px 12px; border-radius: 4px; font-weight: 600; font-family: var(--font-body); cursor: pointer; font-size: 11px; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 6px;" type="button">
+          ⚡ Debrid Downloader
+        </button>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+        <button id="settings-btn-benchmark" style="background:var(--vault-console-surface); color:var(--vault-gold); border:1px solid var(--vault-gold); padding:5px 10px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer; font-size:10.5px; transition: background 0.2s;" type="button">ASR Benchmark</button>
+        <button id="settings-btn-save" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:6px 12px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer;">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-Debrid Torrent Streaming Dialog Backdrop -->
+  <div id="rd-stream-backdrop" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.65); backdrop-filter:blur(3px); z-index:3300;"></div>
+  <div id="rd-stream-dialog" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Real-Debrid Streaming Streamer" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 3350; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: 500px; border-radius: 8px; max-height: 80vh; flex-direction: column;">
+    <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-accent); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-border); padding-bottom: 10px; user-select: none;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+         <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent);"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span id="rd-stream-title-text">Real-Debrid Streaming Client</span>
+      </div>
+      <button id="btn-close-rd" onclick="document.getElementById('rd-stream-dialog').style.display = 'none'; const bd = document.getElementById('rd-stream-backdrop'); if(bd) bd.style.display = 'none';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+    </div>
+    
+    <div id="rd-dialog-body" style="overflow-y: auto; max-height: 50vh; margin-bottom: 15px;">
+       <div id="rd-loading-status" style="text-align: center; padding: 30px 0;">
+          <div class="spinner" style="margin: 0 auto 12px;"></div>
+          <div id="rd-status-text" style="font-size: 13px; color: var(--vault-slate); margin-bottom: 12px;">Searching cached torrent files...</div>
+          <button id="btn-rd-choose-manually" style="display: none; margin: 16px auto 0; background: rgba(255,255,255,0.06); color: var(--vault-accent, #B07CFF); border: 1px solid var(--vault-border); padding: 8px 16px; border-radius: 6px; font-weight: 600; font-family: var(--font-body); cursor: pointer; font-size: 11px; transition: all 0.2s;" type="button">
+             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4.5px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Show All Streams
+          </button>
+       </div>
+       <div id="rd-torrents-list" style="display: none; flex-direction: column; gap: 10px;">
+          <!-- Torrents will be injected here -->
+       </div>
+    </div>
+  </div>
+
+  <!-- Streaming Details Modal for Movies & Series -->
+  <div id="streaming-details-modal" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Streaming Details" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 3340; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: 720px; border-radius: 8px; max-height: 85vh; flex-direction: column; overflow-y: auto;">
+    <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-accent); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-border); padding-bottom: 10px; user-select: none;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+         <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent);"><polygon points="5 3 19 12 5 21 5 3"/></svg><span id="streaming-details-header-title">Title Details</span>
+      </div>
+      <button onclick="document.getElementById('streaming-details-modal').style.display = 'none'; document.getElementById('movie-trailer-iframe').src='';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+    </div>
+
+    <!-- Modal Layout -->
+    <div style="display: flex; gap: 20px; margin-bottom: 16px; flex-wrap: wrap;">
+      <!-- Left Column: Poster & Actions -->
+      <div style="flex: 0 0 180px; width: 180px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="width: 180px; height: 270px; background: #111; border-radius: 6px; overflow: hidden; border: 1px solid var(--vault-border);">
+          <img id="streaming-details-poster" src="" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9IiMxMTEiIHJ4PSIyIiByeT0iMiIvPjxyZWN0IHg9IjgiIHk9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiM5OTkiIHJ4PSIyIiByeT0iMiIvPjwvc3ZnPg==';" />
+        </div>
+        
+        <!-- Modal Actions: Library & Follow -->
+        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+          <button id="btn-modal-library" style="background: rgba(255,255,255,0.06); color: var(--vault-text); border: 1px solid var(--vault-border); padding: 6px 12px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; font-family: var(--font-body); width: 100%;">
+             <span>Add to Library</span>
+          </button>
+          <button id="btn-modal-follow" style="background: rgba(255,255,255,0.06); color: var(--vault-text); border: 1px solid var(--vault-border); padding: 6px 12px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 11px; display: none; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; font-family: var(--font-body); width: 100%;">
+             <span>Follow Show</span>
+          </button>
+          
+          <!-- Movie Actions Container inside Left Column -->
+          <div id="movie-actions-container" style="display: none; flex-direction: column; gap: 8px; width: 100%;">
+            <button id="btn-stream-movie" style="background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 8px 12px; border-radius: 4px; font-weight: 800; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; width: 100%;">
+              <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4.5px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Play Movie
+            </button>
+            <button id="btn-watch-trailer-browser" style="background: transparent; border: 1px solid var(--vault-accent); color: var(--vault-accent); padding: 8px 12px; border-radius: 4px; font-weight: 800; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: none; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; width: 100%;">
+              <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4.5px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Watch Trailer on YouTube
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Info & Video Player -->
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 250px; justify-content: space-between;">
+        <div>
+          <h2 id="streaming-details-title" style="margin: 0 0 6px 0; font-size: 18px; font-weight: 800; color: #fff; font-family: var(--font-mono); line-height: 1.2;">Title</h2>
+          <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; font-size: 11px; font-weight: 600; color: var(--vault-slate);">
+            <span id="streaming-details-year" style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">2026</span>
+            <span id="streaming-details-genres">Sci-Fi, Drama</span>
+            <span id="streaming-details-rating" style="color: var(--vault-gold); font-weight: 700;">★ 8.5</span>
+          </div>
+          <p id="streaming-details-overview" style="margin: 0 0 12px 0; font-size: 12px; line-height: 1.45; color: #ccc; font-family: var(--font-body); display:-webkit-box; -webkit-line-clamp:4; line-clamp: 4; -webkit-box-orient:vertical; overflow:hidden;"></p>
+          <!-- Watch Options & External Links Container -->
+          <div id="streaming-external-links" style="margin-top: 14px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--vault-slate); font-weight: bold;">
+              <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:11px; height:11px; display:inline-block; vertical-align:middle; margin-right:4.5px; color:var(--vault-slate);"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>External Watch & Trailer Links
+            </div>
+            <div id="external-links-badges" style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <!-- Badges will be dynamically populated here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Embed YouTube Trailer at bottom of Right Column, size-restricted -->
+        <div id="movie-trailer-wrapper" style="width: 100%; max-width: 440px; aspect-ratio: 16/9; background: #000; border-radius: 6px; overflow: hidden; border: 1px solid var(--vault-border); display: none; margin-top: 8px; position: relative;">
+          <div id="movie-trailer-loading" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--vault-slate); background: #000; z-index: 2;">
+            <svg class="spinner-inline" viewBox="0 0 24 24" fill="none" stroke="var(--vault-accent, #B07CFF)" stroke-width="3" style="width: 18px; height: 18px; animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="35 35"></circle></svg>
+            <span>LOADING TRAILER...</span>
+          </div>
+          <iframe id="movie-trailer-iframe" src="" style="width: 100%; height: 100%; border: none;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- TV Series Season & Episode Selector (shown only for TV shows) -->
+    <div id="tv-actions-container" style="display: none; border-top: 1px solid var(--vault-border); padding-top: 16px; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label for="tv-season-select" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Select Season:</label>
+        <select id="tv-season-select" style="background: var(--vt-primary); color: var(--vault-text); border: 1px solid var(--vault-border); padding: 5px 10px; border-radius: 4px; font-family: var(--font-body); outline: none; font-size: 12px; min-width: 120px; cursor: pointer;"></select>
+      </div>
+
+      <!-- Episode List Container -->
+      <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--vault-border); border-radius: 6px; background: rgba(0,0,0,0.25);">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--font-body);">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--vault-border); background: rgba(255,255,255,0.03); font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--vault-slate); text-align: left;">
+              <th style="padding: 8px 12px; width: 50px;">Ep</th>
+              <th style="padding: 8px 12px;">Title</th>
+              <th style="padding: 8px 12px; width: 100px; text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="tv-episodes-list">
+            <!-- Episodes will be dynamically injected here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-Debrid URL Downloader & Secure Proxy Dialog Modal -->
+  <div id="debrid-download-dialog" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Real-Debrid URL Downloader" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 3360; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: 520px; border-radius: 8px; max-height: 85vh; flex-direction: column;">
+    <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-accent); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-border); padding-bottom: 10px; user-select: none;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+         ⚡ Real-Debrid URL Downloader
+      </div>
+      <button id="btn-close-debrid-download" onclick="document.getElementById('debrid-download-dialog').style.display = 'none'; if (window.electronAPI.offDownloadProgress) window.electronAPI.offDownloadProgress();" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <!-- Link Input -->
+      <div>
+        <label for="debrid-dl-input" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 6px;">Hoster Link or Magnet URL:</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="debrid-dl-input" style="flex: 1; background:var(--vt-primary, #09060f); color:var(--vault-text); border:1px solid var(--vault-border); padding:8px 12px; font-family:var(--font-body); outline:none; border-radius:4px; font-size:12px;" placeholder="Paste e.g. Rapidgator, Turbobit, Magnet link..." />
+          <button id="btn-debrid-dl-unrestrict" style="background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 8px 16px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; transition: opacity 0.2s;">
+            Debrid
+          </button>
+        </div>
+      </div>
+
+      <!-- Proxy Tunnel Section -->
+      <div style="background: var(--vault-console-surface, #13101c); border: 1px solid var(--vault-border); padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--vault-slate); letter-spacing: 0.05em;">Secure Proxy Tunnel</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <input type="checkbox" id="debrid-proxy-enable" style="accent-color: var(--vault-gold); width: 14px; height: 14px; cursor: pointer;" />
+            <label for="debrid-proxy-enable" style="font-size: 10px; font-weight: 600; color: #fff; cursor: pointer;">Enable Tunnel</label>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="debrid-proxy-address-input" style="flex: 1; background:var(--vt-primary, #09060f); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px 10px; font-family:var(--font-mono); outline:none; border-radius:4px; font-size:11px;" placeholder="http://100.x.y.z:port (e.g. GreenCloud VPS via Tailscale)" />
+          <button id="btn-debrid-test-proxy" style="background: transparent; border: 1px solid var(--vault-accent); color: var(--vault-accent); padding: 6px 12px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.2s;" type="button">Test</button>
+          <div id="debrid-proxy-status" style="font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); color: var(--vault-slate);">Disabled</div>
+        </div>
+      </div>
+
+      <!-- Debrid Output / Download Area -->
+      <div id="debrid-dl-output" style="border: 1px dashed var(--vault-border); padding: 16px; border-radius: 6px; text-align: center; font-size: 12px; color: var(--vault-slate); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0,0,0,0.1);">
+        <div id="debrid-dl-output-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 36px; height: 36px; color: var(--vault-slate); opacity: 0.5; margin-bottom: 8px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <div>Ready for unrestricting and high-speed downloading.</div>
+        </div>
+        
+        <div id="debrid-dl-output-content" style="display: none; width: 100%; text-align: left;">
+          <div style="font-weight: 700; color: #fff; font-family: var(--font-mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px;" id="debrid-dl-filename">Movie_Title_2026.mkv</div>
+          <div style="font-size: 11px; color: var(--vault-slate); margin-bottom: 12px;" id="debrid-dl-filesize">Size: 4.82 GB</div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-debrid-start-download" style="flex: 1; background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 8px 16px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 6px;">
+              📥 Download File
+            </button>
+            <button id="btn-debrid-copy-link" style="background: var(--vault-console-surface, #13101c); color: var(--vault-text); border: 1px solid var(--vault-border); padding: 8px 12px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;" title="Copy Direct Link">
+              Copy Link
+            </button>
+          </div>
+        </div>
+
+        <div id="debrid-dl-output-loading" style="display: none; text-align: center;">
+          <div class="spinner" style="margin: 0 auto 12px;"></div>
+          <div id="debrid-dl-loading-text">Unrestricting link on Real-Debrid servers...</div>
+        </div>
+
+        <div id="debrid-dl-output-progress" style="display: none; width: 100%; text-align: left;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; font-family: var(--font-mono); color: var(--vault-gold); font-weight: 700; margin-bottom: 4px;">
+            <span id="debrid-dl-progress-status">Downloading...</span>
+            <span id="debrid-dl-progress-percent">42%</span>
+          </div>
+          <div style="width: 100%; background: var(--vault-console-surface, #13101c); height: 8px; border-radius: 4px; overflow: hidden; border: 1px solid var(--vault-border); margin-bottom: 8px;">
+            <div id="debrid-dl-progress-bar" style="width: 42%; height: 100%; background: var(--vault-gold); border-radius: 4px; transition: width 0.1s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--vault-slate);">
+            <span id="debrid-dl-progress-speed">Speed: 12.4 MB/s</span>
+            <span id="debrid-dl-progress-bytes">512 MB / 1.2 GB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Premium VaultWares Visual ASR Benchmark Dialog Modal -->
+  <div id="benchmark-dialog" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="ASR Engine Benchmarking Panel" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-console-border-subtle); background: var(--vault-console-bg); color: var(--vault-console-text); z-index: 3200; box-shadow: 0 30px 100px rgba(0,0,0,0.85), 0 0 50px rgba(176,124,255,0.15); font-family: var(--font-sans); width: 620px; border-radius: 8px; max-height: 90vh; overflow-y: auto; user-select: text !important;">
+    
+    <style>
+      @keyframes led-pulse {
+        0%, 100% { opacity: 0.35; transform: scale(0.9); }
+        50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 8px currentColor; }
+      }
+      .telemetry-led {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      .telemetry-led.pulse-green {
+        background-color: var(--vault-signal-online, #6BE675);
+        color: var(--vault-signal-online, #6BE675);
+        animation: led-pulse 1.8s infinite ease-in-out;
+      }
+      .telemetry-led.pulse-purple {
+        background-color: var(--vault-signal-sync, #B07CFF);
+        color: var(--vault-signal-sync, #B07CFF);
+        animation: led-pulse 1.5s infinite ease-in-out;
+      }
+      .telemetry-led.pulse-yellow {
+        background-color: var(--vault-signal-warning, #F0B94B);
+        color: var(--vault-signal-warning, #F0B94B);
+        animation: led-pulse 2.2s infinite ease-in-out;
+      }
+      .telemetry-led.pulse-red {
+        background-color: var(--vault-signal-alert, #FF6B7A);
+        color: var(--vault-signal-alert, #FF6B7A);
+        animation: led-pulse 1.2s infinite ease-in-out;
+      }
+    </style>
+
+    <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-gold); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-console-raised); padding-bottom: 10px; user-select: none;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+        </svg>
+        <span>ASR Speech & Translation Benchmark</span>
+      </div>
+      <button id="btn-close-benchmark" style="background: transparent; border: none; color: var(--vault-console-text-secondary); cursor: pointer; font-size: 16px; line-height: 1; user-select: none;">✕</button>
+    </div>
+
+    <!-- Toggle Hardware / Sim Mode -->
+    <div style="background: var(--vault-console-surface); border: 1px solid var(--vault-console-raised); border-radius: 6px; padding: 14px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+      <div>
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--vault-console-text); margin-bottom: 2px;">Hardware Engine Strategy:</div>
+        <div style="font-size: 11px; color: var(--vault-console-text-secondary);" id="benchmark-mode-desc">Execute on native NVIDIA CUDA RTX 3060 hardware</div>
+      </div>
+      <div style="display: flex; gap: 6px; background: rgba(0,0,0,0.35); border-radius: 6px; padding: 4px; border: 1px solid var(--vault-console-raised);">
+        <button id="mode-btn-native" class="ctrl-btn-sm" style="background: var(--vault-console-elevated); color: var(--vault-gold); font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--vault-gold); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; box-shadow: 0 0 8px rgba(245, 185, 41, 0.2); transition: all 0.2s;">NATIVE GPU</button>
+        <button id="mode-btn-sim" class="ctrl-btn-sm" style="background: transparent; color: var(--vault-console-text-secondary); font-family: var(--font-mono); font-size: 10px; border: 1px solid transparent; padding: 5px 10px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">SIMULATOR</button>
+      </div>
+    </div>
+
+    <!-- React-style Dynamic Telemetry Component with Wave Graph -->
+    <div style="background: var(--vault-console-surface); border: 1px solid var(--vault-console-raised); border-radius: 8px; padding: 18px; margin-bottom: 16px; box-shadow: inset 0 1px 3px rgba(255,255,255,0.03); font-family: var(--font-mono);">
+      <!-- Top Title and LEDs Header -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; user-select: none;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <!-- Circular Node Icon -->
+          <div style="background: rgba(0,0,0,0.3); border-radius: 6px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.08);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--vault-gold)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="5" r="3" />
+              <circle cx="5" cy="19" r="3" />
+              <circle cx="19" cy="19" r="3" />
+              <line x1="8.5" y1="16.5" x2="10.5" y2="7.5" />
+              <line x1="15.5" y1="16.5" x2="13.5" y2="7.5" />
+              <line x1="8.5" y1="19" x2="15.5" y2="19" />
+            </svg>
+          </div>
+          <div>
+            <div style="font-size: 12.5px; font-weight: bold; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">Telemetry</div>
+            <div style="font-size: 9.5px; color: var(--vault-console-text-secondary);">LED-driven health + signals</div>
+          </div>
+        </div>
+        
+        <!-- Glowing LED nodes using --signal-* equivalents -->
+        <div style="display: flex; gap: 6px; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05);">
+          <span class="telemetry-led pulse-green" title="Signal OK (Active)"></span>
+          <span class="telemetry-led pulse-purple" title="Relay Pipeline Linked"></span>
+          <span class="telemetry-led pulse-yellow" id="led-warning" style="opacity: 0.3;" title="Warning Threshold"></span>
+          <span class="telemetry-led pulse-red" id="led-danger" style="opacity: 0.3;" title="Critical Fault"></span>
+        </div>
+      </div>
+
+      <!-- Animated VRAM & Memory Waveform -->
+      <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; padding: 12px; margin-bottom: 12px; position: relative; overflow: hidden; height: 110px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; user-select: none;">
+          <div style="font-size: 9.5px; font-weight: bold; color: var(--vault-console-text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">VRAM & HARDWARE FLOW (DYNAMIC)</div>
+          <div style="display: flex; gap: 8px; font-size: 8.5px;">
+            <span style="display: flex; align-items: center; gap: 3px; color: var(--vault-signal-online, #6BE675);"><span style="width: 4px; height: 4px; border-radius: 50%; background: currentColor;"></span>ok</span>
+            <span style="display: flex; align-items: center; gap: 3px; color: var(--vault-signal-warning, #F0B94B);"><span style="width: 4px; height: 4px; border-radius: 50%; background: currentColor;"></span>warn</span>
+          </div>
+        </div>
+        
+        <!-- Live SVG Waveform line chart matching Screenshot 2 -->
+        <svg style="width: 100%; height: 75px; overflow: visible;" id="telemetry-wave-svg" viewBox="0 0 540 70" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="wave-gradient" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="var(--vault-signal-sync, #B07CFF)" />
+              <stop offset="50%" stop-color="var(--vault-signal-warning, #F0B94B)" />
+              <stop offset="100%" stop-color="var(--vault-signal-online, #6BE675)" />
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="18" x2="540" y2="18" stroke="rgba(255,255,255,0.03)" stroke-dasharray="3,3" />
+          <line x1="0" y1="36" x2="540" y2="36" stroke="rgba(255,255,255,0.03)" stroke-dasharray="3,3" />
+          <line x1="0" y1="54" x2="540" y2="54" stroke="rgba(255,255,255,0.02)" />
+          
+          <path id="telemetry-wave-path" d="M 0 50 Q 45 40, 90 48 T 180 30 T 270 55 T 360 25 T 450 48 T 540 40" fill="none" stroke="url(#wave-gradient)" stroke-width="2.5" style="filter: drop-shadow(0 0 4px rgba(176, 124, 255, 0.45)); transition: d 0.25s ease;" />
+        </svg>
+      </div>
+
+      <!-- Live Micro-Indicators Grid matching Screenshot 2 -->
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; user-select: none;">
+        <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; min-height: 52px; transition: border-color 0.2s;">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 8.5px; color: var(--vault-console-text-secondary); text-transform: uppercase;">
+            <span>INSPECT</span>
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: var(--vault-signal-online, #6BE675); box-shadow: 0 0 6px var(--vault-signal-online, #6BE675);"></span>
+          </div>
+          <div id="telemetry-inspect-val" style="font-size: 18px; font-weight: bold; color: #fff; margin-top: 4px; font-family: var(--font-mono);">93</div>
+        </div>
+        <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; min-height: 52px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 8.5px; color: var(--vault-console-text-secondary); text-transform: uppercase;">
+            <span>RELAY</span>
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: var(--vault-signal-sync, #B07CFF); box-shadow: 0 0 6px var(--vault-signal-sync, #B07CFF);"></span>
+          </div>
+          <div id="telemetry-relay-val" style="font-size: 18px; font-weight: bold; color: #fff; margin-top: 4px; font-family: var(--font-mono);">67</div>
+        </div>
+        <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; min-height: 52px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 8.5px; color: var(--vault-console-text-secondary); text-transform: uppercase;">
+            <span>ALERTS</span>
+            <span id="telemetry-alerts-led" style="width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.15);"></span>
+          </div>
+          <div id="telemetry-alerts-val" style="font-size: 18px; font-weight: bold; color: #fff; margin-top: 4px; font-family: var(--font-mono);">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telemetry Log Terminal -->
+    <div style="font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; color: var(--vault-console-text-secondary); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+      <span>ASR TELEMETRY CONSOLE:</span>
+      <span id="benchmark-status-indicator" style="color: var(--vault-gold); font-weight: bold; letter-spacing: 0.05em;">READY</span>
+    </div>
+    <div id="benchmark-console" style="background: var(--vault-console-surface); border: 1px solid var(--vault-console-raised); border-radius: 6px; height: 130px; overflow-y: auto; padding: 12px; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: #10b981; display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; white-space: pre-wrap; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); user-select: text !important;">
+[Console Idle] Waiting for telemetry initiation...
+    </div>
+
+    <!-- Dynamic Metrics Dashboard Panel -->
+    <div style="font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; color: var(--vault-console-text-secondary); margin-bottom: 8px; user-select: none;">PERFORMANCE INSIGHTS:</div>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; user-select: none;">
+      <div style="background: var(--vault-console-surface); border: 1px solid var(--vault-console-raised); border-radius: 6px; padding: 12px; text-align: center;">
+        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--vault-console-text-secondary); text-transform: uppercase; margin-bottom: 4px;">Initialization Latency</div>
+        <div id="metric-init-time" style="font-size: 20px; font-weight: bold; color: #fff; font-family: var(--font-mono);">—</div>
+        <div style="font-size: 9px; color: var(--vault-console-text-secondary); margin-top: 2px;">ASR model warm-load time</div>
+      </div>
+      <div style="background: var(--vault-console-surface); border: 1px solid var(--vault-console-raised); border-radius: 6px; padding: 12px; text-align: center;">
+        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--vault-console-text-secondary); text-transform: uppercase; margin-bottom: 4px;">Real-Time Factor (RTF)</div>
+        <div id="metric-rtf" style="font-size: 20px; font-weight: bold; color: #fff; font-family: var(--font-mono);">—</div>
+        <div style="font-size: 9px; color: var(--vault-console-text-secondary); margin-top: 2px;">Lower represents higher throughput</div>
+      </div>
+      <div style="background: var(--vault-console-surface); border: 1px solid var(--vault-console-raised); border-radius: 6px; padding: 12px; text-align: center;">
+        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--vault-console-text-secondary); text-transform: uppercase; margin-bottom: 4px;">Translation RTF</div>
+        <div id="metric-trans-rtf" style="font-size: 20px; font-weight: bold; color: #fff; font-family: var(--font-mono);">—</div>
+        <div style="font-size: 9px; color: var(--vault-console-text-secondary); margin-top: 2px;">Native French translating RTF</div>
+      </div>
+      <div style="background: var(--vault-console-surface); border: 1px solid var(--vault-console-raised); border-radius: 6px; padding: 12px; text-align: center;">
+        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--vault-console-text-secondary); text-transform: uppercase; margin-bottom: 4px;">GPU VRAM Allocated</div>
+        <div id="metric-vram" style="font-size: 20px; font-weight: bold; color: #fff; font-family: var(--font-mono);">—</div>
+        <div style="font-size: 9px; color: var(--vault-console-text-secondary); margin-top: 2px;">Peak hardware weight footprint</div>
+      </div>
+    </div>
+
+    <!-- Actions Row -->
+    <div style="display: flex; gap: 12px; justify-content: flex-end; user-select: none;">
+      <button id="btn-run-benchmark" style="background: var(--vault-gold); color: #0b0813; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(245, 185, 41, 0.3); transition: all 0.2s;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        <span>Initiate Hardware Benchmark</span>
+      </button>
+    </div>
+  </div>
+
+  <input type="file" id="subtitle-file-input" accept=".srt,.vtt,.ass,.ssa" style="display:none;">
+
+  <div id="video-modal" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Video Player Modal" tabindex="-1">
+    <div id="player-topbar">
+      <span class="player-title" id="player-title">—</span>
+      <div class="player-corner-btns">
+        <button class="player-corner-btn" id="minimize-modal" aria-label="Picture-in-Picture" title="Picture-in-Picture">🗗</button>
+        <button class="player-corner-btn" id="close-modal" aria-label="Close" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <button id="pip-close-btn" aria-label="Close" title="Close" style="display:none; position:absolute; top:6px; right:8px; z-index:203; background:rgba(0,0,0,0.5); border:none; color:#fff; border-radius:50%; width:20px; height:20px; font-size:12px; align-items:center; justify-content:center; cursor:pointer; padding:0; line-height:1;">✕</button>
+    <div class="video-wrapper">
+       <video id="video-player" autoplay></video>
+       <!-- PiP Controls Hover Overlay -->
+       <div id="pip-controls-overlay">
+          <button id="pip-btn-prev" class="pip-ctrl-btn" title="Previous">⏮</button>
+          <button id="pip-btn-play" class="pip-ctrl-btn" title="Play/Pause">⏯</button>
+          <button id="pip-btn-next" class="pip-ctrl-btn" title="Next">⏭</button>
+       </div>
+        <div id="video-ended-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(7, 8, 10, 0.95); z-index:100; align-items:center; justify-content:center; flex-direction:column; color:var(--console-text); font-family:var(--vault-font-mono), monospace;">
+          <div style="display: flex; gap: 20px; margin-bottom: 24px;">
+             <div style="cursor:pointer; display:flex; align-items:center; justify-content:center; width:56px; height:56px; background:rgba(255,255,255,0.05); border:1px solid var(--console-border); border-radius:50%; transition:all 0.2s ease-in-out;" id="ended-play-btn" class="ctrl-btn-sm" title="Play Next">
+                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px; margin-left: 2px;">
+                     <path d="M 8 5 L 19 12 L 8 19 Z" />
+                 </svg>
+             </div>
+             <div style="cursor:pointer; display:flex; align-items:center; justify-content:center; width:56px; height:56px; background:rgba(255,255,255,0.05); border:1px solid var(--console-border); border-radius:50%; transition:all 0.2s ease-in-out;" id="ended-replay-btn" class="ctrl-btn-sm" title="Replay Current">
+                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;">
+                     <path d="M23 4v6h-6M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                 </svg>
+             </div>
+          </div>
+          <div id="ended-countdown" style="font-size:13px; letter-spacing:0.06em; text-transform:uppercase; font-weight:600; color:#fff;">Next video in 5 seconds...</div>
+        </div>
+        <div id="custom-controls">
+           <div class="player-controls-container">
+              
+              <!-- Left controls: Prev, Play, Next, Volume -->
+              <div class="controls-left">
+                 <button id="btn-prev" class="ctrl-btn" title="Previous" aria-label="Previous">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                       <path d="M 18 5 L 7 12 L 18 19 Z" />
+                       <line x1="4" y1="19" x2="4" y2="15" /><line x1="4" y1="9" x2="4" y2="5" />
+                    </svg>
+                 </button>
+                 <button id="btn-playpause" class="ctrl-btn" title="Play/Pause (Space)" aria-label="Play or Pause">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                       <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
+                    </svg>
+                 </button>
+                 <button id="btn-next" class="ctrl-btn" title="Next" aria-label="Next">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                       <path d="M 6 5 L 17 12 L 6 19 Z" />
+                       <line x1="20" y1="19" x2="20" y2="15" /><line x1="20" y1="9" x2="20" y2="5" />
+                    </svg>
+                 </button>
+                 <button id="btn-clip" class="ctrl-btn" title="Create Clip (C)" aria-label="Create Clip">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                 </button>
+                 <div class="volume-container" style="position:relative; display:flex; align-items:center; cursor:pointer; height:30px;">
+                    <button class="ctrl-btn" id="btn-volume-icon" style="padding:6px 10px;" title="Volume" aria-label="Volume">
+                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                          <path d="M 7 11 L 7 9 L 11 9 L 15 5 L 15 19 L 11 15 L 7 15 L 7 13" />
+                          <path d="M 18 9 A 3 3 0 0 1 18 15" />
+                          <path d="M 21 7 A 6 6 0 0 1 21 17" />
+                       </svg>
+                    </button>
+                    <div class="volume-slider-wrapper" style="position:absolute; bottom:28px; left:50%; transform:translateX(-50%); display:none; background:rgba(0,0,0,0.8); padding:15px 10px; border-radius:4px; z-index:205;">
+                       <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5" style="writing-mode: bt-lr; -webkit-appearance: slider-vertical; appearance: slider-vertical; width:8px; height:80px; accent-color:var(--console-active); cursor:pointer;" title="Volume (Up/Down)" aria-label="Volume">
+                    </div>
+                 </div>
+              </div>
+              
+              <!-- Center controls: Seek Bar surrounded by times (shown as [elapsed] --- [seek bar] --- [total] on small screens) -->
+              <div class="controls-center-seek">
+                 <span id="time-elapsed" class="seek-time-lbl">0:00</span>
+                 <div id="seek-area" style="position:relative; flex-grow:1; height:20px; cursor:pointer; display:flex; align-items:center;">
+                    <div style="width:100%; height:6px; background:var(--console-raised); border-radius:3px;" id="seek-bg">
+                       <div id="seek-fill" style="width:0%; height:100%; background:var(--console-active); border-radius:3px; pointer-events:none;"></div>
+                    </div>
+                    <canvas id="seek-hover-preview" style="position:absolute; bottom:30px; left:0; width:160px; height:90px; border:2px solid var(--vault-accent); box-shadow:0 10px 30px rgba(0,0,0,0.6); border-radius:6px; display:none; pointer-events:none; transform:translateX(-50%); background:#000; z-index:99;"></canvas>
+                    <div id="seek-time-tooltip" style="position:absolute; bottom:128px; left:0; transform:translateX(-50%); background:var(--vault-accent); color:#0b0813; padding:4px 8px; font-size:11px; font-weight:700; font-family:var(--font-mono); border-radius:4px; display:none; pointer-events:none; z-index:100; border:1px solid var(--vault-accent); box-shadow:0 5px 15px rgba(0,0,0,0.3); white-space:nowrap;">0:00</div>
+                 </div>
+                 <span id="time-total" class="seek-time-lbl">0:00</span>
+              </div>
+              
+              <!-- Right controls: Consolidated Time Display, Autoplay, Speed, Subtitles, AI Upscaling, Fullscreen -->
+              <div class="controls-right">
+                 <span id="time-display" style="font-size:11px; opacity:0.8; margin-right:4px; font-family:var(--vault-font-mono), monospace;">0:00 / 0:00</span>
+                 
+                 <button id="btn-autoplay" class="ctrl-btn-sm" title="Toggle Autoplay" aria-label="Toggle Autoplay">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                       <path d="M 9 7 L 17 7 C 19.8 7 22 9.2 22 12 C 22 14.8 19.8 17 17 17 L 7 17 C 4.2 17 2 14.8 2 12 C 2 9.8 3.7 8 6 7.1" />
+                       <circle cx="16" cy="12" r="3" id="autoplay-knob-circle" class="transition-all duration-200 ease-out" style="fill:currentColor;" />
+                    </svg>
+                 </button>
+                 
+                 <!-- Playback speed picker — kept in DOM for code compat, hidden from view (replaced by quality picker) -->
+                 <div class="speed-dropdown-container" style="display:none; position:relative; -webkit-app-region: no-drag;">
+                    <button id="btn-speed" class="ctrl-btn-sm" title="Playback speed" aria-label="Playback speed" style="display:none;">
+                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                          <path d="M 4 17 A 8 8 0 0 1 18 7" /><path d="M 20 10 A 8 8 0 0 1 20 17" />
+                          <line x1="12" y1="15" x2="15" y2="10" />
+                       </svg>
+                    </button>
+                    <div id="speed-menu" style="display:none;">
+                       <div class="speed-option" data-val="0.5">0.5×</div>
+                       <div class="speed-option" data-val="0.75">0.75×</div>
+                       <div class="speed-option active" data-val="1">1.0× (Normal)</div>
+                       <div class="speed-option" data-val="1.25">1.25×</div>
+                       <div class="speed-option" data-val="1.5">1.5×</div>
+                       <div class="speed-option" data-val="2">2.0×</div>
+                    </div>
+                 </div>
+
+                 <!-- Stream quality picker (RD streams only — hidden for local files) -->
+                 <div id="quality-dropdown-container" class="quality-dropdown-container" style="position:relative; display:none; -webkit-app-region: no-drag;">
+                    <button id="btn-quality" class="ctrl-btn-sm" title="Stream quality" aria-label="Stream quality" style="display:inline-flex; align-items:center; gap:5px;">
+                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px; display:block;">
+                          <rect x="3" y="6" width="18" height="12" rx="2"/><path d="M 8 10 H 16"/><path d="M 8 14 H 12"/>
+                       </svg>
+                       <span id="quality-btn-text" style="font-family:var(--font-mono); font-size:11px; font-weight:700;">AUTO</span> ▾
+                    </button>
+                    <div id="quality-menu" style="display:none; position:absolute; bottom:38px; right:0; background:var(--vt-surface); border:1px solid var(--vault-border); border-radius:4px; padding:4px 0; z-index:210; min-width:160px; box-shadow:0 4px 15px rgba(0,0,0,0.5);"></div>
+                 </div>
+                 
+                 <div class="subtitle-dropdown-container" style="position:relative; display:inline-block; -webkit-app-region: no-drag;">
+                    <button id="btn-subtitles" class="ctrl-btn-sm" title="Subtitles (CC)" aria-label="Subtitles" style="display:inline-flex; align-items:center; gap:6px;">
+                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px; display:block;">
+                          <path d="M 21 9 L 21 17 C 21 18.1 20.1 19 19 19 L 5 19 C 3.9 19 3 18.1 3 17 L 3 7 C 3 5.9 3.9 5 5 5 L 15 5" /><line x1="18" y1="5" x2="19" y2="5" /><path d="M 7 10 L 13 10" /><path d="M 7 14 L 17 14" />
+                       </svg>
+                       <span id="subtitles-btn-text">CC</span> ▾
+                    </button>
+                    <div id="subtitles-menu" style="display:none; position:absolute; bottom:38px; right:0; background:var(--vt-surface); border:1px solid var(--vault-border); border-radius:4px; padding:4px 0; z-index:210; min-width:180px; box-shadow:0 4px 15px rgba(0,0,0,0.5);">
+                       <div class="subtitle-option active" data-idx="-1" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-accent); font-weight:600; transition:background 0.2s;">Off</div>
+                       <div class="subtitle-divider" style="height:1px; background:var(--vault-border); margin:4px 0;"></div>
+                       <div id="subtitle-tracks-list" style="max-height: 160px; overflow-y: auto;"></div>
+                       <div class="subtitle-divider" style="height:1px; background:var(--vault-border); margin:4px 0;"></div>
+                       <div id="opt-more-subs" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:11px; color:var(--vault-slate); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;" title="Search OpenSubtitles by language"><span>More subtitles…</span><span id="more-subs-caret" style="font-size:10px;">▸</span></div>
+                       <div id="subtitles-more-panel" style="display:none;">
+                          <div style="padding:2px 12px 2px; font-size:9px; font-family:var(--font-mono); font-weight:700; text-transform:uppercase; color:var(--vault-slate); letter-spacing:0.05em;">Search OpenSubtitles</div>
+                          <div class="subtitle-quick-lang" data-lang="en" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span>🇬🇧 English</span><span style="font-size:10px; color:var(--vault-slate);">EN</span></div>
+                          <div class="subtitle-quick-lang" data-lang="fr-CA" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span>🇨🇦 French (Canadian)</span><span style="font-size:10px; color:var(--vault-slate);">FR-CA</span></div>
+                          <div class="subtitle-quick-lang" data-lang="fr" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span>🇫🇷 French</span><span style="font-size:10px; color:var(--vault-slate);">FR</span></div>
+                       </div>
+                       <div class="subtitle-divider" style="height:1px; background:var(--vault-border); margin:4px 0;"></div>
+                       <div id="subtitle-sync-row" style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 12px; font-family:var(--font-body); font-size:12px; color:var(--vault-text); user-select:none;">
+                          <span title="Shift subtitle timing to fix A/V sync">Sync delay</span>
+                          <div style="display:flex; align-items:center; gap:6px;">
+                             <button id="subtitle-offset-minus" title="Subtitles earlier by 0.25s" style="background:transparent; border:1px solid var(--vault-border); color:var(--vault-text); border-radius:4px; padding:1px 7px; cursor:pointer; font-family:var(--font-mono); font-size:12px; line-height:1.3;">−0.25</button>
+                             <span id="subtitle-offset-value" style="min-width:46px; text-align:center; font-family:var(--font-mono); color:var(--vault-accent);">+0.00s</span>
+                             <button id="subtitle-offset-plus" title="Subtitles later by 0.25s" style="background:transparent; border:1px solid var(--vault-border); color:var(--vault-text); border-radius:4px; padding:1px 7px; cursor:pointer; font-family:var(--font-mono); font-size:12px; line-height:1.3;">+0.25</button>
+                          </div>
+                       </div>
+                       <div class="subtitle-divider" style="height:1px; background:var(--vault-border); margin:4px 0;"></div>
+                       <div class="subtitle-option-upload" id="opt-upload-subtitle" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s;">Upload SRT/VTT...</div>
+                       <div class="subtitle-option-upload" id="opt-generate-subtitle" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-accent); font-weight:600; transition:background 0.2s; border-top:1px dashed var(--vault-border); display:inline-flex; align-items:center; gap:6px; width:100%; box-sizing:border-box;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:12px; height:12px; display:block; flex-shrink:0;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Live Subtitles (AI)</span></div>
+                    </div>
+                 </div>
+                 
+                 <button id="btn-upscale" class="ctrl-btn-sm" style="display:inline-flex; align-items:center; gap:6px; opacity: 0.5; cursor: not-allowed;" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px; display:block;">
+                       <path d="M 12 20 V 14" /><path d="M 12 10 V 4" /><path d="M 7 9 L 12 4 L 17 9" /><path d="M 18 14 L 19 16 L 21 17 L 19 18 L 18 20 L 17 18 L 15 17 L 17 16 Z" />
+                    </svg>
+                    <span>AI</span>
+                 </button>
+                 <button id="btn-fullscreen" class="ctrl-btn" title="Fullscreen (F)" aria-label="Toggle Fullscreen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
+                       <path d="M 5 9 L 5 5 L 9 5" /><path d="M 15 5 L 19 5 L 19 9" /><path d="M 19 15 L 19 19 L 15 19" /><path d="M 5 15 L 5 19" />
+                    </svg>
+                 </button>
+              </div>
+              
+           </div>
+        </div>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Small helper to safely wait until elements are ready/app is initialized
+      setTimeout(() => {
+        const trigger = document.getElementById('btn-sort-menu-trigger');
+        const menu = document.getElementById('sort-dropdown-menu');
+        const label = document.getElementById('sort-btn-label');
+        const hiddenSortBy = document.getElementById('sort-by');
+        const hiddenOrder = document.getElementById('btn-sort-order');
+        
+        if (trigger && menu) {
+          trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+          });
+          
+          document.addEventListener('click', () => {
+            menu.style.display = 'none';
+          });
+          
+          // Sort field selection
+          menu.querySelectorAll('.sort-option').forEach(item => {
+            item.addEventListener('click', (e) => {
+              e.stopPropagation();
+              menu.querySelectorAll('.sort-option').forEach(x => {
+                x.classList.remove('active');
+                x.style.color = '';
+                x.style.fontWeight = '';
+              });
+              item.classList.add('active');
+              item.style.color = 'var(--vault-accent)';
+              item.style.fontWeight = '600';
+              
+              const val = item.getAttribute('data-field');
+              hiddenSortBy.value = val;
+              label.textContent = item.textContent;
+              
+              // Trigger sorting
+              hiddenSortBy.dispatchEvent(new Event('change'));
+              menu.style.display = 'none';
+            });
+          });
+          
+          // Sort order selection
+          menu.querySelectorAll('.sort-order-option').forEach(item => {
+            item.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const requestedOrder = item.getAttribute('data-order');
+              const currentOrder = hiddenOrder.dataset.order || 'desc';
+              
+              menu.querySelectorAll('.sort-order-option').forEach(x => {
+                x.classList.remove('active');
+                x.style.color = '';
+                x.style.fontWeight = '';
+              });
+              
+              item.classList.add('active');
+              item.style.color = 'var(--vault-accent)';
+              item.style.fontWeight = '600';
+              
+              if (requestedOrder !== currentOrder) {
+                hiddenOrder.click();
+              }
+              menu.style.display = 'none';
+            });
+          });
+        }
+      }, 500);
+    });
+  </script>
+
+  <!-- Photo Editor Modal -->
+  <div id="photo-editor-modal" style="display:none; position:fixed; inset:0; background: var(--vault-console-bg); z-index: 10001; flex-direction: column; overflow: hidden;">
+    <!-- Top bar -->
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--vault-border); flex-shrink: 0;">
+      <h3 style="margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase; color: var(--vault-text); font-family: var(--font-mono); letter-spacing: 0.05em;">Photo Editor</h3>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="photo-editor-save" style="background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 6px 14px; border-radius: 4px; font-weight: 700; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;">Save</button>
+        <button id="photo-editor-close" title="Close (Esc)" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 18px; padding: 4px;">✕</button>
+      </div>
+    </div>
+    <!-- Main workspace -->
+    <div style="flex: 1; display: flex; overflow: hidden;">
+      <!-- Left toolbar -->
+      <div style="flex: 0 0 56px; border-right: 1px solid var(--vault-border); display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 8px; overflow-y: auto;">
+        <button class="photo-tool" data-tool="move" title="Move" style="background: var(--vault-accent); color: var(--vt-primary); border: none; width: 36px; height: 36px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l4-4 4 4"/><path d="M9 5v12"/><path d="M15 15l-4 4-4-4"/><path d="M9 19V7"/></svg>
+        </button>
+        <button class="photo-tool" data-tool="crop" title="Crop" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); width: 36px; height: 36px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v16h16"/><path d="M18 22V7"/><path d="M14 6H6"/></svg>
+        </button>
+        <button class="photo-tool" data-tool="rotate" title="Rotate" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); width: 36px; height: 36px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <button class="photo-tool" data-tool="flip" title="Flip" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); width: 36px; height: 36px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 7v14"/><path d="M21 7H9"/><path d="M9 7v14"/><path d="M6 7v14"/><path d="M3 7v14"/></svg>
+        </button>
+        <button class="photo-tool" data-tool="filters" title="Filters" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); width: 36px; height: 36px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </button>
+        <button class="photo-tool" data-tool="exposure" title="Exposure" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); width: 36px; height: 36px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9z"/><path d="M12 2v20"/><line x1="12" y1="6" x2="17" y2="6"/><line x1="12" y1="10" x2="19" y2="10"/><line x1="12" y1="14" x2="18" y2="14"/><line x1="12" y1="18" x2="15" y2="18"/></svg>
+        </button>
+      </div>
+      <!-- Canvas area -->
+      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden; position: relative; background: var(--vault-console-surface);">
+          <canvas id="photo-editor-canvas" style="max-width: 100%; max-height: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);"></canvas>
+        </div>
+        <!-- Bottom toolbar -->
+        <div style="flex: 0 0 56px; border-top: 1px solid var(--vault-border); display: flex; align-items: center; padding: 0 16px; gap: 12px; overflow-x: auto;">
+          <button class="photo-tool-bottom" data-tool="draw" title="Draw" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.5 8.6"/></svg>
+            Draw
+          </button>
+          <button class="photo-tool-bottom" data-tool="text" title="Text" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5h16v2"/><path d="M9 20h6"/><path d="M12 5v15"/></svg>
+            Text
+          </button>
+          <button class="photo-tool-bottom" data-tool="adjust" title="Adjust" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+            Adjust
+          </button>
+          <button class="photo-tool-bottom" data-tool="markup" title="Markup" style="background: transparent; color: var(--vault-text); border: 1px solid var(--vault-border); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Markup
+          </button>
+          <div id="photo-editor-adjustments" style="display: none; align-items: center; gap: 12px; margin-left: auto; flex-wrap: wrap;">
+            <label style="font-size: 10px; color: var(--vault-slate); font-family: var(--font-mono); display: flex; align-items: center; gap: 6px;">
+              Bright <input id="pe-brightness" type="range" min="0.5" max="1.5" step="0.05" value="1" style="width: 70px; accent-color: var(--vault-accent);">
+            </label>
+            <label style="font-size: 10px; color: var(--vault-slate); font-family: var(--font-mono); display: flex; align-items: center; gap: 6px;">
+              Contrast <input id="pe-contrast" type="range" min="0.5" max="1.5" step="0.05" value="1" style="width: 70px; accent-color: var(--vault-accent);">
+            </label>
+            <label style="font-size: 10px; color: var(--vault-slate); font-family: var(--font-mono); display: flex; align-items: center; gap: 6px;">
+              Saturate <input id="pe-saturate" type="range" min="0" max="2" step="0.05" value="1" style="width: 70px; accent-color: var(--vault-accent);">
+            </label>
+            <button id="pe-grayscale" class="pe-filter-btn" style="background: transparent; border: 1px solid var(--vault-border); color: var(--vault-text); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); cursor: pointer;">Grayscale</button>
+            <button id="pe-sepia" class="pe-filter-btn" style="background: transparent; border: 1px solid var(--vault-border); color: var(--vault-text); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); cursor: pointer;">Sepia</button>
+            <button id="pe-invert" class="pe-filter-btn" style="background: transparent; border: 1px solid var(--vault-border); color: var(--vault-text); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); cursor: pointer;">Invert</button>
+            <button id="pe-reset" style="background: transparent; border: 1px solid var(--vault-border); color: var(--vault-slate); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); cursor: pointer;">Reset</button>
+          </div>
+          <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+            <span style="font-size: 10px; color: var(--vault-slate); font-family: var(--font-mono);">Zoom</span>
+            <input id="photo-editor-zoom" type="range" min="0.5" max="3" step="0.1" value="1" style="width: 100px; accent-color: var(--vault-accent); cursor: pointer;">
+            <span id="photo-editor-zoom-val" style="font-size: 10px; color: var(--vault-slate); font-family: var(--font-mono); min-width: 28px;">100%</span>
+          </div>
+        </div>
+        <!-- Filmstrip -->
+        <div id="photo-editor-filmstrip" style="flex: 0 0 80px; border-top: 1px solid var(--vault-border); background: var(--vault-console-bg); padding: 8px; display: flex; gap: 8px; overflow-x: auto; align-items: center;">
+          <!-- Thumbnails populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

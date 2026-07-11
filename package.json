@@ -1,0 +1,90 @@
+{
+  "name": "vault-streaming",
+  "version": "0.1.0",
+  "description": "VaultWares streaming client — Real-Debrid / Usenet / TMDB movie & series streaming, extracted from vault-explorer.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1",
+    "playwright": "^1.59.1"
+  },
+  "build": {
+    "appId": "com.vaultwares.vaultexplorer",
+    "icon": "build/icon.ico",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "index.css",
+      "themes.css",
+      "themes.js",
+      "js/**",
+      "css/**",
+      "src/**",
+      "public/**",
+      "powershell/**",
+      "build/**",
+      "python-scripts/**",
+      "vault_explorer/**",
+      "tools/**",
+      "scripts/**",
+      "vaultwares-themes/**",
+      "node_modules/**",
+      "!tools/models/*.nemo",
+      "!tools/models/parakeet-tdt-0.6b-v3/**",
+      "!node_modules/playwright/**",
+      "!node_modules/@playwright/**",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**",
+      "!node_modules/app-builder-lib/**",
+      "!node_modules/builder-util/**",
+      "!node_modules/electron-publish/**",
+      "!node_modules/@electron/rebuild/**",
+      "!node_modules/dmg-builder/**"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env",
+        "filter": [
+          ".env"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "tools/**",
+      "python-scripts/**",
+      "vault_explorer/**"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "vault-explorer-setup-${version}.${ext}"
+    }
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "node-fetch": "^3.3.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller"
+    ]
+  },
+  "allowScripts": {
+    "electron@41.2.1": true,
+    "electron-winstaller@5.4.0": true
+  }
+}
