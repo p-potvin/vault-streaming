@@ -66,38 +66,11 @@ function loadCometStreamBase() {
 
 const COMET_STREAM_BASE = loadCometStreamBase();
 
+// DISABLED: this used to call api.real-debrid.com/instantAvailability directly
+// from the account IP — a policy violation and a ban risk. Comet already tags
+// cached streams (they carry a resolved url), so this is a no-op kept only for
+// API compatibility. Do NOT restore the direct Real-Debrid call.
 async function checkRealDebridCache(torrentList) {
-    if (!RD_TOKEN || !torrentList || torrentList.length === 0) return torrentList;
-    try {
-        const hashes = torrentList.map(t => t.hash).filter(Boolean);
-        if (hashes.length === 0) return torrentList;
-        
-        const chunkSize = 40;
-        let cachedMap = {};
-        for (let i = 0; i < hashes.length; i += chunkSize) {
-            const chunk = hashes.slice(i, i + chunkSize);
-            const cacheUrl = `https://api.real-debrid.com/rest/1.0/torrents/instantAvailability/${chunk.join('/')}`;
-            const cacheRes = await fetchWithTimeout(cacheUrl, {
-                headers: { Authorization: `Bearer ${RD_TOKEN}` }
-            });
-            if (cacheRes.ok) {
-                const data = await cacheRes.json();
-                cachedMap = { ...cachedMap, ...data };
-            }
-        }
-        
-        torrentList.forEach(t => {
-            if (!t.hash) return;
-            const key = t.hash.toLowerCase();
-            const isCached = !!(cachedMap[key] && cachedMap[key].rd && cachedMap[key].rd.length > 0);
-            t.cached = isCached;
-            if (isCached) {
-                t.type = `⚡ [RD+] ${t.type}`;
-            }
-        });
-    } catch (e) {
-        console.error('[Real-Debrid] Cache check failed:', e);
-    }
     return torrentList;
 }
 

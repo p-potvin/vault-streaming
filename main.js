@@ -43,14 +43,11 @@ const utils = require('./src/utils');
 
 const child_process = require('child_process');
 const { execFile } = child_process;
-const cryptoHandlers = require('./src/crypto');
-const previewHandlers = require('./src/previews');
-const normalizationHandlers = require('./src/normalization');
 const tmdbHandlers = require('./src/tmdb');
 const realDebridHandlers = require('./src/realdebrid');
-const liveSubtitlesHandlers = require('./src/live-subtitles');
 const watchHistoryHandlers = require('./src/watch-history');
-const usenetHandlers = require('./src/usenet');
+const liveSubtitlesHandlers = require('./src/live-subtitles');
+// usenet disabled — VaultWares single-IP/Comet-only policy
 
 
 let mainWindow;
@@ -62,15 +59,18 @@ function getProcessName() {
     return path.basename(process.execPath);
 }
 
-function killAllVaultExplorerProcesses(includeSelf = true) {
+function killAllOwnProcesses(includeSelf = true) {
+    // Kill only processes with OUR OWN executable image name. Never run in dev:
+    // there the image is electron.exe, shared with every other Electron app on
+    // the machine (this previously hardcoded vault-explorer.exe, so launching
+    // Vault Streaming would kill a running Vault Explorer).
     const execName = getProcessName();
-    // Only run process cleanup on Windows and only when the executable is the packaged app
-    if (process.platform !== 'win32' || execName.toLowerCase() !== 'vault-explorer.exe') return;
+    const lower = execName.toLowerCase();
+    if (process.platform !== 'win32' || lower === 'electron.exe' || !lower.startsWith('vault')) return;
 
     if (includeSelf) {
-        // Detached taskkill will outlive the current process and terminate the whole family
         try {
-            child_process.spawn('taskkill', ['/F', '/IM', 'vault-explorer.exe'], {
+            child_process.spawn('taskkill', ['/F', '/IM', execName], {
                 detached: true,
                 windowsHide: true,
                 stdio: 'ignore'
@@ -81,44 +81,31 @@ function killAllVaultExplorerProcesses(includeSelf = true) {
         return;
     }
 
-    // Kill all vault-explorer processes except the current PID (startup zombie cleanup)
+    // Kill sibling processes of the SAME app except the current PID
+    const baseName = execName.replace(/\.exe$/i, '');
     const currentPid = process.pid;
     try {
         child_process.spawn('powershell.exe', [
             '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
-            `Get-Process -Name vault-explorer -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${currentPid} } | Stop-Process -Force -ErrorAction SilentlyContinue`
+            `Get-Process -Name '${baseName}' -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${currentPid} } | Stop-Process -Force -ErrorAction SilentlyContinue`
         ], {
             detached: true,
             windowsHide: true,
             stdio: 'ignore'
         }).unref();
     } catch (err) {
-        console.error('[cleanup] Failed to kill sibling vault-explorer processes:', err);
-    }
-}
-
-function killNodeProcesses() {
-    if (process.platform !== 'win32') return;
-    try {
-        child_process.spawn('powershell.exe', [
-            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
-            'Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue'
-        ], {
-            detached: true,
-            windowsHide: true,
-            stdio: 'ignore'
-        }).unref();
-    } catch (err) {
-        console.error('[cleanup] Failed to kill node processes:', err);
+        console.error('[cleanup] Failed to kill sibling processes:', err);
     }
 }
 
 function performFullAppCleanup() {
     console.log('[main:cleanup] Full app cleanup requested');
     try { liveSubtitlesHandlers.shutdownLiveSubtitles(); } catch (e) { /* noop */ }
+    // NOTE: the old killNodeProcesses() nuked EVERY node.exe on the machine —
+    // removed. utils.killAllActiveSubprocesses() already kills our own tracked
+    // subprocess trees.
     utils.killAllActiveSubprocesses();
-    killNodeProcesses();
-    killAllVaultExplorerProcesses(true);
+    killAllOwnProcesses(true);
 }
 
 async function cleanupStaleTempFiles(vaultPath) {
@@ -251,7 +238,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
     // Clean up any orphaned vault-explorer processes from a previous bad exit
-    killAllVaultExplorerProcesses(false);
+    killAllOwnProcesses(false);
 
     createWindow();
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
@@ -464,22 +451,16 @@ async function saveSettings(settings) {
 
 const { registerSystemIpc } = require('./src/ipc/system.ipc');
 const { registerMediaIpc } = require('./src/ipc/media.ipc');
-const { registerCryptoIpc } = require('./src/ipc/crypto.ipc');
 
 
 registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings);
 registerMediaIpc(ipcMain);
-registerCryptoIpc(ipcMain);
 
 // Register Modular Handlers
-previewHandlers.registerPreviewHandlers(ipcMain);
-previewHandlers.registerImageEnhanceHandler(ipcMain);
-normalizationHandlers.registerNormalizationHandlers(ipcMain);
 tmdbHandlers.registerTmdbHandlers(ipcMain);
 realDebridHandlers.registerRealDebridHandlers(ipcMain);
-usenetHandlers.registerUsenetHandlers(ipcMain, app);
-liveSubtitlesHandlers.registerLiveSubtitlesHandlers(ipcMain);
 watchHistoryHandlers.registerWatchHistoryHandlers(ipcMain, app);
+liveSubtitlesHandlers.registerLiveSubtitlesHandlers(ipcMain);
 
 // Register Clip Handler
 registerClipHandler(ipcMain);

@@ -336,7 +336,9 @@ body.tab-streaming-active #tmdb-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   width: 100%;
-  gap: 24px;
+  /* Extra row gap (vs column gap) gives a taller empty strip between rows, so
+     moving off a hover popup lands in dead space instead of the next card. */
+  gap: 44px 24px;
   align-content: start;
   position: relative;
 }

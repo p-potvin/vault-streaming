@@ -216,13 +216,14 @@ function registerLiveSubtitlesHandlers(ipcMain) {
         return { success: true, ready: daemonReady, modelPresent: modelPresent() };
     });
 
-    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo } = {}) => {
-        if (!videoPath || /^https?:\/\//i.test(videoPath)) {
-            return { success: false, error: 'Live subtitles require a local playback source.' };
+    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt } = {}) => {
+        // Vault Streaming plays remote (Comet/RD) URLs, so http(s) sources are
+        // allowed here (ffmpeg reads them). SRT is opt-in and only meaningful for
+        // a local file — see the python daemon.
+        if (!videoPath) {
+            return { success: false, error: 'No playback source for live subtitles.' };
         }
         lastSender = event.sender;
-        // First use on a fresh install: fetch the model (with progress) before
-        // the daemon can load it.
         try {
             await ensureModel();
         } catch (e) {
@@ -237,6 +238,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
             volumeBoost: Number.isFinite(parsedBoost) ? Math.min(2.5, Math.max(1, parsedBoost)) : 1.5,
             start: Math.max(0, Number.parseFloat(startTime) || 0),
             translateTo: translateTo || null,
+            writeSrt: !!writeSrt,
         });
         return { success: ok, ready: daemonReady };
     });

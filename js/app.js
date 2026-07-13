@@ -10,26 +10,32 @@ function setLanguage(lang) {
   
   if (el('path-display')) el('path-display').title = window.translations[lang].browseVault;
   
+  // Files-tab controls (filter/search/sort) were removed with the local-vault
+  // features — guard every lookup so the language pass can't crash.
   const filterType = el('filter-type');
-  filterType.options[0].text = window.translations[lang].videos;
-  filterType.options[1].text = window.translations[lang].images;
-  filterType.options[2].text = window.translations[lang].music;
-  filterType.options[3].text = window.translations[lang].allFiles;
-  
-  el('search-box').placeholder = window.translations[lang].searchPlaceholder;
+  if (filterType && filterType.options.length >= 4) {
+    filterType.options[0].text = window.translations[lang].videos;
+    filterType.options[1].text = window.translations[lang].images;
+    filterType.options[2].text = window.translations[lang].music;
+    filterType.options[3].text = window.translations[lang].allFiles;
+  }
+
+  if (el('search-box')) el('search-box').placeholder = window.translations[lang].searchPlaceholder;
   if (el('btn-new-folder')) el('btn-new-folder').title = window.translations[lang].addFolder;
-  el('btn-refresh').title = window.translations[lang].refresh;
+  if (el('btn-refresh')) el('btn-refresh').title = window.translations[lang].refresh;
   if (el('sort-label')) el('sort-label').innerText = window.translations[lang].sortLabel;
-  
+
   const sortBy = el('sort-by');
-  sortBy.options[0].text = window.translations[lang].dateModified;
-  sortBy.options[1].text = window.translations[lang].name;
-  sortBy.options[2].text = window.translations[lang].size;
-  sortBy.options[3].text = window.translations[lang].type;
-  sortBy.options[4].text = window.translations[lang].duration;
-  
-  window.updateSortOrderButtonUI();
-  el('loading-text').innerText = window.translations[lang].scanning;
+  if (sortBy && sortBy.options.length >= 5) {
+    sortBy.options[0].text = window.translations[lang].dateModified;
+    sortBy.options[1].text = window.translations[lang].name;
+    sortBy.options[2].text = window.translations[lang].size;
+    sortBy.options[3].text = window.translations[lang].type;
+    sortBy.options[4].text = window.translations[lang].duration;
+  }
+
+  if (typeof window.updateSortOrderButtonUI === 'function') window.updateSortOrderButtonUI();
+  if (el('loading-text')) el('loading-text').innerText = window.translations[lang].scanning;
   
   const dialogLabel = document.querySelector('#fake-folder-dialog label');
   if (dialogLabel) dialogLabel.innerText = window.translations[lang].enterFolderName;
@@ -56,7 +62,7 @@ function setLanguage(lang) {
   if (el('subtab-movies')) el('subtab-movies').innerText = window.translations[lang].tabMovies;
   if (el('subtab-series')) el('subtab-series').innerText = window.translations[lang].tabSeries;
 
-  if (!window.currentRealPath) {
+  if (!window.currentRealPath && el('path-display')) {
     el('path-display').innerText = window.translations[lang].noFolderSelected;
   }
   
@@ -67,11 +73,12 @@ function setLanguage(lang) {
   if (emptyStateP) emptyStateP.innerText = window.translations[lang].clickBrowse;
   if (emptyStateBtn) emptyStateBtn.innerText = window.translations[lang].browseVault;
   
-  window.updateStatusBar();
+  if (typeof window.updateStatusBar === 'function') window.updateStatusBar();
 }
 
 function updateSortOrderButtonUI() {
     const btn = el('btn-sort-order');
+    if (!btn) return; // sort controls removed with the local vault UI
     const order = btn.dataset.order || 'desc';
     const lang = window.currentLang || 'en';
     if (order === 'asc') {
@@ -172,13 +179,14 @@ async function initApp() {
         setLanguage('en');
     }
 
-    // Initialize player, settings, tab clicks, navigation keybindings, TMDB search and livestream components
-    window.initPlayer();
-    window.initSettingsListeners();
-    window.initTabListeners();
-    window.initNavigationListeners();
+    // Initialize player, settings, tab clicks, keybindings, and TMDB search.
+    // Local-vault modules (navigation/directory) were removed — guard each init.
+    if (typeof window.initPlayer === 'function') window.initPlayer();
+    if (typeof window.initSettingsListeners === 'function') window.initSettingsListeners();
+    if (typeof window.initTabListeners === 'function') window.initTabListeners();
+    if (typeof window.initNavigationListeners === 'function') window.initNavigationListeners();
     if (typeof window.initKeybindingsAndFolderListeners === 'function') window.initKeybindingsAndFolderListeners();
-    window.initTMDBListeners();
+    if (typeof window.initTMDBListeners === 'function') window.initTMDBListeners();
 
     // ── WebM Real-time Progress Tracking ─────────────────────────────────────
     window.electronAPI.onWebmProgress((data) => {
@@ -324,26 +332,12 @@ async function initApp() {
         }
     }, 5 * 60 * 1000);
 
-    // Default boot tab setup, deferred to run after full init
-    window.vaultLoaded = false;
-    const validTabs = ['files', 'music', 'photoalbums', 'misc', 'streaming', 'livestream'];
-    let homeTab = window.appSettings?.defaultHomeTab || 'files';
-    if (homeTab === 'vault') homeTab = 'files';
-    if (homeTab === 'photos') homeTab = 'photoalbums';
-    if (homeTab === 'audio') homeTab = 'music';
-    if (homeTab === 'albums') homeTab = 'photoalbums';
-    if (homeTab === 'playlists') homeTab = 'music';
-    if (!validTabs.includes(homeTab)) homeTab = 'files';
-    window.switchTab(homeTab);
-
-    // Warm-load the live-subtitles ASR model ~3s after the UI settles, so the
-    // first "Live Subtitles" click is instant instead of paying the ~29s model
-    // load. Fire-and-forget; the daemon loads in the background.
-    if (window.electronAPI && typeof window.electronAPI.warmLiveSubtitles === 'function') {
-        setTimeout(() => {
-            window.electronAPI.warmLiveSubtitles().catch(() => {});
-        }, 3000);
+    // Boot straight into Discover — must run AFTER initTMDBListeners so the
+    // TMDB state (providers, search) is initialized before the first render.
+    if (typeof window.switchStreamingSubtab === 'function') {
+        window.switchStreamingSubtab('discover');
     }
+
 }
 
 // Kickstart app when page loads

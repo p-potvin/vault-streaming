@@ -538,12 +538,17 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
     updateLiveSubButton(true);
     window.showToast(`Live subtitles started for "${itemName}" (${primaryLang.toUpperCase()})…`, 'success');
 
+    // SRT sidecar is opt-in (default off) — controlled by the menu checkbox.
+    const srtChk = el('chk-write-srt');
+    const writeSrt = !!(srtChk && srtChk.checked);
+
     window.electronAPI.startLiveSubtitles({
         videoPath,
         langs,
         volumeBoost,
         startTime,
         translateTo,
+        writeSrt,
     }).then((res) => {
         if (!res || !res.success) {
             window.showToast('Live subtitles failed to start: ' + ((res && res.error) || 'unknown'), 'error');

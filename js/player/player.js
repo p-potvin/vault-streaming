@@ -1115,7 +1115,7 @@ function initPlayer() {
         window.initSubtitleListeners();
     }
     if (typeof window.initUpscaleListeners === 'function') {
-        window.initUpscaleListeners();
+        if (typeof window.initUpscaleListeners === 'function') window.initUpscaleListeners(); // upscale module removed in Vault Streaming
     }
     
     // Initialize clip system

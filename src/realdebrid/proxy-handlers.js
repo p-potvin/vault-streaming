@@ -1,7 +1,19 @@
 // src/realdebrid/proxy-handlers.js - proxy-aware unrestrict, download, and proxy test handlers
 const path = require("path");
 const { RD_TOKEN } = require("./client");
-const { makeProxiedRequest, downloadFileWithProxy } = require("./proxy");
+const { makeProxiedRequest, downloadFileWithProxy, parseProxyString } = require("./proxy");
+
+// Ban-prevention gate (Tue, 17 Jun 2026 torrent+debrid policy): the manual Debrid
+// Downloader is the one path Comet cannot cover, so it MUST only ever talk to
+// Real-Debrid through the proxy tunnel — never directly from the account IP.
+// makeProxiedRequest / downloadFileWithProxy silently fall back to a DIRECT
+// request when no proxy is given, so we refuse here before that can happen.
+function requireTunnel(proxy) {
+    if (!proxy || !String(proxy).trim() || !parseProxyString(proxy)) {
+        return { success: false, error: 'Debrid Downloader requires the proxy tunnel to be enabled and configured (direct Real-Debrid access is blocked to avoid an IP ban).' };
+    }
+    return null;
+}
 
 function registerProxyHandlers(ipcMain) {
     ipcMain.handle('rd-unrestrict-url', async (event, { link, proxy }) => {
@@ -9,6 +21,8 @@ function registerProxyHandlers(ipcMain) {
             if (!RD_TOKEN) {
                 return { success: false, error: 'Real-Debrid API token is not configured in .env' };
             }
+            const gate = requireTunnel(proxy);
+            if (gate) return gate;
 
             if (link.startsWith('magnet:')) {
                 console.log('[Real-Debrid] Processing magnet for unrestrict...');
@@ -141,6 +155,8 @@ function registerProxyHandlers(ipcMain) {
     // 4. Secure Proxy Tunnel Stream Downloader
     ipcMain.handle('rd-download-file', async (event, { downloadUrl, filename, proxy }) => {
         try {
+            const gate = requireTunnel(proxy);
+            if (gate) return gate;
             const { app } = require('electron');
             const downloadsDir = app.getPath('downloads');
             const destPath = path.join(downloadsDir, filename);

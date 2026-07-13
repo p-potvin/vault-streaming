@@ -340,3 +340,17 @@ window.showConfirmDialog = showConfirmDialog;
 window.createFolderChooserEmptyState = createFolderChooserEmptyState;
 window.browseTabFolder = browseTabFolder;
 window.getTabDefaultFolder = getTabDefaultFolder;
+
+// Status bar (the original lived in the removed local-vault navigation module).
+// Streaming context: show the number of rendered TMDB cards.
+window.updateStatusBar = function () {
+    const items = el('status-items');
+    if (!items) return;
+    const grid = el('tmdb-results-grid');
+    const count = grid ? grid.querySelectorAll('.tmdb-movie-card').length : 0;
+    items.innerText = `${count} items`;
+    const sel = el('status-selected');
+    if (sel) sel.innerText = '';
+    const size = el('status-size');
+    if (size) size.innerText = '';
+};

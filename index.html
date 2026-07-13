@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vault Explorer</title>
-  <!-- v1.1.5 -->
+  <title>Vault Streaming</title>
+  <!-- v1.2.0 -->
   <link href="themes.css" rel="stylesheet">
   <link href="index.css" rel="stylesheet">
   <script src="themes.js" defer></script>
@@ -16,13 +16,11 @@
   <script src="js/icons.js" defer></script>
   <script src="js/settings/theme.js" defer></script>
   <script src="js/settings/pill-tags.js" defer></script>
-  <script src="js/settings/benchmark.js" defer></script>
   <script src="js/settings/debrid-downloader.js" defer></script>
   <script src="js/settings/core.js" defer></script>
   <script src="js/navigation/card-events.js" defer></script>
   <script src="js/navigation/card.js" defer></script>
   <script src="js/player/subtitles.js" defer></script>
-  <script src="js/player/upscale.js" defer></script>
   <script src="js/player/clip.js" defer></script>
   <script src="js/player/player.js" defer></script>
   <script src="js/progress.js" defer></script>
@@ -36,7 +34,6 @@
   <script src="js/tmdb.js" defer></script>
   <script src="js/navigation/tabs.js" defer></script>
   <script src="js/navigation/keybindings.js" defer></script>
-  <script src="js/navigation/idle.js" defer></script>
   <script src="js/app.js" defer></script>
   <script src="js/tooltip.js" defer></script>
 </head>
@@ -47,7 +44,7 @@
       <circle fill="none" stroke="var(--vault-gold)" stroke-width="3" cx="55" cy="62" r="10"/>
       <circle fill="var(--vault-gold)" cx="55" cy="62" r="4"/>
     </svg>
-    <span style="font-size: 11px; font-weight: 500; letter-spacing: 0.1em; opacity: 0.75; margin-right: 16px;">Explorer</span>
+    <span style="font-size: 11px; font-weight: 500; letter-spacing: 0.1em; opacity: 0.75; margin-right: 16px;">Vault Streaming</span>
     
 
 
@@ -339,7 +336,6 @@
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
-        <button id="settings-btn-benchmark" style="background:var(--vault-console-surface); color:var(--vault-gold); border:1px solid var(--vault-gold); padding:5px 10px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer; font-size:10.5px; transition: background 0.2s;" type="button">ASR Benchmark</button>
         <button id="settings-btn-save" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:6px 12px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer;">Save</button>
       </div>
     </div>
@@ -894,15 +890,10 @@
                        <div class="subtitle-divider" style="height:1px; background:var(--vault-border); margin:4px 0;"></div>
                        <div class="subtitle-option-upload" id="opt-upload-subtitle" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s;">Upload SRT/VTT...</div>
                        <div class="subtitle-option-upload" id="opt-generate-subtitle" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-accent); font-weight:600; transition:background 0.2s; border-top:1px dashed var(--vault-border); display:inline-flex; align-items:center; gap:6px; width:100%; box-sizing:border-box;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:12px; height:12px; display:block; flex-shrink:0;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Live Subtitles (AI)</span></div>
+                       <label id="opt-srt-toggle" style="padding:4px 12px 8px 12px; display:flex; align-items:center; gap:6px; font-family:var(--font-body); font-size:11px; color:var(--vault-slate); cursor:pointer;"><input type="checkbox" id="chk-write-srt" style="accent-color:var(--vault-accent); cursor:pointer;"> Save subtitles to .srt file</label>
                     </div>
                  </div>
                  
-                 <button id="btn-upscale" class="ctrl-btn-sm" style="display:inline-flex; align-items:center; gap:6px; opacity: 0.5; cursor: not-allowed;" disabled>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px; display:block;">
-                       <path d="M 12 20 V 14" /><path d="M 12 10 V 4" /><path d="M 7 9 L 12 4 L 17 9" /><path d="M 18 14 L 19 16 L 21 17 L 19 18 L 18 20 L 17 18 L 15 17 L 17 16 Z" />
-                    </svg>
-                    <span>AI</span>
-                 </button>
                  <button id="btn-fullscreen" class="ctrl-btn" title="Fullscreen (F)" aria-label="Toggle Fullscreen">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;">
                        <path d="M 5 9 L 5 5 L 9 5" /><path d="M 15 5 L 19 5 L 19 9" /><path d="M 19 15 L 19 19 L 15 19" /><path d="M 5 15 L 5 19" />

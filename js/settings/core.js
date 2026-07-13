@@ -209,7 +209,6 @@ function initSettingsListeners() {
   });
 
   // Sub-panels were split into their own modules for maintainability.
-  initBenchmarkDashboard();
   initDebridDownloader();
 }
 

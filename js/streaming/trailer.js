@@ -2,6 +2,12 @@
 // Part of the streaming feature, split out of the former monolithic js/streaming.js.
 
 async function _fetchAndInjectTrailer(tmdbId, mediaType) {
+    // Generation token: any modal close (destroyTrailer) bumps this, so an
+    // in-flight resolution that finishes AFTER the modal closed will abort
+    // before attaching an autoplaying <video> off-screen (the "ghost trailer").
+    const gen = window._modalTrailerGen = (window._modalTrailerGen || 0) + 1;
+    const stillCurrent = () => gen === window._modalTrailerGen;
+
     const iframeWrapper = el('movie-trailer-wrapper');
     const loadingEl = el('movie-trailer-loading');
     
@@ -120,7 +126,14 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                 console.warn('[streaming] yt-dlp extraction failed, falling back to iframe:', e.message);
             }
         }
-        
+
+        // The modal was closed while we were resolving — do NOT attach anything
+        // (this is what prevents the off-screen ghost trailer).
+        if (!stillCurrent()) {
+            if (loadingEl) loadingEl.style.display = 'none';
+            return;
+        }
+
         if (directUrl) {
             console.log('[streaming] yt-dlp resolved direct stream, replacing iframe with native video');
             // Remove old iframe listener if any
@@ -274,6 +287,10 @@ async function _getTMDBToken() {
 }
 
 window.destroyTrailer = function() {
+    // Invalidate any in-flight _fetchAndInjectTrailer so a late resolution can't
+    // re-attach an autoplaying trailer after we tear down.
+    window._modalTrailerGen = (window._modalTrailerGen || 0) + 1;
+
     const iframeWrapper = document.getElementById('movie-trailer-wrapper');
     if (!iframeWrapper) return;
     

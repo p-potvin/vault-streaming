@@ -60,7 +60,57 @@ def dbg(msg):
 
 # ---------------------------------------------------------------------------
 # SRT sidecar writer — its own thread so file I/O never stalls ASR.
+# ---------------------------------------------------------------------------
+def _fmt_ts(seconds):
+    if seconds < 0:
+        seconds = 0.0
+    ms = int(round((seconds - int(seconds)) * 1000))
+    s = int(seconds)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
+
+class SrtWriter(threading.Thread):
+    def __init__(self, srt_path):
+        super().__init__(daemon=True)
+        self.srt_path = srt_path
+        self.q = queue.Queue()
+        self._idx = 0
+        self._fh = None
+
+    def run(self):
+        try:
+            self._fh = open(self.srt_path, "w", encoding="utf-8")
+        except Exception as e:
+            emit("LIVE_STATUS", {"status": "warn", "message": f"SRT open failed: {e}"})
+            return
+        while True:
+            cue = self.q.get()
+            if cue is None:
+                break
+            self._idx += 1
+            try:
+                self._fh.write(
+                    f"{self._idx}\n"
+                    f"{_fmt_ts(cue['start'])} --> {_fmt_ts(cue['end'])}\n"
+                    f"{cue['text'].strip()}\n\n"
+                )
+                self._fh.flush()
+            except Exception:
+                pass
+            self.q.task_done()
+        try:
+            if self._fh:
+                self._fh.close()
+        except Exception:
+            pass
+
+    def submit(self, cue):
+        self.q.put(cue)
+
+    def close(self):
+        self.q.put(None)
 
 
 def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost):
@@ -156,11 +206,25 @@ def run_session(model, opts, stop_event):
 
     translator = Translator(translate_to) if translate_to else None
 
+    # SRT sidecar is OPT-IN (default off) and only for local files — there's
+    # nowhere to write a sidecar next to a remote http(s) stream URL.
+    write_srt = bool(opts.get("writeSrt"))
+    is_remote = video_path.lower().startswith(("http://", "https://"))
+    srt_path = None
+    writer = None
+    if write_srt and not is_remote:
+        base, _ = os.path.splitext(video_path)
+        srt_path = f"{base}.{primary_lang}.srt"
+        writer = SrtWriter(srt_path)
+        writer.start()
+    elif write_srt and is_remote:
+        dbg("writeSrt requested but source is a remote URL — skipping sidecar")
+
     dbg(f"session: video={video_path!r} langs={langs} boost={volume_boost} start={start:.2f}s "
-        f"translateTo={translate_to} min_silence={min_silence}s max_utt={max_utt_s}s")
+        f"translateTo={translate_to} writeSrt={write_srt and not is_remote} min_silence={min_silence}s max_utt={max_utt_s}s")
 
     emit("LIVE_STATUS", {"status": "started", "message": "Live subtitles running",
-                         "videoPath": video_path, "startTime": start,
+                         "videoPath": video_path, "srtPath": srt_path, "startTime": start,
                          "translateTo": translate_to})
 
     ff_cmd = build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost)
@@ -168,6 +232,8 @@ def run_session(model, opts, stop_event):
     try:
         proc = subprocess.Popen(ff_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except Exception as e:
+        if writer:
+            writer.close()
         emit("JSON_STATUS", {"status": "FAILED", "error": f"ffmpeg spawn failed: {e}",
                              "videoPath": video_path, "final": True})
         return
@@ -203,6 +269,8 @@ def run_session(model, opts, stop_event):
         cue = {"index": cue_index[0], "start": round(seg_start, 3), "end": round(seg_end, 3),
                "text": t, "lang": primary_lang, "partial": False, "videoPath": video_path}
         emit("SUBTITLE_CUE", cue)
+        if writer:
+            writer.submit(cue)
         last_final_end = max(last_final_end, seg_end)
         dbg(f"  FINAL #{cue_index[0]} [{seg_start:.2f}-{seg_end:.2f}] {t!r}")
 
@@ -279,11 +347,14 @@ def run_session(model, opts, stop_event):
             proc.terminate()
         except Exception:
             pass
+        if writer:
+            writer.close()
+            writer.join(timeout=3.0)
 
     if stopped:
         emit("LIVE_STATUS", {"status": "stopped", "videoPath": video_path})
     else:
-        emit("JSON_STATUS", {"status": "SUCCESS", "cues": final_count[0],
+        emit("JSON_STATUS", {"status": "SUCCESS", "srtPath": srt_path, "cues": final_count[0],
                              "videoPath": video_path, "final": True})
     dbg(f"session done: finals={final_count[0]} stopped={stopped}")
 

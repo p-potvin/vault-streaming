@@ -40,13 +40,10 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     const chooseManuallyBtn = el('btn-rd-choose-manually');
     if (chooseManuallyBtn) chooseManuallyBtn.style.display = 'none';
 
-    // Fetch streaming mode from backend first to update title/status
-    let streamingMode = 'torrent-only';
-    try {
-        streamingMode = window.appSettings.streamingMode || await window.electronAPI.getStreamingMode();
-    } catch(err) {
-        console.warn('[streaming] Could not retrieve streaming mode, using default torrent-only', err);
-    }
+    // Usenet is disabled (VaultWares single-IP / Comet-only policy). Force
+    // torrent-only so the usenet-only / hybrid branches (which call the removed
+    // searchUsenet handler) can never run. Do not restore the settings read.
+    const streamingMode = 'torrent-only';
 
     if (titleTextEl) {
         if (streamingMode === 'usenet-only') {
@@ -66,7 +63,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     } else if (streamingMode === 'hybrid') {
         statusText.innerHTML = `${window.icons ? window.icons.search('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Scraping Torrents & Usenet for:<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>...`;
     } else {
-        statusText.innerHTML = `${window.icons ? window.icons.search('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Scraping Torrentio index for:<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>...`;
+        statusText.innerHTML = `${window.icons ? window.icons.search('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Querying Comet for cached streams:<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>...`;
     }
 
     const preferredQuality = getPreferredQuality();
@@ -170,16 +167,15 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
         const torrentItems = torrents.filter(t => !t.isUsenet);
         const usenetItems = torrents.filter(t => t.isUsenet);
 
+        // Comet tells us which streams are cached (it returns a resolved `url`
+        // for those; search.js sets `cached:true`). We trust that flag instead
+        // of hitting Real-Debrid directly — a direct call would use the account
+        // IP and, since RD killed instantAvailability, would trigger a grab.
         let torrentsWithCacheStatus = [];
         if (torrentItems.length > 0) {
-            const apiKey = window.appSettings?.rdApiKey;
-            const cachedSet = await checkRDCachedBatch(
-                torrentItems.map(t => t.hash).filter(Boolean),
-                apiKey
-            );
             torrentsWithCacheStatus = torrentItems.map(t => ({
                 ...t,
-                isRDCached: t.hash ? cachedSet.has(t.hash.toLowerCase()) : false
+                isRDCached: !!t.cached
             }));
         }
 
@@ -592,6 +588,14 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             // Skip on infringing file
             if (response && response.error === 'infringing_file') {
                 console.warn(`[RD] Infringing file, trying next: ${currentTorrent.quality}`);
+                lastError = response.error;
+                continue;
+            }
+
+            // Non-cached sources can't be resolved via Comet — skip to the next
+            // (⚡ cached) result instead of trying to grab it directly.
+            if (response && response.notCached) {
+                console.warn(`[RD] Not available via Comet, trying next cached result`);
                 lastError = response.error;
                 continue;
             }

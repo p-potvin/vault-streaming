@@ -44,40 +44,19 @@ function _detectQualityRank(text) {
 }
 
 /**
- * Batched Real-Debrid cache check.
- * RD's instantAvailability endpoint accepts many hashes per request, so one call
- * replaces the previous N-concurrent fetch storm that risked rate-limiting.
- * Returns a Set of lower-cased hashes that RD reports as cached.
+ * DISABLED (VaultWares single-IP / Comet-only policy).
+ *
+ * This used to call api.real-debrid.com/torrents/instantAvailability directly
+ * from the account's own IP — a ban risk, and pointless now that Real-Debrid
+ * removed that endpoint (it always returns empty / triggers a grab). Comet
+ * already flags cached streams server-side: search.js sets `cached:true` on any
+ * result Comet returned a resolved `url` for. rd-flow.js reads that flag instead
+ * of calling this. Kept as a no-op for signature compatibility.
+ *
+ * Do NOT restore a direct Real-Debrid call here.
  */
 async function checkRDCachedBatch(hashes, apiKey) {
-    const cached = new Set();
-    if (!apiKey || !hashes || !hashes.length) return cached;
-
-    const valid = [...new Set(hashes.filter(h => typeof h === 'string' && h.length >= 32).map(h => h.toLowerCase()))];
-    const CHUNK = 40; // keep URL length sane
-
-    for (let i = 0; i < valid.length; i += CHUNK) {
-        const chunk = valid.slice(i, i + CHUNK);
-        try {
-            const res = await fetch(
-                `https://api.real-debrid.com/rest/1.0/torrents/instantAvailability/${chunk.join('/')}`,
-                { headers: { Authorization: `Bearer ${apiKey}` } }
-            );
-            if (!res.ok) continue;
-            const data = await res.json();
-            if (!data || typeof data !== 'object') continue;
-            for (const h of chunk) {
-                const entry = data[h] || data[h.toUpperCase()];
-                if (entry && Array.isArray(entry.rd) && entry.rd.length > 0) {
-                    cached.add(h);
-                }
-            }
-            if (i + CHUNK < valid.length) await new Promise(r => setTimeout(r, 250));
-        } catch (e) {
-            console.warn('[RD] Batched cache check chunk failed:', e);
-        }
-    }
-    return cached;
+    return new Set();
 }
 
 /**

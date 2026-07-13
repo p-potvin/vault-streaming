@@ -30,12 +30,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFolderSizeSmart: (dirPath, fileCount) => ipcRenderer.invoke('get-folder-size-smart', dirPath, fileCount),
   encryptFiles: (data) => ipcRenderer.invoke('encrypt-files', data),
   decryptFiles: (data) => ipcRenderer.invoke('decrypt-files', data),
-  startUpscaleStream: (data) => ipcRenderer.invoke('upscale-stream-start', data),
-  stopUpscaleStream: () => ipcRenderer.invoke('upscale-stream-stop'),
-  onUpscaleChunk: (cb) => ipcRenderer.on('upscale-chunk', (_, data) => cb(data)),
-  offUpscaleChunk: () => ipcRenderer.removeAllListeners('upscale-chunk'),
-  onUpscaleStatus: (cb) => ipcRenderer.on('upscale-status', (_, data) => cb(data)),
-  offUpscaleStatus: () => ipcRenderer.removeAllListeners('upscale-status'),
   findSubtitles: (videoPath, queryTitle, skipOpenSubtitles) => ipcRenderer.invoke('find-subtitles', videoPath, queryTitle, skipOpenSubtitles),
   downloadSubtitleTrack: (data) => ipcRenderer.invoke('download-subtitle-track', data),
   onWebmProgress: (cb) => ipcRenderer.on('generate-webm-progress', (_, data) => cb(data)),
@@ -76,7 +70,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moveUsenetToDrive: (data) => ipcRenderer.invoke('move-usenet-to-drive', data),
   getStreamingMode: () => ipcRenderer.invoke('get-streaming-mode'),
 
-  // Live streaming ASR subtitles (Parakeet)
+  // Live AI subtitles (Parakeet daemon)
   warmLiveSubtitles: () => ipcRenderer.invoke('warm-live-subtitles'),
   startLiveSubtitles: (data) => ipcRenderer.invoke('start-live-subtitles', data),
   stopLiveSubtitles: () => ipcRenderer.invoke('stop-live-subtitles'),
@@ -84,6 +78,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offLiveSubtitleCue: () => ipcRenderer.removeAllListeners('live-subtitle-cue'),
   onLiveSubtitleStatus: (cb) => ipcRenderer.on('live-subtitle-status', (_, data) => cb(data)),
   offLiveSubtitleStatus: () => ipcRenderer.removeAllListeners('live-subtitle-status'),
+
+  // Live streaming ASR subtitles (Parakeet)
 
   startLivestream: (data) => ipcRenderer.invoke('start-livestream', data),
   stopLivestream: () => ipcRenderer.invoke('stop-livestream'),

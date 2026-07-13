@@ -1,209 +1,74 @@
-// src/realdebrid/stream.js - Real-Debrid magnet unrestrict workflow and status polling
-const { fetchWithTimeout, RD_TOKEN } = require("./client");
+// src/realdebrid/stream.js — Comet-only stream resolution.
+//
+// VaultWares policy (STRICT — the account is at ban risk): every magnet
+// resolution and stream-URL fetch goes through Comet, which handles Real-Debrid
+// server-side on a rotating IP. This client NEVER calls api.real-debrid.com
+// directly (no addMagnet / selectFiles / unrestrict / info polling), so it can't
+// grab a torrent from the account's own IP and can't create duplicate grabs.
+//
+// A stream is playable iff Comet returned a resolved `url` for it (search.js
+// sets `cached:true` for those). We follow that Comet url to the final media
+// location. Resolved urls are cached by hash so repeated plays don't re-hit
+// Comet's resolver for the same content.
+const { fetchWithTimeout } = require("./client");
 
-// Track in-flight addMagnet operations to prevent duplicate concurrent calls
 const _inFlightMagnets = new Set();
+const _resolvedCache = new Map(); // hash/url -> { streamUrl, filename, ts }
+const RESOLVED_TTL_MS = 30 * 60 * 1000; // 30 min
+
+async function resolveCometUrl(url) {
+    // With PROXY_DEBRID_STREAM enabled server-side, Comet's `url` IS the playable
+    // endpoint: Comet proxies the debrid stream through its VPN (Mullvad) so all
+    // traffic stays on ONE IP. We must hand this URL straight to the player and
+    // let it issue GET range requests. Do NOT HEAD it (the proxy route only
+    // serves GET — HEAD returns 405) and do NOT follow it to the RD CDN (that
+    // would hit Real-Debrid from the user's own IP and break the single-IP
+    // guarantee). The player/browser handles any redirect natively.
+    return { streamUrl: url, filename: (url.split('/').pop() || 'stream.mp4').split('?')[0] };
+}
 
 function registerStreamHandlers(ipcMain) {
-    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url }) => {
-        let dedupKey = '';
-        try {
-            if (!RD_TOKEN) {
-                return { success: false, error: 'Real-Debrid API token is not configured in .env' };
-            }
+    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url } = {}) => {
+        const dedupKey = (hash || url || magnet || '').toLowerCase().trim();
 
-            // Quick bypass: If a pre-resolved Torrentio Real-Debrid link is available, resolve it directly!
-            if (url) {
-                console.log(`[Real-Debrid] Resolving pre-debrided stream redirect: ${url}`);
-                try {
-                    const redirectRes = await fetchWithTimeout(url, { method: 'HEAD', redirect: 'manual' }, 10000);
-                    const location = redirectRes.headers.get('location');
-                    if (location) {
-                        console.log(`[Real-Debrid] Pre-debrided redirect resolved successfully: ${location}`);
-                        return {
-                            success: true,
-                            streamUrl: location,
-                            filename: location.split('/').pop() || 'stream.mp4'
-                        };
-                    }
-                } catch (e) {
-                    console.error('[Real-Debrid] Failed to follow Torrentio redirect, falling back to magnet flow:', e);
-                }
-            }
-
-            const dedupKey = (hash || magnet).toLowerCase().trim();
-            if (_inFlightMagnets.has(dedupKey)) {
-                console.warn(`[Real-Debrid] Skipping duplicate in-flight magnet: ${dedupKey.slice(0, 16)}...`);
-                return { success: false, error: 'Duplicate in-flight magnet request', dedup: true };
-            }
-            _inFlightMagnets.add(dedupKey);
-
-            console.log('[Real-Debrid] Adding magnet...');
-            // Step 1: Add Magnet to Real-Debrid
-            const addRes = await fetchWithTimeout('https://api.real-debrid.com/rest/1.0/torrents/addMagnet', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${RD_TOKEN}`,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({ magnet })
-            });
-
-            if (!addRes.ok) {
-                const errText = await addRes.text();
-                let parsedError = null;
-                try {
-                    parsedError = JSON.parse(errText);
-                } catch(e) {}
-                if (parsedError && parsedError.error) {
-                    return { success: false, error: parsedError.error, errorCode: parsedError.error_code, rawError: errText };
-                }
-                return { success: false, error: `Failed to add magnet: ${errText}` };
-            }
-
-            const addData = await addRes.json();
-            const torrentId = addData.id;
-            console.log(`[Real-Debrid] Magnet added. ID: ${torrentId}`);
-
-            // Step 2: Get torrent info to select largest/video file
-            const infoRes = await fetchWithTimeout(`https://api.real-debrid.com/rest/1.0/torrents/info/${torrentId}`, {
-                headers: { Authorization: `Bearer ${RD_TOKEN}` }
-            });
-
-            if (!infoRes.ok) {
-                return { success: false, error: 'Failed to retrieve torrent info' };
-            }
-
-            const infoData = await infoRes.json();
-            
-            // Step 3: Select files (largest video file index)
-            // Let's identify the files. Real-Debrid maps file IDs (1-indexed).
-            let targetFiles = 'all';
-            if (infoData.files && infoData.files.length > 0) {
-                // Find largest video file ID
-                const videoFiles = infoData.files.filter(f => f.path.match(/\.(mp4|mkv|avi|webm)$/i));
-                if (videoFiles.length > 0) {
-                    const largestVideo = videoFiles.reduce((prev, current) => (prev.bytes > current.bytes) ? prev : current);
-                    targetFiles = largestVideo.id;
-                }
-            }
-
-            console.log(`[Real-Debrid] Selecting files: ${targetFiles}`);
-            const selectRes = await fetchWithTimeout(`https://api.real-debrid.com/rest/1.0/torrents/selectFiles/${torrentId}`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${RD_TOKEN}`,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({ files: targetFiles })
-            });
-
-            if (!selectRes.ok) {
-                return { success: false, error: 'Failed to select torrent files' };
-            }
-
-            // Step 4: Wait/poll for the direct links to become available
-            console.log('[Real-Debrid] Polling torrent details for direct links...');
-            let links = [];
-            let attempts = 0;
-            let finalInfo = null;
-            while (attempts < 6) {
-                const checkRes = await fetchWithTimeout(`https://api.real-debrid.com/rest/1.0/torrents/info/${torrentId}`, {
-                    headers: { Authorization: `Bearer ${RD_TOKEN}` }
-                });
-                if (checkRes.ok) {
-                    const checkData = await checkRes.json();
-                    finalInfo = checkData;
-                    if (checkData.links && checkData.links.length > 0) {
-                        links = checkData.links;
-                        break;
-                    }
-                    // If it is dead or failed, stop polling early
-                    if (checkData.status === 'dead' || checkData.status === 'error' || checkData.status === 'magnet_error') {
-                        break;
-                    }
-                }
-                attempts++;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-
-            if (links.length === 0) {
-                if (finalInfo && (finalInfo.status === 'downloading' || finalInfo.status === 'queued' || finalInfo.status === 'waiting_files_selection' || finalInfo.status === 'magnet_conversion')) {
-                    console.log(`[Real-Debrid] Torrent is not yet cached but is downloading. Progress: ${finalInfo.progress}%, Speed: ${finalInfo.speed} B/s`);
-                    return {
-                        success: true,
-                        downloading: true,
-                        torrentId: torrentId,
-                        status: finalInfo.status,
-                        progress: finalInfo.progress || 0,
-                        speed: finalInfo.speed || 0,
-                        seeders: finalInfo.seeders || 0
-                    };
-                }
-                return { success: false, error: 'Torrent link selection is currently downloading (not cached on Real-Debrid).' };
-            }
-
-            // Step 5: Unrestrict (debrid) the first direct link
-            console.log(`[Real-Debrid] Unrestricting link: ${links[0]}`);
-            const unrestrictRes = await fetchWithTimeout('https://api.real-debrid.com/rest/1.0/unrestrict/link', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${RD_TOKEN}`,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({ link: links[0] })
-            });
-
-            if (!unrestrictRes.ok) {
-                const errText = await unrestrictRes.text();
-                let parsedError = null;
-                try {
-                    parsedError = JSON.parse(errText);
-                } catch(e) {}
-                if (parsedError && parsedError.error) {
-                    return { success: false, error: parsedError.error, errorCode: parsedError.error_code, rawError: errText };
-                }
-                return { success: false, error: `Failed to unrestrict link: ${errText}` };
-            }
-
-            const unrestrictData = await unrestrictRes.json();
-            console.log('[Real-Debrid] Unrestricting succeeded. Direct stream link:', unrestrictData.download);
-
+        // Only a Comet-resolved url is playable. No url = not cached/available;
+        // we refuse rather than fall back to a direct Real-Debrid grab.
+        if (!url) {
             return {
-                success: true,
-                streamUrl: unrestrictData.download,
-                filename: unrestrictData.filename
+                success: false,
+                error: 'This source is not available through Comet (no resolved link). Pick a ⚡ cached result.',
+                notCached: true
             };
+        }
+
+        // Serve from cache — avoids re-resolving the same content repeatedly.
+        const cached = _resolvedCache.get(dedupKey);
+        if (cached && (Date.now() - cached.ts) < RESOLVED_TTL_MS) {
+            console.log('[Comet] Serving cached resolved link for', dedupKey.slice(0, 16));
+            return { success: true, streamUrl: cached.streamUrl, filename: cached.filename, cached: true };
+        }
+
+        if (_inFlightMagnets.has(dedupKey)) {
+            return { success: false, error: 'Duplicate in-flight resolve request', dedup: true };
+        }
+        _inFlightMagnets.add(dedupKey);
+        try {
+            console.log('[Comet] Resolving stream url…');
+            const { streamUrl, filename } = await resolveCometUrl(url);
+            _resolvedCache.set(dedupKey, { streamUrl, filename, ts: Date.now() });
+            return { success: true, streamUrl, filename };
         } catch (e) {
-            console.error('[Real-Debrid] Workflow Error:', e);
+            console.error('[Comet] Resolve failed:', e.message);
             return { success: false, error: e.message };
         } finally {
-            if (dedupKey) _inFlightMagnets.delete(dedupKey);
+            _inFlightMagnets.delete(dedupKey);
         }
     });
 
-    ipcMain.handle('rd-torrent-status', async (event, torrentId) => {
-        try {
-            if (!RD_TOKEN) {
-                return { success: false, error: 'Real-Debrid API token is not configured in .env' };
-            }
-            const res = await fetchWithTimeout(`https://api.real-debrid.com/rest/1.0/torrents/info/${torrentId}`, {
-                headers: { Authorization: `Bearer ${RD_TOKEN}` }
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            return {
-                success: true,
-                status: data.status,
-                progress: data.progress || 0,
-                speed: data.speed || 0,
-                seeders: data.seeders || 0,
-                links: data.links || []
-            };
-        } catch (err) {
-            console.error('[Real-Debrid] Status fetch failed:', err);
-            return { success: false, error: err.message };
-        }
+    // Legacy polling channel — under Comet-only resolution there is no
+    // client-side torrent to poll (Comet manages downloads server-side).
+    ipcMain.handle('rd-torrent-status', async () => {
+        return { success: false, error: 'Torrent status polling is disabled (Comet manages resolution server-side).' };
     });
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "vault-streaming",
-  "version": "0.1.0",
-  "description": "VaultWares streaming client — Real-Debrid / Usenet / TMDB movie & series streaming, extracted from vault-explorer.",
+  "version": "1.2.0",
+  "description": "VaultWares streaming client - Torrents + Real-Debrid via Comet, TMDB movie & series streaming.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -17,7 +17,7 @@
     "playwright": "^1.59.1"
   },
   "build": {
-    "appId": "com.vaultwares.vaultexplorer",
+    "appId": "com.vaultwares.vaultstreaming",
     "icon": "build/icon.ico",
     "files": [
       "main.js",
@@ -29,17 +29,12 @@
       "js/**",
       "css/**",
       "src/**",
-      "public/**",
-      "powershell/**",
-      "build/**",
       "python-scripts/**",
       "vault_explorer/**",
-      "tools/**",
-      "scripts/**",
+      "public/**",
+      "build/**",
       "vaultwares-themes/**",
       "node_modules/**",
-      "!tools/models/*.nemo",
-      "!tools/models/parakeet-tdt-0.6b-v3/**",
       "!node_modules/playwright/**",
       "!node_modules/@playwright/**",
       "!node_modules/electron/**",
@@ -59,19 +54,15 @@
         ]
       }
     ],
-    "asarUnpack": [
-      "tools/**",
-      "python-scripts/**",
-      "vault_explorer/**"
-    ],
     "win": {
       "target": "nsis"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "vault-explorer-setup-${version}.${ext}"
-    }
+      "artifactName": "vault-streaming-setup-${version}.${ext}"
+    },
+    "productName": "Vault Streaming"
   },
   "dependencies": {
     "express": "^5.2.1",
