@@ -147,7 +147,6 @@ window.renderTMDB = async function(query = '', append = false) {
         const langCode = window.currentLang === 'fr' ? 'fr-FR' : 'en-US';
         if (window.tmdbCurrentQuery) {
             response = await window.electronAPI.searchTMDB(window.tmdbCurrentQuery, window.tmdbCurrentPage, langCode);
-        } else {
             response = await window.electronAPI.discoverTMDB(
                 window.tmdbCurrentProvider, 
                 window.tmdbCurrentMediaType, 
@@ -155,7 +154,8 @@ window.renderTMDB = async function(query = '', append = false) {
                 langCode,
                 window.tmdbCurrentGenre,
                 window.tmdbCurrentDecade,
-                window.tmdbCurrentRegion
+                window.tmdbCurrentRegion,
+                window.tmdbCurrentSort
             );
         }
 
@@ -350,6 +350,7 @@ window.initTMDBListeners = function() {
     window.tmdbCurrentGenre = 'all';
     window.tmdbCurrentDecade = 'all';
     window.tmdbCurrentRegion = 'all';
+    window.tmdbCurrentSort = 'popularity.desc';
     window.tmdbAdvancedExpanded = false;
 
     // Initialize genres dropdown
@@ -436,6 +437,7 @@ window.initTMDBListeners = function() {
     const filterGenre = el('filter-genre');
     const filterDecade = el('filter-decade');
     const filterRegion = el('filter-region');
+    const filterSort = el('filter-sort');
 
     if (filterGenre) {
         filterGenre.addEventListener('change', () => {
@@ -458,6 +460,13 @@ window.initTMDBListeners = function() {
             window.renderTMDB();
         });
     }
+    if (filterSort) {
+        filterSort.addEventListener('change', () => {
+            window.tmdbCurrentSort = filterSort.value;
+            window.tmdbCurrentPage = 1;
+            window.renderTMDB();
+        });
+    }
 
     // Reset Advanced Filters
     const btnResetFilters = el('btn-clear-advanced-filters');
@@ -468,6 +477,7 @@ window.initTMDBListeners = function() {
             window.tmdbCurrentGenre = 'all';
             window.tmdbCurrentDecade = 'all';
             window.tmdbCurrentRegion = 'all';
+            window.tmdbCurrentSort = 'popularity.desc';
             window.tmdbCurrentPage = 1;
             window.tmdbCurrentQuery = '';
             
@@ -475,6 +485,7 @@ window.initTMDBListeners = function() {
             if (filterGenre) filterGenre.value = 'all';
             if (filterDecade) filterDecade.value = 'all';
             if (filterRegion) filterRegion.value = 'all';
+            if (filterSort) filterSort.value = 'popularity.desc';
             
             updateGenreOptions();
             window.renderTMDB();

@@ -421,7 +421,7 @@ function registerTmdbHandlers(ipcMain) {
         }
     });
 
-    ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region }) => {
+    ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort }) => {
         try {
             const type = mediaType === 'tv' ? 'tv' : 'movie';
             
@@ -459,7 +459,8 @@ function registerTmdbHandlers(ipcMain) {
                 return { success: true, results: mockList };
             }
 
-            let url = `https://api.themoviedb.org/3/discover/${type}?sort_by=popularity.desc&language=${language}&page=${page}`;
+            const sortByParam = sort || 'popularity.desc';
+            let url = `https://api.themoviedb.org/3/discover/${type}?sort_by=${sortByParam}&language=${language}&page=${page}`;
             
             if (providerId && providerId !== 'all') {
                 url += `&with_watch_providers=${providerId}&watch_region=CA&with_watch_monetization_types=flatrate`;
@@ -472,8 +473,8 @@ function registerTmdbHandlers(ipcMain) {
             }
             if (decade && decade !== 'all') {
                 const startYear = parseInt(decade);
-                if (startYear === 1960) {
-                    url += `&primary_release_date.lte=1969-12-31`;
+                if (startYear === 1920) {
+                    url += `&primary_release_date.lte=1929-12-31`;
                 } else {
                     url += `&primary_release_date.gte=${startYear}-01-01&primary_release_date.lte=${startYear + 9}-12-31`;
                 }
