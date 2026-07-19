@@ -44,7 +44,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // TMDB / KinoCheck API
   searchTMDB: (query, page = 1, language = 'en-US') => ipcRenderer.invoke('search-tmdb', { query, page, language }),
-  discoverTMDB: (providerId, mediaType, page = 1, language = 'en-US') => ipcRenderer.invoke('discover-tmdb', { providerId, mediaType, page, language }),
+  discoverTMDB: (providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region) => ipcRenderer.invoke('discover-tmdb', { providerId, mediaType, page, language, withGenres, decade, region }),
   getTMDBMovie: (data) => ipcRenderer.invoke('get-tmdb-movie', data),
   getTMDBTV: (data) => ipcRenderer.invoke('get-tmdb-tv', data),
   getTMDBTVSeason: (data) => ipcRenderer.invoke('get-tmdb-tv-season', data),

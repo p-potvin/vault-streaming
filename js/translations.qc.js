@@ -85,5 +85,11 @@ window.translationsQc = {
   confirmRemoveFromLibrary: "Voulez-vous vraiment retirer \"{0}\" de votre bibliothèque ?",
   loadingFavorites: "Chargement des favoris...",
   errorLoadingFavorites: "Erreur lors du chargement des favoris.",
-  systemActionRequired: "Action système requise"
+  systemActionRequired: "Action système requise",
+  historyEmpty: "Votre historique de visionnement est vide",
+  historyEmptyDesc: "Commencez à regarder des films ou des séries pour les voir ici.",
+  removeFromHistory: "Retirer de l'historique",
+  confirmRemoveFromHistory: "Voulez-vous vraiment retirer \"{0}\" de votre historique ?",
+  removedFromHistory: "Retiré de l'historique",
+  loadingHistory: "Chargement de l'historique..."
 };

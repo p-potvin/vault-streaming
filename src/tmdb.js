@@ -421,7 +421,7 @@ function registerTmdbHandlers(ipcMain) {
         }
     });
 
-    ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US' }) => {
+    ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region }) => {
         try {
             const type = mediaType === 'tv' ? 'tv' : 'movie';
             
@@ -459,13 +459,29 @@ function registerTmdbHandlers(ipcMain) {
                 return { success: true, results: mockList };
             }
 
-            let url;
-            if (providerId === 'all') {
-                url = `https://api.themoviedb.org/3/discover/${type}?sort_by=popularity.desc&language=${language}&with_original_language=en|fr|ja|ko&page=${page}`;
-            } else {
-                url = `https://api.themoviedb.org/3/discover/${type}?with_watch_providers=${providerId}&watch_region=CA&with_watch_monetization_types=flatrate&sort_by=popularity.desc&language=${language}&with_original_language=en|fr|ja|ko&page=${page}`;
+            let url = `https://api.themoviedb.org/3/discover/${type}?sort_by=popularity.desc&language=${language}&page=${page}`;
+            
+            if (providerId && providerId !== 'all') {
+                url += `&with_watch_providers=${providerId}&watch_region=CA&with_watch_monetization_types=flatrate`;
             }
-            console.log(`[TMDB] Discovering streaming provider items: ${url}`);
+            if (withGenres && withGenres !== 'all') {
+                url += `&with_genres=${withGenres}`;
+            }
+            if (region && region !== 'all') {
+                url += `&with_origin_country=${region}`;
+            }
+            if (decade && decade !== 'all') {
+                const startYear = parseInt(decade);
+                if (startYear === 1960) {
+                    url += `&primary_release_date.lte=1969-12-31`;
+                } else {
+                    url += `&primary_release_date.gte=${startYear}-01-01&primary_release_date.lte=${startYear + 9}-12-31`;
+                }
+            }
+            
+            url += `&with_original_language=en|fr|ja|ko`;
+            
+            console.log(`[TMDB] Discovering streaming items: ${url}`);
             
             const response = await fetchWithTimeout(url, {
                 method: 'GET',

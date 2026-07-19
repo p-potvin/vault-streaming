@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vault Streaming</title>
-  <!-- v1.2.0 -->
+  <!-- v1.3.0 -->
   <link href="themes.css" rel="stylesheet">
   <link href="index.css" rel="stylesheet">
   <script src="themes.js" defer></script>
@@ -31,6 +31,7 @@
   <script src="js/streaming/rd-flow.js" defer></script>
   <script src="js/hover-card.js" defer></script>
   <script src="js/favorites.js" defer></script>
+  <script src="js/history.js" defer></script>
   <script src="js/tmdb.js" defer></script>
   <script src="js/navigation/tabs.js" defer></script>
   <script src="js/navigation/keybindings.js" defer></script>
@@ -79,12 +80,12 @@
       <!-- Streaming Tab Subcategories -->
       <div id="sub-nav-streaming" style="display: flex; gap: 8px; align-items: center; width: 100%;">
          <button id="subtab-streaming-discover" class="sub-nav-pill active" style="font-size: 10.5px; font-weight: 700; color: var(--vt-primary); background: var(--vault-accent); border: none; padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s;">Discover</button>
-         <button id="subtab-streaming-library" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8;">Library</button>
+         <button id="subtab-streaming-library" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8; margin-right: 2px;">Library</button>
+         <button id="subtab-streaming-history" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8;">Watch History</button>
       </div>
     </div>
     
     <div class="main-area" id="main-area">
-
 
       <!-- Persistent Library Tab Grid (streaming + watchlist) -->
       <div id="library-grid" class="file-grid" style="display:none;">
@@ -97,13 +98,21 @@
         </div>
       </div>
 
+      <!-- Persistent History Tab Grid (watching progress) -->
+      <div id="history-grid" class="file-grid" style="display:none;">
+        <div class="empty-state">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 48px; height: 48px; margin-bottom: 12px; color: var(--vault-gold);">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+           </svg>
+           <h3>Your Watch History is Empty</h3>
+           <p>Start streaming movies or series to see them here.</p>
+        </div>
+      </div>
+
       <!-- Persistent TMDB Browser Tab Container -->
       <div id="tmdb-container" style="display:none; color: var(--vault-text); font-family: var(--font-sans); width:100%; height:100%; overflow-y:auto;">
-         <!-- Single-row compact toolbar: type · providers · search -->
+         <!-- Single-row compact toolbar: providers · search + toggle pill · advanced -->
          <div id="streaming-toolbar" style="display:flex; gap:8px; align-items:center; padding:6px 12px; border-bottom:1px solid var(--vault-warm-border-subtle); flex-wrap:nowrap; min-height:42px; background: rgba(0,0,0,0.12);">
-            <button id="subtab-movies" class="top-tab active" style="background:var(--vault-accent); color:var(--vt-primary); font-family:var(--font-body); font-size:9.5px; font-weight:700; text-transform:uppercase; border:none; padding:4.5px 11px; border-radius:4px; cursor:pointer; letter-spacing:0.05em; transition:all 0.2s; flex-shrink:0;">Movies</button>
-            <button id="subtab-series" class="top-tab" style="background:transparent; color:var(--vault-text); font-family:var(--font-body); font-size:9.5px; font-weight:700; text-transform:uppercase; border:1px solid var(--vault-border); padding:4.5px 11px; border-radius:4px; cursor:pointer; opacity:0.8; letter-spacing:0.05em; transition:all 0.2s; flex-shrink:0;">Series</button>
-            <span style="width:1px; height:22px; background:var(--vault-warm-border-subtle); margin:0 4px; flex-shrink:0;"></span>
             <div id="streaming-providers" style="display:flex; gap:6px; align-items:center; flex-wrap:nowrap; overflow:hidden;">
                <button class="provider-btn active" data-provider="all" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">All</button>
                <button class="provider-btn" data-provider="8" style="background:transparent; color:#E50914; border:1px solid rgba(229,9,20,0.4); padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">Netflix</button>
@@ -111,11 +120,62 @@
                <button class="provider-btn" data-provider="350" style="background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.3); padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">Apple TV+</button>
                <button class="provider-btn" data-provider="9" style="background:transparent; color:#00A8E1; border:1px solid rgba(0,168,225,0.4); padding:4px 9px; border-radius:4px; font-weight:700; cursor:pointer; font-size:10px; text-transform:uppercase; font-family:var(--font-mono); transition:all 0.2s; flex-shrink:0;">Prime</button>
             </div>
-            <div style="margin-left:auto; display:flex; gap:6px; flex-shrink:0;">
-               <input type="text" id="tmdb-search-input" class="search-box" placeholder="Search Movies & TV…" style="width:240px; padding:4px 10px; height:28px; font-size:12px; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); outline:none; border-radius:4px;" />
-               <button id="tmdb-search-btn" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:0 14px; border-radius:4px; font-weight:600; cursor:pointer; height:28px; font-size:11px;">Search</button>
+            <div style="margin-left:auto; display:flex; gap:6px; flex-shrink:0; align-items:center;">
+               <div style="position:relative; display:flex; align-items:center; background:var(--vt-primary); border:1px solid var(--vault-border); border-radius:4px; height:28px; padding:0 8px;">
+                  <span id="search-type-pill" style="font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--vt-primary); background:var(--vault-accent); padding:2px 6px; border-radius:3px; margin-right:8px; cursor:pointer; user-select:none; font-family:var(--font-mono); transition: all 0.2s;" title="Click to toggle Movies/Series">Movies</span>
+                  <input type="text" id="tmdb-search-input" placeholder="Search Movies & TV…" style="width:200px; border:none; background:transparent; color:var(--vault-text); outline:none; height:100%; font-size:12px; font-family: var(--font-sans);" />
+               </div>
+               <button id="tmdb-search-btn" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:0 14px; border-radius:4px; font-weight:600; cursor:pointer; height:28px; font-size:11px; font-family: var(--font-mono);">Search</button>
+               <button id="tmdb-advanced-toggle" style="background:transparent; border:1px solid var(--vault-border); color:var(--vault-text); padding:0 10px; border-radius:4px; cursor:pointer; height:28px; font-size:11px; display:flex; align-items:center; gap:4px; font-family:var(--font-mono); transition: all 0.2s;">
+                  <span>Advanced</span>
+                  <svg id="advanced-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform 0.2s;"><path d="M6 9l6 6 6-6"/></svg>
+               </button>
             </div>
          </div>
+         
+         <!-- Advanced Filters Drawer -->
+         <div id="streaming-advanced-filters" style="display:none; padding:12px 16px; background:rgba(0,0,0,0.18); border-bottom:1px solid var(--vault-warm-border-subtle); gap:16px; align-items:center; flex-wrap:wrap; animation: slideDown 0.2s ease-out; min-height:54px;">
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <span style="font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--vault-slate); font-family:var(--font-mono);">Format</span>
+                <div style="display:flex; gap:6px;">
+                    <button id="filter-format-movies" class="filter-pill active" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:3px 9px; border-radius:12px; font-size:9.5px; font-weight:700; cursor:pointer; font-family:var(--font-mono);">Movies</button>
+                    <button id="filter-format-series" class="filter-pill" style="background:transparent; color:var(--vault-text); border:1px solid var(--vault-border); padding:3px 9px; border-radius:12px; font-size:9.5px; font-weight:700; cursor:pointer; font-family:var(--font-mono);">Series</button>
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <span style="font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--vault-slate); font-family:var(--font-mono);">Genre</span>
+                <select id="filter-genre" style="background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:2px 6px; border-radius:4px; font-size:11px; font-family:var(--font-sans); outline:none; height:24px; min-width:120px; cursor:pointer;">
+                    <option value="all">All Genres</option>
+                </select>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <span style="font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--vault-slate); font-family:var(--font-mono);">Decade</span>
+                <select id="filter-decade" style="background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:2px 6px; border-radius:4px; font-size:11px; font-family:var(--font-sans); outline:none; height:24px; min-width:90px; cursor:pointer;">
+                    <option value="all">All Time</option>
+                    <option value="2020">2020s</option>
+                    <option value="2010">2010s</option>
+                    <option value="2000">2000s</option>
+                    <option value="1990">1990s</option>
+                    <option value="1980">1980s</option>
+                    <option value="1970">1970s</option>
+                    <option value="1960">Older</option>
+                </select>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <span style="font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--vault-slate); font-family:var(--font-mono);">Region</span>
+                <select id="filter-region" style="background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:2px 6px; border-radius:4px; font-size:11px; font-family:var(--font-sans); outline:none; height:24px; min-width:120px; cursor:pointer;">
+                    <option value="all">All Regions</option>
+                    <option value="US">United States</option>
+                    <option value="GB">United Kingdom</option>
+                    <option value="FR">France</option>
+                    <option value="CA">Canada</option>
+                    <option value="JP">Japan</option>
+                    <option value="KR">South Korea</option>
+                </select>
+            </div>
+            <button id="btn-clear-advanced-filters" style="margin-top:14px; background:rgba(255,255,255,0.06); border:1px solid var(--vault-border); color:var(--vault-slate); padding:3px 10px; border-radius:4px; font-size:10px; font-family:var(--font-mono); cursor:pointer; height:24px; text-transform:uppercase; font-weight:600; transition: all 0.2s;">Reset</button>
+         </div>
+
          <div id="tmdb-results-grid" class="file-grid tmdb-grid" style="padding:16px; flex:1 1 auto;">
             <!-- Trending movies displayed here -->
          </div>

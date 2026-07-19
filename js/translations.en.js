@@ -83,5 +83,11 @@ window.translationsEn = {
   confirmRemoveFromLibrary: "Are you sure you want to remove \"{0}\" from your library?",
   loadingFavorites: "Loading favorites...",
   errorLoadingFavorites: "Error loading favorites.",
-  systemActionRequired: "System Action Required"
+  systemActionRequired: "System Action Required",
+  historyEmpty: "Your Watch History is Empty",
+  historyEmptyDesc: "Start streaming movies or series to see them here.",
+  removeFromHistory: "Remove from History",
+  confirmRemoveFromHistory: "Are you sure you want to remove \"{0}\" from your watch history?",
+  removedFromHistory: "Removed from History",
+  loadingHistory: "Loading watch history..."
 };

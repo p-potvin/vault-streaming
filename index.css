@@ -1917,3 +1917,48 @@ body.clip-mode-active #btn-clip {
 .success-bounce {
   animation: successBounce 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+
+/* Vault Streaming: Advanced Filters and Layout Customizations */
+.tmdb-grid {
+  grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)) !important;
+}
+
+.tmdb-movie-card .thumbnail-container {
+  height: 160px !important;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.filter-pill {
+  transition: all 0.2s;
+  opacity: 0.8;
+}
+
+.filter-pill.active {
+  opacity: 1;
+}
+
+/* History progress bar overlay */
+.history-progress-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  z-index: 10;
+}
+
+.history-progress-bar {
+  height: 100%;
+  background: var(--vault-accent);
+}

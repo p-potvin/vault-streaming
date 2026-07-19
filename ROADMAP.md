@@ -9,16 +9,17 @@
 - [x] Integrate TMDB trending and search APIs.
 - [x] Enable bilingual TMDB metadata integration.
 - [x] Rich UI with hero banners, provider filters, and dynamic backgrounds.
-- [ ] Compact the header: keep the watch providers branded logos prominent, place the search bar next to them. Add a very obvious visual cue that we are either viewing only movies or only series.
-- [ ] In the search bar, add a pill on the left side to indicate movies or series.
-- [ ] Optimize the card layout: make the cards less tall and a slightly larger. Reduce the grid from 8 cards across to 7 for better cover art visibility.
-- [ ] Sub-routing improvement: Movies and Series should become explicit sub-views for the Streaming section, replacing the top-level generic 'discover' and defaulting to the last used state.
+- [x] Compact the header: keep the watch providers branded logos prominent, place the search bar next to them. Add a very obvious visual cue that we are either viewing only movies or only series.
+- [x] In the search bar, add a pill on the left side to indicate movies or series.
+- [x] Optimize the card layout: make the cards less tall and a slightly larger. Reduce the grid from 8 cards across to 7 for better cover art visibility.
+- [ ] Sub-routing improvement: Movies and Series should become explicit sub-views for the Streaming section, replacing the top-level generic 'discover' and defaulting to the last used state. (Partially bypassed: kept Discover and added format toggles & advanced search instead)
 
 ## 2. Library & Tracking
 
 - [x] Create the Library tab for tracking watched and currently-watching content.
 - [x] Ability to save movies and TV shows from the Discover tab directly into the Library.
 - [x] Ability to remove items from the Library.
+- [x] Create the Watch History tab alongside Discover and Library.
 - [ ] Enhanced progress tracking: automatically mark items as "watched" when viewing completes.
 - [ ] Syncing and backup capabilities for the Library state.
 

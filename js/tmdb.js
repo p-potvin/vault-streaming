@@ -68,39 +68,41 @@ function updateProviderButtonsUI() {
     });
 }
 
-function updateSubtabsUI() {
-    const subtabMovies = el('subtab-movies');
-    const subtabSeries = el('subtab-series');
-    if (!subtabMovies || !subtabSeries) return;
-    if (window.tmdbCurrentMediaType === 'movie') {
-        subtabMovies.classList.add('active');
-        subtabMovies.style.background = 'var(--vault-accent)';
-        subtabMovies.style.color = 'var(--vt-primary)';
-        subtabMovies.style.border = 'none';
-        subtabMovies.style.opacity = '1';
+function updateFiltersUI() {
+    const pill = el('search-type-pill');
+    if (pill) {
+        pill.innerText = window.tmdbCurrentMediaType === 'movie' ? 'Movies' : 'Series';
+    }
 
-        subtabSeries.classList.remove('active');
-        subtabSeries.style.background = 'transparent';
-        subtabSeries.style.color = 'var(--vault-text)';
-        subtabSeries.style.border = '1px solid var(--vault-border)';
-        subtabSeries.style.opacity = '0.8';
-    } else {
-        subtabSeries.classList.add('active');
-        subtabSeries.style.background = 'var(--vault-accent)';
-        subtabSeries.style.color = 'var(--vt-primary)';
-        subtabSeries.style.border = 'none';
-        subtabSeries.style.opacity = '1';
+    const btnMovies = el('filter-format-movies');
+    const btnSeries = el('filter-format-series');
+    if (btnMovies && btnSeries) {
+        if (window.tmdbCurrentMediaType === 'movie') {
+            btnMovies.classList.add('active');
+            btnMovies.style.background = 'var(--vault-accent)';
+            btnMovies.style.color = 'var(--vt-primary)';
+            btnMovies.style.border = 'none';
 
-        subtabMovies.classList.remove('active');
-        subtabMovies.style.background = 'transparent';
-        subtabMovies.style.color = 'var(--vault-text)';
-        subtabMovies.style.border = '1px solid var(--vault-border)';
-        subtabMovies.style.opacity = '0.8';
+            btnSeries.classList.remove('active');
+            btnSeries.style.background = 'transparent';
+            btnSeries.style.color = 'var(--vault-text)';
+            btnSeries.style.border = '1px solid var(--vault-border)';
+        } else {
+            btnSeries.classList.add('active');
+            btnSeries.style.background = 'var(--vault-accent)';
+            btnSeries.style.color = 'var(--vt-primary)';
+            btnSeries.style.border = 'none';
+
+            btnMovies.classList.remove('active');
+            btnMovies.style.background = 'transparent';
+            btnMovies.style.color = 'var(--vault-text)';
+            btnMovies.style.border = '1px solid var(--vault-border)';
+        }
     }
 }
 
 window.updateProviderButtonsUI = updateProviderButtonsUI;
-window.updateSubtabsUI = updateSubtabsUI;
+window.updateFiltersUI = updateFiltersUI;
 
 window.renderTMDB = async function(query = '', append = false) {
     if (!append) {
@@ -136,9 +138,9 @@ window.renderTMDB = async function(query = '', append = false) {
         if (loadMoreText) loadMoreText.innerText = 'Loading...';
     }
 
-    // Update UI for active/inactive state of providers and subtabs
+    // Update UI for active/inactive state of providers and filters
     updateProviderButtonsUI();
-    updateSubtabsUI();
+    updateFiltersUI();
 
     try {
         let response;
@@ -146,7 +148,15 @@ window.renderTMDB = async function(query = '', append = false) {
         if (window.tmdbCurrentQuery) {
             response = await window.electronAPI.searchTMDB(window.tmdbCurrentQuery, window.tmdbCurrentPage, langCode);
         } else {
-            response = await window.electronAPI.discoverTMDB(window.tmdbCurrentProvider, window.tmdbCurrentMediaType, window.tmdbCurrentPage, langCode);
+            response = await window.electronAPI.discoverTMDB(
+                window.tmdbCurrentProvider, 
+                window.tmdbCurrentMediaType, 
+                window.tmdbCurrentPage, 
+                langCode,
+                window.tmdbCurrentGenre,
+                window.tmdbCurrentDecade,
+                window.tmdbCurrentRegion
+            );
         }
 
         // Check if this request is still the latest one
@@ -265,6 +275,66 @@ window.renderTMDB = async function(query = '', append = false) {
     }
 };
 
+const MOVIE_GENRES = [
+    { id: 'all', name: 'All Genres' },
+    { id: 28, name: 'Action' },
+    { id: 12, name: 'Adventure' },
+    { id: 16, name: 'Animation' },
+    { id: 35, name: 'Comedy' },
+    { id: 80, name: 'Crime' },
+    { id: 99, name: 'Documentary' },
+    { id: 18, name: 'Drama' },
+    { id: 10751, name: 'Family' },
+    { id: 14, name: 'Fantasy' },
+    { id: 36, name: 'History' },
+    { id: 27, name: 'Horror' },
+    { id: 10402, name: 'Music' },
+    { id: 9648, name: 'Mystery' },
+    { id: 10749, name: 'Romance' },
+    { id: 878, name: 'Sci-Fi' },
+    { id: 10770, name: 'TV Movie' },
+    { id: 53, name: 'Thriller' },
+    { id: 10752, name: 'War' },
+    { id: 37, name: 'Western' }
+];
+
+const TV_GENRES = [
+    { id: 'all', name: 'All Genres' },
+    { id: 10759, name: 'Action & Adventure' },
+    { id: 16, name: 'Animation' },
+    { id: 35, name: 'Comedy' },
+    { id: 80, name: 'Crime' },
+    { id: 99, name: 'Documentary' },
+    { id: 18, name: 'Drama' },
+    { id: 10751, name: 'Family' },
+    { id: 10762, name: 'Kids' },
+    { id: 9648, name: 'Mystery' },
+    { id: 10763, name: 'News' },
+    { id: 10764, name: 'Reality' },
+    { id: 10765, name: 'Sci-Fi & Fantasy' },
+    { id: 10766, name: 'Soap' },
+    { id: 10767, name: 'Talk' },
+    { id: 10768, name: 'War & Politics' },
+    { id: 37, name: 'Western' }
+];
+
+function updateGenreOptions() {
+    const genreSelect = el('filter-genre');
+    if (!genreSelect) return;
+    const genres = window.tmdbCurrentMediaType === 'movie' ? MOVIE_GENRES : TV_GENRES;
+    
+    // Remember currently selected genre if valid in target format
+    const oldVal = genreSelect.value;
+    genreSelect.innerHTML = genres.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+    if (genres.some(g => String(g.id) === oldVal)) {
+        genreSelect.value = oldVal;
+        window.tmdbCurrentGenre = oldVal;
+    } else {
+        genreSelect.value = 'all';
+        window.tmdbCurrentGenre = 'all';
+    }
+}
+
 window.initTMDBListeners = function() {
     console.log('[tmdb] Initializing TMDB listeners...');
     
@@ -275,6 +345,15 @@ window.initTMDBListeners = function() {
     window.tmdbCurrentMediaType = 'movie';
     window.tmdbCurrentPage = 1;
     window.tmdbCurrentQuery = '';
+    
+    // Advanced Filters State
+    window.tmdbCurrentGenre = 'all';
+    window.tmdbCurrentDecade = 'all';
+    window.tmdbCurrentRegion = 'all';
+    window.tmdbAdvancedExpanded = false;
+
+    // Initialize genres dropdown
+    updateGenreOptions();
 
     // TMDB Search listeners
     const tmdbSearchBtn = el('tmdb-search-btn');
@@ -293,24 +372,111 @@ window.initTMDBListeners = function() {
         });
     }
 
-    // TMDB Subtabs (Movies / Series) click handlers
-    const subtabMovies = el('subtab-movies');
-    const subtabSeries = el('subtab-series');
-    if (subtabMovies) {
-        subtabMovies.addEventListener('click', () => {
+    // Toggle search type pill (Movie/Series) on the search bar
+    const searchTypePill = el('search-type-pill');
+    if (searchTypePill) {
+        searchTypePill.addEventListener('click', () => {
+            window.tmdbCurrentMediaType = window.tmdbCurrentMediaType === 'movie' ? 'tv' : 'movie';
             if (tmdbSearchInput) tmdbSearchInput.value = '';
             window.tmdbCurrentQuery = '';
-            window.tmdbCurrentMediaType = 'movie';
+            window.tmdbCurrentPage = 1;
+            updateGenreOptions();
+            window.renderTMDB();
+        });
+    }
+
+    // Advanced Drawer Toggle
+    const advancedToggle = el('tmdb-advanced-toggle');
+    const advancedChevron = el('advanced-chevron');
+    const advancedFiltersDrawer = el('streaming-advanced-filters');
+    if (advancedToggle && advancedFiltersDrawer) {
+        advancedToggle.addEventListener('click', () => {
+            window.tmdbAdvancedExpanded = !window.tmdbAdvancedExpanded;
+            if (window.tmdbAdvancedExpanded) {
+                advancedFiltersDrawer.style.display = 'flex';
+                if (advancedChevron) advancedChevron.style.transform = 'rotate(180deg)';
+                advancedToggle.style.background = 'rgba(255, 255, 255, 0.08)';
+            } else {
+                advancedFiltersDrawer.style.display = 'none';
+                if (advancedChevron) advancedChevron.style.transform = 'rotate(0deg)';
+                advancedToggle.style.background = 'transparent';
+            }
+        });
+    }
+
+    // Filter Format buttons (inside advanced filters)
+    const filterFormatMovies = el('filter-format-movies');
+    const filterFormatSeries = el('filter-format-series');
+    if (filterFormatMovies) {
+        filterFormatMovies.addEventListener('click', () => {
+            if (window.tmdbCurrentMediaType !== 'movie') {
+                window.tmdbCurrentMediaType = 'movie';
+                if (tmdbSearchInput) tmdbSearchInput.value = '';
+                window.tmdbCurrentQuery = '';
+                window.tmdbCurrentPage = 1;
+                updateGenreOptions();
+                window.renderTMDB();
+            }
+        });
+    }
+    if (filterFormatSeries) {
+        filterFormatSeries.addEventListener('click', () => {
+            if (window.tmdbCurrentMediaType !== 'tv') {
+                window.tmdbCurrentMediaType = 'tv';
+                if (tmdbSearchInput) tmdbSearchInput.value = '';
+                window.tmdbCurrentQuery = '';
+                window.tmdbCurrentPage = 1;
+                updateGenreOptions();
+                window.renderTMDB();
+            }
+        });
+    }
+
+    // Dropdown Select Filters
+    const filterGenre = el('filter-genre');
+    const filterDecade = el('filter-decade');
+    const filterRegion = el('filter-region');
+
+    if (filterGenre) {
+        filterGenre.addEventListener('change', () => {
+            window.tmdbCurrentGenre = filterGenre.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
         });
     }
-    if (subtabSeries) {
-        subtabSeries.addEventListener('click', () => {
-            if (tmdbSearchInput) tmdbSearchInput.value = '';
-            window.tmdbCurrentQuery = '';
-            window.tmdbCurrentMediaType = 'tv';
+    if (filterDecade) {
+        filterDecade.addEventListener('change', () => {
+            window.tmdbCurrentDecade = filterDecade.value;
             window.tmdbCurrentPage = 1;
+            window.renderTMDB();
+        });
+    }
+    if (filterRegion) {
+        filterRegion.addEventListener('change', () => {
+            window.tmdbCurrentRegion = filterRegion.value;
+            window.tmdbCurrentPage = 1;
+            window.renderTMDB();
+        });
+    }
+
+    // Reset Advanced Filters
+    const btnResetFilters = el('btn-clear-advanced-filters');
+    if (btnResetFilters) {
+        btnResetFilters.addEventListener('click', () => {
+            window.tmdbCurrentProvider = 'all';
+            window.tmdbCurrentMediaType = 'movie';
+            window.tmdbCurrentGenre = 'all';
+            window.tmdbCurrentDecade = 'all';
+            window.tmdbCurrentRegion = 'all';
+            window.tmdbCurrentPage = 1;
+            window.tmdbCurrentQuery = '';
+            
+            if (tmdbSearchInput) tmdbSearchInput.value = '';
+            if (filterGenre) filterGenre.value = 'all';
+            if (filterDecade) filterDecade.value = 'all';
+            if (filterRegion) filterRegion.value = 'all';
+            
+            updateGenreOptions();
             window.renderTMDB();
         });
     }
@@ -326,7 +492,7 @@ window.initTMDBListeners = function() {
         });
     });
 
-    // TMDB Load More pagination click handler (kept as manual fallback)
+    // TMDB Load More pagination click handler
     const tmdbLoadMoreBtn = el('tmdb-load-more-btn');
     if (tmdbLoadMoreBtn) {
         tmdbLoadMoreBtn.addEventListener('click', () => {
@@ -335,10 +501,7 @@ window.initTMDBListeners = function() {
         });
     }
 
-    // Auto-paginate: when the user scrolls close to the bottom of the
-    // streaming container, automatically fetch the next page. Throttled so
-    // mid-fetch scroll events don't fire it again, and only fires when the
-    // load-more button is actually visible (i.e. more pages exist).
+    // Auto-paginate
     const tmdbContainer = el('tmdb-container');
     if (tmdbContainer) {
         tmdbContainer.addEventListener('scroll', () => {
