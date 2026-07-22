@@ -52,6 +52,36 @@ const liveSubtitlesHandlers = require('./src/live-subtitles');
 
 let mainWindow;
 let tray = null;
+let splashWindow = null;
+let splashShownAt = 0;
+
+// Branded splash shown while the main window boots (TMDB, AI warmup, etc.).
+function createSplash() {
+    splashWindow = new BrowserWindow({
+        width: 420, height: 320,
+        frame: false, transparent: true, resizable: false,
+        center: true, alwaysOnTop: true, skipTaskbar: true, show: false,
+        icon: path.join(__dirname, 'build', 'icon.ico'),
+        webPreferences: { contextIsolation: true, nodeIntegration: false }
+    });
+    splashWindow.loadFile('splash.html');
+    splashWindow.once('ready-to-show', () => { splashWindow && splashWindow.show(); });
+    splashShownAt = Date.now();
+}
+
+// Close the splash and reveal the main window, guaranteeing a minimum on-screen
+// time so the animation is never a jarring one-frame flash.
+let splashFinished = false;
+function finishSplash() {
+    if (splashFinished) return;
+    splashFinished = true;
+    const MIN_MS = 1600;
+    const wait = Math.max(0, MIN_MS - (Date.now() - splashShownAt));
+    setTimeout(() => {
+        if (splashWindow && !splashWindow.isDestroyed()) { splashWindow.close(); splashWindow = null; }
+        if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); }
+    }, wait);
+}
 let isQuitting = false;
 
 // Windows process cleanup helpers
@@ -165,6 +195,7 @@ function createTray() {
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200, height: 800,
+        show: false, // revealed by finishSplash() once ready (see splash flow)
         icon: path.join(__dirname, 'build', 'icon.ico'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -178,6 +209,9 @@ function createWindow() {
         titleBarOverlay: { color: '#2f3241', symbolColor: '#B07CFF' }
     });
     mainWindow.maximize();
+
+    // Reveal once the renderer has painted; the splash enforces a min display time.
+    mainWindow.once('ready-to-show', finishSplash);
 
     // YouTube Referer & Origin overrides to fix Error 152/153/4 (domain embedding restrictions)
     // Apply to ALL sessions to cover iframe requests
@@ -240,7 +274,10 @@ app.whenReady().then(() => {
     // Clean up any orphaned vault-explorer processes from a previous bad exit
     killAllOwnProcesses(false);
 
+    createSplash();
     createWindow();
+    // Safety net: never let a missed 'ready-to-show' strand the app on the splash.
+    setTimeout(finishSplash, 8000);
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
     // Remove leftover .tmp files from previous crashes/kills in the background.
