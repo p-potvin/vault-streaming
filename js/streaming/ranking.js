@@ -144,20 +144,18 @@ function scoreTorrent(torrent, preferredQuality, preferredLang) {
         else                  score += Math.min(15, Math.log2(seeds + 1) * 2);
     }
 
-    // ── Size sanity (filter fake 4K, oversized remuxes for streaming) ───────
+    // ── Size sanity (quality integrity only) ────────────────────────────────
+    // We intentionally DO NOT penalize large files: Real-Debrid/Comet handle the
+    // cache, so a big UHD remux streams just as easily as a small encode and is
+    // often the reliably-cached one. Downscaling for bandwidth is handled by the
+    // optional transcode-to-1080p path, not by biasing selection here.
+    // The only remaining size check flags suspiciously *tiny* "4K"/"1080p" files
+    // that are almost certainly mislabeled upscales — a quality signal, not a cap.
     const bytes = _parseSize(torrent.size);
     if (bytes > 0) {
         const GB = 1024 ** 3;
-        if (tq === 4) {
-            if (bytes < 6 * GB)  score -= 8;                  // probably a fake 4K upscale
-            if (bytes > 80 * GB) score -= 12;                 // too large to stream comfortably
-        } else if (tq === 3) {
-            if (bytes < 1.2 * GB) score -= 6;
-            if (bytes > 25 * GB)  score -= 8;
-        } else if (tq === 2) {
-            if (bytes < 500 * 1024 * 1024) score -= 4;
-            if (bytes > 8 * GB)            score -= 4;
-        }
+        if (tq === 4 && bytes < 6 * GB)        score -= 8;    // probable fake 4K upscale
+        else if (tq === 3 && bytes < 1.2 * GB) score -= 6;    // suspiciously small "1080p"
     }
 
     // ── Encoder reputation (small touch) ────────────────────────────────────
