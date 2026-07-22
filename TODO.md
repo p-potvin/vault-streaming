@@ -1,5 +1,34 @@
 # Vault Streaming - Active TODO List
 
+## Batch — Wed, 22 Jul 2026 (big list)
+
+> Note: user swapped to the **castlabs Electron build + Widevine** (main.js imports `components`) — AC3/E-AC3 audio + HEVC now decode natively; DTS/TrueHD still need transcode-remux to AAC.
+
+### P0 — bugs / regressions (do first)
+- [ ] **AllDebrid/TorBox appear inactive** — no loading animation while picking a torrent, seems to default to RD. Investigate whether the multi-debrid Comet config is actually being used (needs app restart to reload `.env`?), whether the size-probe misfires on TB/AD stream URLs (flagging them placeholder → skipping to RD), and stream-object parsing for non-RD providers.
+- [x] **Hover effect broken on larger cards** — hover should trigger anywhere on the card (regression after cards were enlarged / 25px padding). Fix the trigger area in `hover-card.js` / card CSS.
+- [ ] **Fullscreen menu disappears + cursor stuck on click action** in the video player.
+- [ ] **Disk thrashing** — app writes a LOT to disk. Verify cache flushing (resolved-link cache, watch-history writes, thumbnails, any per-frame/temp writes) and stop excessive writes.
+- [x] **Tray icon shows even when the setting is off** — respect `minimizeToTray`/tray setting before `createTray()`.
+
+### P1 — features
+- [ ] **Transcode-to-ceiling renderer wiring** (see Active Tasks; backend done). Also hosts the <5-min duration guard + fixes DTS/TrueHD audio via `-c:a aac`.
+- [ ] **Dynamic search bar with debounce** — port the debounced live search from `vault-tv`.
+- [ ] **Double-click on video → toggle fullscreen.**
+- [ ] **YouTube trailer volume**: default −20%; setting to mute trailers by default; add a volume icon next to the trailer play/pause button.
+- [ ] **Add-to-library "+" on movie card** (top-right); fills gold on click when added.
+- [ ] **Watch-status cues on cards**: one visual cue for "in watch history", a different one for "watched".
+
+### P2 — UI / polish
+- [x] **Splash**: add an overlay to hide the main container behind the splash; lengthen to ~3s.
+- [x] **Header logo**: put the logo top-left of the window, next to the "Vault Streaming" text.
+- [ ] **Recording LED**: move the flashing LED next to the movie title (currently next to settings).
+- [ ] **Settings modal redesign**: split into sections, make larger so it no longer scrolls; add Language selector inside; move region → **nationality** naming in advanced search.
+- [ ] **Settings icons**: modal settings SVG icons should match the main settings icon.
+- [x] **Remove Debrid Downloader button**; align the Save button to the right.
+- [x] **Advanced search**: rename "Region" → "Nationality".
+- [ ] **Main tabs restyle**: make the 3 primary tabs visually distinct from ordinary pills.
+
 ## Active Tasks
 
 - [ ] **Transcode-to-ceiling — renderer wiring** (backend done: `src/ipc/transcode.ipc.js` + preload `transcodeStream*`/`onTranscode*`). Remaining: in `js/player/playStream`, compare `activeStreamingMedia.quality` vs `appSettings.streamQuality` (map 2160p/1080p/720p → height); if source > ceiling, play via MediaSource fed by `transcode-chunk` (codec `avc1.640029, mp4a.40.2`) instead of `vp.src = url`; show a "1080p" badge; use ffmpeg `-ss` for resume (guard the double-seek); seeking mid-stream restarts the transcode at the new position; fall back to direct playback on transcode error.

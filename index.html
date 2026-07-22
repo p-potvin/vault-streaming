@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vault Streaming</title>
-  <!-- v1.5.0 -->
+  <!-- v1.5.1 -->
   <link href="themes.css" rel="stylesheet">
   <link href="index.css" rel="stylesheet">
   <link href="node_modules/flag-icons/css/flag-icons.min.css" rel="stylesheet">
@@ -42,12 +42,23 @@
   <script src="js/tooltip.js" defer></script>
 </head>
 <body class="vw-console-shell">
+  <!-- Boot overlay: hides the main container through the splash → window reveal handoff, then fades. -->
+  <div id="boot-overlay" style="position:fixed; inset:0; z-index:2147483000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:radial-gradient(120% 120% at 50% 0%, #22202e 0%, #16131f 60%, #0f0c17 100%); transition:opacity 0.5s ease; -webkit-app-region:drag;">
+    <img src="public/vault-streaming-logo.png" alt="" style="width:120px; height:120px; object-fit:contain; filter:drop-shadow(0 6px 18px rgba(176,124,255,0.35)); animation:bootpulse 2.2s ease-in-out infinite;">
+    <div style="font-size:16px; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:#fff;">Vault<span style="color:#B07CFF;">Streaming</span></div>
+    <div style="width:170px; height:3px; border-radius:3px; overflow:hidden; background:rgba(255,255,255,0.08); position:relative;"><div style="position:absolute; top:0; left:-40%; width:40%; height:100%; border-radius:3px; background:linear-gradient(90deg,transparent,#B07CFF,#F5B929,transparent); animation:bootslide 1.15s ease-in-out infinite;"></div></div>
+  </div>
+  <style>
+    @keyframes bootpulse { 0%,100%{transform:scale(1);opacity:.92} 50%{transform:scale(1.05);opacity:1} }
+    @keyframes bootslide { 0%{left:-40%} 100%{left:100%} }
+  </style>
+  <script>
+    (function(){ var ov=document.getElementById('boot-overlay'); if(!ov) return;
+      setTimeout(function(){ ov.style.opacity='0'; setTimeout(function(){ ov.remove(); }, 550); }, 3000);
+    })();
+  </script>
   <div class="titlebar">
-    <svg height="14" width="14" viewBox="0 0 110 120" style="margin-right:8px; flex-shrink:0;">
-      <path fill="var(--vault-gold)" d="M10 20 L30 20 L55 85 L80 20 L100 20 L63 108 L47 108 Z"/>
-      <circle fill="none" stroke="var(--vault-gold)" stroke-width="3" cx="55" cy="62" r="10"/>
-      <circle fill="var(--vault-gold)" cx="55" cy="62" r="4"/>
-    </svg>
+    <img src="public/vault-streaming-logo.png" alt="" height="18" width="18" style="margin-right:8px; flex-shrink:0; object-fit:contain; vertical-align:middle;">
     <span style="font-size: 11px; font-weight: 500; letter-spacing: 0.1em; opacity: 0.75; margin-right: 16px;">Vault Streaming</span>
     
 
@@ -177,9 +188,9 @@
                 </select>
             </div>
             <div style="display:flex; flex-direction:column; gap:4px;">
-                <span style="font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--vault-slate); font-family:var(--font-mono);">Region</span>
+                <span style="font-size:9.5px; font-weight:700; text-transform:uppercase; color:var(--vault-slate); font-family:var(--font-mono);">Nationality</span>
                 <select id="filter-region" style="background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:2px 6px; border-radius:4px; font-size:11px; font-family:var(--font-sans); outline:none; height:24px; min-width:120px; cursor:pointer;">
-                    <option value="all">All Regions</option>
+                    <option value="all">All Nationalities</option>
                     <option value="US">United States</option>
                     <option value="GB">United Kingdom</option>
                     <option value="FR">France</option>
@@ -404,13 +415,7 @@
         </div>
       </div>
 
-      <div style="margin-top: 8px; border-top: 1px solid var(--vault-warm-border-subtle); padding-top: 10px;">
-        <button id="settings-btn-debrid-downloader" style="width: 100%; background: var(--vault-console-surface, #13101c); color: var(--vault-accent, #B07CFF); border: 1px solid var(--vault-accent, #B07CFF); padding: 7px 12px; border-radius: 4px; font-weight: 600; font-family: var(--font-body); cursor: pointer; font-size: 11px; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 6px;" type="button">
-          <span data-icon="lightning" data-icon-style="width:16px;height:16px;vertical-align:middle;"></span> Debrid Downloader
-        </button>
-      </div>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+      <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:8px;">
         <button id="settings-btn-save" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:6px 12px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer;">Save</button>
       </div>
     </div>

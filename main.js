@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu, Tray, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu, Tray, session, components } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = fs.promises;
@@ -75,7 +75,7 @@ let splashFinished = false;
 function finishSplash() {
     if (splashFinished) return;
     splashFinished = true;
-    const MIN_MS = 1600;
+    const MIN_MS = 3000;
     const wait = Math.max(0, MIN_MS - (Date.now() - splashShownAt));
     setTimeout(() => {
         if (splashWindow && !splashWindow.isDestroyed()) { splashWindow.close(); splashWindow = null; }
@@ -267,25 +267,40 @@ function createWindow() {
         performFullAppCleanup();
     });
 
-    createTray();
+    // Only create the tray icon when the user has opted into tray behavior.
+    if (loadSettings().minimizeToTray) createTray();
 }
 
-app.whenReady().then(() => {
-    // Clean up any orphaned vault-explorer processes from a previous bad exit
-    killAllOwnProcesses(false);
+app.whenReady().then(async () => {
+	try {
+		// Clean up any orphaned vault-explorer processes from a previous bad exit
+		killAllOwnProcesses(false);
+		
+		// wait for Widevine CDM installation to finish
+		// this is from the castlabs branch of electron
+		await components.whenReady();
+		
+		createSplash();
+		createWindow();
+		// Safety net: never let a missed 'ready-to-show' strand the app on the splash.
+		setTimeout(finishSplash, 8000);
+		app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
-    createSplash();
-    createWindow();
-    // Safety net: never let a missed 'ready-to-show' strand the app on the splash.
-    setTimeout(finishSplash, 8000);
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-
-    // Remove leftover .tmp files from previous crashes/kills in the background.
-    // This runs after the window is created so startup is never blocked by I/O.
-    cleanupAllVaultTempFiles().catch(err => {
-        console.warn('[main:cleanup] Startup temp-file cleanup failed:', err.message);
-    });
+		// Remove leftover .tmp files from previous crashes/kills in the background.
+		// This runs after the window is created so startup is never blocked by I/O.
+		cleanupAllVaultTempFiles().catch(err => {
+			console.warn('[main:cleanup] Startup temp-file cleanup failed:', err.message);
+		});
+	} catch (err) {
+		console.error('[main:startup] App initialization failed:', err);
+		// Proceed to launch or gracefully show error UI if Widevine/process cleanup fails
+		createWindow();
+	}
+})
+.catch(err => {
+	console.error('[main:fatal] app.whenReady rejected:', err);
 });
+	
 app.on('before-quit', () => {
     isQuitting = true;
     performFullAppCleanup();

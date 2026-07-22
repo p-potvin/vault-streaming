@@ -17,6 +17,20 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
             return null;
         }
         console.log(`[Comet] Found ${data.streams.length} streams`);
+        // Provider breakdown — makes it obvious in the console whether TorBox /
+        // AllDebrid are actually returning results (vs everything falling to RD).
+        try {
+            const counts = { TorBox: 0, AllDebrid: 0, RealDebrid: 0, other: 0, cached: 0 };
+            for (const s of data.streams) {
+                const n = s.name || '';
+                if (/\bTB\b|torbox/i.test(n)) counts.TorBox++;
+                else if (/\bAD\b|alldebrid/i.test(n)) counts.AllDebrid++;
+                else if (/RD\+?|real-?debrid/i.test(n)) counts.RealDebrid++;
+                else counts.other++;
+                if (s.url) counts.cached++;
+            }
+            console.log('[Comet] provider breakdown:', counts);
+        } catch (_) { /* diagnostics only */ }
         return data.streams.map(s => {
             const nameStr = s.name || '';
             const descStr = s.description || s.title || '';

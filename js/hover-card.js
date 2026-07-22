@@ -47,7 +47,7 @@ const HOVER_OPEN_DELAY = 450;
 // Only the upper part of a card arms the preview. The lower strip (the title /
 // description area) is a dead zone, so sliding the cursor down off the popup
 // into empty space doesn't re-trigger the hover on the card it passes over.
-const HOVER_TRIGGER_ZONE = 0.6; // top 60% of the card height
+const HOVER_TRIGGER_ZONE = 1.0; // whole card — hovering anywhere on it arms the preview
 
 window.attachPremiumHoverCard = function(card, movie) {
     const inTriggerZone = (e) => {
