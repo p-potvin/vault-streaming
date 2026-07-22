@@ -147,10 +147,11 @@ window.renderTMDB = async function(query = '', append = false) {
         const langCode = window.currentLang === 'fr' ? 'fr-FR' : 'en-US';
         if (window.tmdbCurrentQuery) {
             response = await window.electronAPI.searchTMDB(window.tmdbCurrentQuery, window.tmdbCurrentPage, langCode);
+        } else {
             response = await window.electronAPI.discoverTMDB(
-                window.tmdbCurrentProvider, 
-                window.tmdbCurrentMediaType, 
-                window.tmdbCurrentPage, 
+                window.tmdbCurrentProvider,
+                window.tmdbCurrentMediaType,
+                window.tmdbCurrentPage,
                 langCode,
                 window.tmdbCurrentGenre,
                 window.tmdbCurrentDecade,
