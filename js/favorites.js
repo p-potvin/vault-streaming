@@ -297,6 +297,31 @@ window.renderLibrary = async function(useCache = false) {
 };
 
 /**
+ * Toggle a movie/show in the streaming library. Returns true if it was ADDED.
+ */
+window.toggleLibrarySave = function(movie) {
+    window.appSettings.library = window.appSettings.library || [];
+    const idx = window.appSettings.library.findIndex(m => m.id === movie.id && m.media_type === movie.media_type);
+    let added;
+    if (idx >= 0) { window.appSettings.library.splice(idx, 1); added = false; }
+    else { window.appSettings.library.push(movie); added = true; }
+    window.electronAPI.saveSettings(window.appSettings);
+    return added;
+};
+
+/**
+ * Card "+" button handler — toggles library membership and paints the button
+ * gold when the item is in the library.
+ */
+window.handleCardLibToggle = function(btn, movie) {
+    const added = window.toggleLibrarySave(movie);
+    btn.style.background = added ? 'var(--vault-gold)' : 'rgba(0,0,0,0.8)';
+    btn.style.color = added ? 'var(--vt-primary)' : 'var(--vault-gold)';
+    const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
+    if (window.showToast) window.showToast(added ? (t.addedToLibrary || 'Added to Library') : (t.removedFromLibrary || 'Removed from Library'), 'success');
+};
+
+/**
  * Remove an item from the streaming library.
  */
 window.removeFromLibrary = async function(movieId, movieTitle) {

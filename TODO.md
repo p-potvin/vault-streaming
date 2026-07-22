@@ -15,19 +15,19 @@
 - [x] **Transcode-to-ceiling renderer wiring** (see Active Tasks; backend done). Also hosts the <5-min duration guard + fixes DTS/TrueHD audio via `-c:a aac`.
 - [x] **Dynamic search bar with debounce** — port the debounced live search from `vault-tv`.
 - [x] **Double-click on video → toggle fullscreen.**
-- [ ] **YouTube trailer volume**: default −20%; setting to mute trailers by default; add a volume icon next to the trailer play/pause button.
-- [ ] **Add-to-library "+" on movie card** (top-right); fills gold on click when added.
+- [~] **YouTube trailer volume**: default −20%; setting to mute trailers by default; add a volume icon next to the trailer play/pause button.
+- [x] **Add-to-library "+" on movie card** (top-right); fills gold on click when added.
 - [ ] **Watch-status cues on cards**: one visual cue for "in watch history", a different one for "watched".
 
 ### P2 — UI / polish
 - [x] **Splash**: add an overlay to hide the main container behind the splash; lengthen to ~3s.
 - [x] **Header logo**: put the logo top-left of the window, next to the "Vault Streaming" text.
-- [ ] **Recording LED**: move the flashing LED next to the movie title (currently next to settings).
+- [x] **Recording LED**: move the flashing LED next to the movie title (currently next to settings).
 - [ ] **Settings modal redesign**: split into sections, make larger so it no longer scrolls; add Language selector inside; move region → **nationality** naming in advanced search.
 - [ ] **Settings icons**: modal settings SVG icons should match the main settings icon.
 - [x] **Remove Debrid Downloader button**; align the Save button to the right.
 - [x] **Advanced search**: rename "Region" → "Nationality".
-- [ ] **Main tabs restyle**: make the 3 primary tabs visually distinct from ordinary pills.
+- [x] **Main tabs restyle**: make the 3 primary tabs visually distinct from ordinary pills.
 
 ## Active Tasks
 

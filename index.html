@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vault Streaming</title>
-  <!-- v1.6.1 -->
+  <!-- v1.7.0 -->
   <link href="themes.css" rel="stylesheet">
   <link href="index.css" rel="stylesheet">
   <link href="node_modules/flag-icons/css/flag-icons.min.css" rel="stylesheet">
@@ -68,7 +68,8 @@
       <span style="width:8px; height:8px; border:1px solid rgba(0,0,0,0.3); border-top-color:#000; border-radius:50%; display:inline-block; animation:spin 0.8s linear infinite;"></span>
       <span>Generating Previews: <span id="task-percent">0%</span></span>
     </span>
-    <span id="titlebar-video-title" style="margin-left: 20px; font-size:11px; font-weight:600; color:var(--vault-accent); display:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px; text-transform: none; font-family: var(--font-body); letter-spacing: 0.02em;"></span>
+    <span id="title-led" class="settings-led" style="display:none; margin-left:20px;"></span>
+    <span id="titlebar-video-title" style="margin-left: 8px; font-size:11px; font-weight:600; color:var(--vault-accent); display:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:400px; text-transform: none; font-family: var(--font-body); letter-spacing: 0.02em;"></span>
     <div id="titlebar-menus" style="display: flex; gap: 8px; align-items: center; -webkit-app-region: no-drag; margin-left: auto; transition: opacity 0.25s ease;">
       <button id="lang-trigger" class="theme-trigger" aria-label="Switch Language">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;">
@@ -78,7 +79,6 @@
       </button>
       <div style="position:relative;">
         <button id="settings-trigger" class="theme-trigger" aria-label="Open Settings">
-          <span class="settings-led"></span>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -94,9 +94,9 @@
     <div id="sub-nav-bar" class="sub-nav-bar" style="display: flex; gap: 8px; align-items: center; padding: 10px 24px; background: var(--vault-acrylic); border-bottom: 1px solid var(--vault-border); z-index: 9; flex-shrink: 0; -webkit-app-region: no-drag;">
       <!-- Streaming Tab Subcategories -->
       <div id="sub-nav-streaming" style="display: flex; gap: 8px; align-items: center; width: 100%;">
-         <button id="subtab-streaming-discover" class="sub-nav-pill active" style="font-size: 10.5px; font-weight: 700; color: var(--vt-primary); background: var(--vault-accent); border: none; padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s;">Discover</button>
-         <button id="subtab-streaming-library" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8; margin-right: 2px;">Library</button>
-         <button id="subtab-streaming-history" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 5px 12px; border-radius: 20px; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8;">Watch History</button>
+         <button id="subtab-streaming-discover" class="sub-nav-pill active" style="font-size: 10.5px; font-weight: 700; color: var(--vt-primary); background: var(--vault-accent); border: none; padding: 6px 16px; border-radius: 5px 5px 0 0; border-bottom: 2px solid transparent; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s;">Discover</button>
+         <button id="subtab-streaming-library" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 6px 16px; border-radius: 5px 5px 0 0; border-bottom: 2px solid transparent; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8; margin-right: 2px;">Library</button>
+         <button id="subtab-streaming-history" class="sub-nav-pill" style="font-size: 10.5px; font-weight: 700; color: var(--vault-text); background: transparent; border: 1px solid var(--vault-border); padding: 6px 16px; border-radius: 5px 5px 0 0; border-bottom: 2px solid transparent; cursor: pointer; text-transform: uppercase; font-family: var(--font-body); letter-spacing: 0.05em; transition: all 0.2s; opacity: 0.8;">Watch History</button>
       </div>
     </div>
     

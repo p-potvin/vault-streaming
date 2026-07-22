@@ -13,17 +13,20 @@ window.switchStreamingSubtab = function(subtab) {
         const id = pill.id;
         const targetId = `subtab-streaming-${subtab}`;
         if (id === targetId) {
+            // Distinct "tab" look (not a floating pill): filled head + gold underline.
             pill.classList.add('active');
             pill.style.background = 'var(--vault-accent)';
             pill.style.color = 'var(--vt-primary)';
             pill.style.border = 'none';
+            pill.style.borderBottom = '2px solid var(--vault-gold)';
             pill.style.opacity = '1';
         } else {
             pill.classList.remove('active');
             pill.style.background = 'transparent';
             pill.style.color = 'var(--vault-text)';
-            pill.style.border = '1px solid var(--vault-border)';
-            pill.style.opacity = '0.8';
+            pill.style.border = 'none';
+            pill.style.borderBottom = '2px solid transparent';
+            pill.style.opacity = '0.7';
         }
     });
 

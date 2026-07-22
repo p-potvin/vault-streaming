@@ -1451,6 +1451,10 @@ video::cue {
   -webkit-box-orient: vertical;
 }
 
+/* The recording LED lives next to the streaming title and only shows while a
+   title is visible (its inline style flips to inline-block during playback). */
+.titlebar:has(#titlebar-video-title[style*="inline"]) #title-led { display: inline-block !important; }
+
 .settings-led {
   width: 4px;
   height: 4px;

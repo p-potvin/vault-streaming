@@ -153,6 +153,9 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
             vid.playsInline = true;
             vid.preload = 'auto';
             vid.autoplay = true;
+            // Trailers at 80% (−20%) by default; muted if the user opted in.
+            vid.muted = !!(window.appSettings && window.appSettings.muteTrailers);
+            vid.volume = 0.8;
             
             // Hide loading indicator when video metadata is loaded
             vid.addEventListener('loadedmetadata', () => {

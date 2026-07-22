@@ -426,7 +426,10 @@ async function loadHoverTrailer(popup, movie, title, year) {
         const vid = document.createElement('video');
         vid.style.cssText = 'width:100%; height:100%; border:none; background:#000; display:block; transform:scale(1.02); pointer-events:none;';
         vid.src = directUrl;
-        vid.muted = false;
+        // Trailers play at 80% (−20%) by default; muted entirely if the user opted in.
+        const _muteTrailers = !!(window.appSettings && window.appSettings.muteTrailers);
+        vid.muted = _muteTrailers;
+        vid.volume = 0.8;
         vid.autoplay = true;
         vid.loop = true;
         vid.playsInline = true;
@@ -443,8 +446,8 @@ async function loadHoverTrailer(popup, movie, title, year) {
 
     // ── FALLBACK: iframe embed (only when yt-dlp is unavailable/failed) ──
     const embedUrl = trailerKey
-        ? `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1`
-        : `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(title + ' ' + (year || '') + ' official trailer')}&autoplay=1&mute=0&controls=0&modestbranding=1&rel=0`;
+        ? `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${(window.appSettings&&window.appSettings.muteTrailers)?1:0}&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1`
+        : `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(title + ' ' + (year || '') + ' official trailer')}&autoplay=1&mute=${(window.appSettings&&window.appSettings.muteTrailers)?1:0}&controls=0&modestbranding=1&rel=0`;
 
     window.stopAllTrailerPreviews(); // clear any straggler before attaching
     const iframe = document.createElement('iframe');
