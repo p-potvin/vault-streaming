@@ -1,0 +1,37 @@
+# Normalize all text files to LF in the repo (checkout as-is, no CRLF).
+* text=auto eol=lf
+
+# Explicit text types (kept LF)
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.svg   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+*.jsx   text eol=lf
+*.tsx   text eol=lf
+
+# Binary assets — never touch line endings
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.mp4   binary
+*.webm  binary
+*.mov   binary
+*.mp3   binary
+*.wav   binary
+*.zip   binary
+*.gz    binary
