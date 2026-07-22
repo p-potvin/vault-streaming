@@ -1409,7 +1409,9 @@ video::cue {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
   column-gap: 18px !important;
   row-gap: 32px !important;
-  padding: 14px 0 !important;
+  /* 25px side padding keeps edge-column cards off the viewport edge so their
+     (viewport-clamped, position:fixed) hover popups can center without overflowing. */
+  padding: 14px 25px !important;
 }
 
 .tmdb-movie-card {
