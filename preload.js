@@ -39,6 +39,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offNormalizeProgress: () => ipcRenderer.removeAllListeners('normalize-progress'),
   onUpscaleProgress: (cb) => ipcRenderer.on('upscale-progress', (_, data) => cb(data)),
   offUpscaleProgress: () => ipcRenderer.removeAllListeners('upscale-progress'),
+  // Real-time down-transcode (Max Stream Quality ceiling → h264_nvenc/libx264)
+  transcodeStreamStart: (opts) => ipcRenderer.invoke('transcode-stream-start', opts),
+  transcodeStreamStop: () => ipcRenderer.invoke('transcode-stream-stop'),
+  onTranscodeChunk: (cb) => ipcRenderer.on('transcode-chunk', (_, data) => cb(data)),
+  offTranscodeChunk: () => ipcRenderer.removeAllListeners('transcode-chunk'),
+  onTranscodeStatus: (cb) => ipcRenderer.on('transcode-status', (_, data) => cb(data)),
+  offTranscodeStatus: () => ipcRenderer.removeAllListeners('transcode-status'),
   runASRBenchmark: (forceSimulation) => ipcRenderer.invoke('run-asr-benchmark', { forceSimulation }),
   revertEnhancements: (p) => ipcRenderer.invoke('revert-enhancements', p),
   

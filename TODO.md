@@ -2,6 +2,9 @@
 
 ## Active Tasks
 
+- [ ] **Transcode-to-ceiling — renderer wiring** (backend done: `src/ipc/transcode.ipc.js` + preload `transcodeStream*`/`onTranscode*`). Remaining: in `js/player/playStream`, compare `activeStreamingMedia.quality` vs `appSettings.streamQuality` (map 2160p/1080p/720p → height); if source > ceiling, play via MediaSource fed by `transcode-chunk` (codec `avc1.640029, mp4a.40.2`) instead of `vp.src = url`; show a "1080p" badge; use ffmpeg `-ss` for resume (guard the double-seek); seeking mid-stream restarts the transcode at the new position; fall back to direct playback on transcode error.
+- [ ] **Provider-unavailable fallback**: when an auto-played stream returns Real-Debrid's ~8s placeholder video (mis-flagged cache), fall back to the next ranked stream automatically.
+
 - [ ] **Library Sync**: Implement logic to persist the user's Library (tracked movies/series) locally in `appSettings` or a dedicated DB file.
 - [ ] **Subtitle UX**: Ensure the player overlay for AI Subtitles properly handles overlapping text when multiple speakers talk simultaneously.
 - [ ] **Decouple clip IPC from `main.js`**: Move the clip handler (`registerClipHandler`) out of `main.js` into its own `src/ipc/clip.ipc.js` module, matching the `system.ipc`/`media.ipc`/`subtitles.ipc` pattern.

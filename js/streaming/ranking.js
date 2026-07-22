@@ -63,7 +63,7 @@ async function checkRDCachedBatch(hashes, apiKey) {
  * Score a torrent entry by how well it matches the user's quality & language preferences.
  * Higher score = better match.
  */
-function scoreTorrent(torrent, preferredQuality, preferredLang) {
+function scoreTorrent(torrent, preferredLang) {
     let score = 0;
 
     const text = `${torrent.quality || ''} ${torrent.desc || ''} ${torrent.type || ''}`.toLowerCase();
@@ -86,18 +86,13 @@ function scoreTorrent(torrent, preferredQuality, preferredLang) {
     if (BAD_RELEASE_RE.test(text)) score -= 10000;
 
     // ── Quality scoring ─────────────────────────────────────────────────────
-    const maxQualityRank = QUALITY_RANK[preferredQuality] ?? 3;
+    // The user's "Max Stream Quality" is now enforced at PLAYBACK by transcoding,
+    // NOT by torrent selection. So we simply prefer the highest available quality:
+    // the best cached UHD is the ideal source, and we downscale it on play if it
+    // exceeds the ceiling. (preferredQuality is intentionally no longer consulted.)
     const tq = _detectQualityRank(text);
-
-    if (tq === 0) {
-        score -= 5;                                           // unknown / unparseable
-    } else if (tq === maxQualityRank) {
-        score += 100;                                         // perfect match for the ceiling
-    } else if (tq < maxQualityRank) {
-        score += tq * 15;                                     // lower than asked — still ok, the closer the better
-    } else {
-        score -= (tq - maxQualityRank) * 20;                  // exceeds the ceiling — costlier per step
-    }
+    if (tq === 0) score -= 5;                                 // unknown / unparseable
+    else score += tq * 25;                                    // 480→25 · 720→50 · 1080→75 · 4K→100
 
     // ── Source tier ─────────────────────────────────────────────────────────
     if      (/\bremux\b/.test(text))       score += 18;
@@ -170,7 +165,6 @@ function scoreTorrent(torrent, preferredQuality, preferredLang) {
  * Returns a new sorted array.
  */
 function rankTorrents(torrents) {
-    const quality = getPreferredQuality();
     const lang = getPreferredLang();
-    return [...torrents].sort((a, b) => scoreTorrent(b, quality, lang) - scoreTorrent(a, quality, lang));
+    return [...torrents].sort((a, b) => scoreTorrent(b, lang) - scoreTorrent(a, lang));
 }
