@@ -27,6 +27,36 @@ async function resolveCometUrl(url) {
     return { streamUrl: url, filename: (url.split('/').pop() || 'stream.mp4').split('?')[0] };
 }
 
+// A real movie/episode is always well over this; a debrid "provider unavailable"
+// placeholder clip is a few MB. Used to catch streams a provider flagged cached
+// but can't actually serve (RD's optimistic URLs since instantAvailability died).
+const MIN_REAL_BYTES = 50 * 1024 * 1024; // 50 MB
+
+// Probe the resolved stream's real total size with ONE tiny GET range request
+// to the COMET PROXY url (same origin the player hits — stays on Comet's IP,
+// never touches the RD CDN directly). Returns total bytes, or null if unknown.
+async function probeStreamBytes(url) {
+    try {
+        const res = await fetchWithTimeout(url, { method: 'GET', headers: { Range: 'bytes=0-1' } }, 12000);
+        // 206 → Content-Range: "bytes 0-1/<total>"; 200 → Content-Length is total.
+        const cr = res.headers.get('content-range');
+        if (cr) {
+            const total = parseInt((cr.split('/')[1] || '').trim(), 10);
+            if (Number.isFinite(total) && total > 0) return total;
+        }
+        const cl = res.headers.get('content-length');
+        if (res.status === 200 && cl) {
+            const total = parseInt(cl, 10);
+            if (Number.isFinite(total) && total > 0) return total;
+        }
+        return null;
+    } catch (e) {
+        // Network hiccup on the probe shouldn't block playback — treat as unknown.
+        console.warn('[Comet] size probe failed (allowing stream):', e.message);
+        return null;
+    }
+}
+
 function registerStreamHandlers(ipcMain) {
     ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url } = {}) => {
         const dedupKey = (hash || url || magnet || '').toLowerCase().trim();
@@ -55,6 +85,23 @@ function registerStreamHandlers(ipcMain) {
         try {
             console.log('[Comet] Resolving stream url…');
             const { streamUrl, filename } = await resolveCometUrl(url);
+
+            // Verify it's a real file, not a provider "unavailable" placeholder.
+            // A provider can flag a torrent cached (Comet returns a url) yet serve
+            // a tiny placeholder when actually hit — since RD killed the
+            // instantAvailability check. Reject placeholder-sized streams so the
+            // caller can fall back to the next ranked source.
+            const totalBytes = await probeStreamBytes(streamUrl);
+            if (totalBytes !== null && totalBytes < MIN_REAL_BYTES) {
+                console.warn(`[Comet] Placeholder detected (${(totalBytes / 1048576).toFixed(1)} MB) — not actually cached.`);
+                return {
+                    success: false,
+                    notCached: true,
+                    placeholder: true,
+                    error: 'Provider returned a placeholder (not actually cached). Trying the next source.'
+                };
+            }
+
             _resolvedCache.set(dedupKey, { streamUrl, filename, ts: Date.now() });
             return { success: true, streamUrl, filename };
         } catch (e) {

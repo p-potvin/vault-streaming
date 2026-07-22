@@ -36,7 +36,10 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
             const hasRdUrl = !!s.url;
             return {
                 quality,
-                type: (hasRdUrl ? '⚡ [RD+] ' : '') + 'Comet ' + nameStr.split('\n')[0].trim(),
+                // Comet's own name already carries the provider marker (e.g. [TB⚡],
+                // [AD], [RD+]) now that we fan out to AllDebrid/TorBox/RD, so just
+                // flag cached generically here rather than hardcoding [RD+].
+                type: (hasRdUrl ? '⚡ ' : '') + 'Comet ' + nameStr.split('\n')[0].trim(),
                 size,
                 seeds,
                 peers: '—',
