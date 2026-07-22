@@ -159,10 +159,10 @@ window.renderLibrary = async function(useCache = false) {
 
     grid.innerHTML = '';
 
-    const term = el('search-box').value.toLowerCase();
-    const filterAttr = el('filter-type').value;
-    const sortBy = el('sort-by').value;
-    const sortOrder = el('btn-sort-order').dataset.order || 'desc';
+    const term = (el('search-box')?.value || '').toLowerCase();
+    const filterAttr = el('filter-type')?.value || 'all';
+    const sortBy = el('sort-by')?.value || 'title';
+    const sortOrder = el('btn-sort-order')?.dataset.order || 'desc';
 
     // 1. Filter and sort Streaming items
     let filteredLibrary = [...window.appSettings.library];
@@ -240,12 +240,24 @@ window.renderLibrary = async function(useCache = false) {
                     window.playStream(prog.streamUrl, prog.streamTitle || movie.title || movie.name);
                     const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
                     window.showToast(t.resumingStream || 'Resuming stream...', 'success');
-                } else {
+                } else if (movie.media_type === 'tv') {
+                    // Series with no in-progress episode → open the season screen.
+                    // The last-watched season is remembered/preselected inside showMediaDetails.
                     window.showMediaDetails(movie);
+                } else {
+                    // Movie with no saved progress → auto-play the best cached source
+                    // directly. triggerRDStream auto-picks the top-ranked stream and
+                    // keeps the "Choose Manually" list as a fallback.
+                    window.triggerRDStream(movie.title || movie.name, movie.id, 'movie', null, null, { poster: movie.poster, year: movie.year });
                 }
             } catch (e) {
                 console.error("Error resuming library item:", e);
-                window.showMediaDetails(movie);
+                // Fall back to the streaming dialog for movies, season screen for series.
+                if (movie.media_type === 'tv') {
+                    window.showMediaDetails(movie);
+                } else {
+                    window.triggerRDStream(movie.title || movie.name, movie.id, 'movie', null, null, { poster: movie.poster, year: movie.year });
+                }
             }
         });
         

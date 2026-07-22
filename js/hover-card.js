@@ -184,7 +184,7 @@ window.showPremiumHoverCard = function(card, movie) {
       <div class="details-container" style="padding:14px; background:linear-gradient(180deg, rgba(20,18,30,0.95), rgba(11,8,19,0.99)); color:#fff; text-align:left; border-top:1px solid rgba(255,255,255,0.06); font-family: var(--font-sans);">
         <div class="title-row" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <span class="title" style="font-weight:700; font-size:14px; color:#fff; font-family:var(--font-mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${window.escapeHtml(title)}</span>
-          <span class="rating-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; font-size:9.5px; padding:1.5px 5px; border-radius:4px; font-family:var(--font-mono); white-space:nowrap;">★ ${rating}</span>
+          <span class="rating-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; font-size:9.5px; padding:1.5px 5px; border-radius:4px; font-family:var(--font-mono); white-space:nowrap;">${window.icons.star('', 'width:9px;height:9px;vertical-align:middle;', 'currentColor', 'currentColor')} ${rating}</span>
         </div>
         <div class="meta-row" style="font-size:10px; color:var(--vault-slate); margin-top:2px; font-weight:600; text-transform:uppercase;">${year} • ${window.escapeHtml(genres)}</div>
         <p class="overview" style="font-size:11px; color:#bbb; margin-top:6px; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; font-family:var(--font-body); height:46px; margin-bottom:0;">${window.escapeHtml(overview)}</p>

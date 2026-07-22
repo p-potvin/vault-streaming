@@ -906,12 +906,12 @@ function initPlayer() {
     vp.addEventListener('play', () => {
         btnPlay.innerHTML = PAUSE_ICON_SVG;
         const pipPlayBtn = el('pip-btn-play');
-        if (pipPlayBtn) pipPlayBtn.textContent = '⏸';
+        if (pipPlayBtn) pipPlayBtn.innerHTML = window.icons.pause('', 'width:14px;height:14px;vertical-align:middle;');
     });
     vp.addEventListener('pause', () => {
         btnPlay.innerHTML = PLAY_ICON_SVG;
         const pipPlayBtn = el('pip-btn-play');
-        if (pipPlayBtn) pipPlayBtn.textContent = '▶';
+        if (pipPlayBtn) pipPlayBtn.innerHTML = window.icons.play('', 'width:14px;height:14px;vertical-align:middle;');
     });
 
     btnPlay.addEventListener('click', () => {
@@ -1395,7 +1395,7 @@ async function playStream(url, title) {
     }
     
     const titleEl = el('player-title');
-    if (titleEl) titleEl.textContent = `⚡ RD Stream: ${title}`;
+    if (titleEl) titleEl.innerHTML = `${window.icons.lightning('', 'width:13px;height:13px;vertical-align:middle;')} RD Stream: ${window.escapeHtml(String(title || ''))}`;
     const tbTitle = el('titlebar-video-title');
     if (tbTitle) {
         tbTitle.textContent = `·  RD Streaming: ${title}`;

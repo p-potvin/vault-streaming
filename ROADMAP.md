@@ -27,8 +27,10 @@
 
 - [x] Integrated custom video player with real-time UI overlay.
 - [x] Added persistent mini-player "Picture-in-Picture" mode.
-- [x] **Live Subtitles**: Integrated local NVIDIA Parakeet-TDT model for real-time transcription.
-- [x] Refactored live subtitles to stream text directly over IPC without generating local `.srt` files on disk.
+- [~] **Live Subtitles**: local NVIDIA Parakeet-TDT real-time transcription. _(Reconciled Wed, 22 Jul 2026: the **renderer UI was removed** in the 12 Jul streaming-only trim — see `EXTRACTION-NOTES.md`. The **main-process IPC still exists and is registered** (`warm/start/stop-live-subtitles` in `src/live-subtitles.js`, wired at `main.js`). Re-adding the renderer button/overlay is tracked in `TODO.md`.)_
+- [x] Refactored live subtitles to stream text directly over IPC without generating local `.srt` files on disk. _(Historical — landed while this was still part of vault-explorer; the IPC contract survives, the UI does not.)_
+- [x] **Local subtitles**: sidecar `.srt`/`.vtt` discovery via `find-subtitles` (restored Wed, 22 Jul 2026 after it was dropped in the trim).
+- [ ] **OpenSubtitles download**: remote subtitle fetch not yet reimplemented after the trim (local sidecars only). Tracked in `TODO.md`.
 - [ ] Expand translation features: Add more destination languages and custom visual styling for the subtitle overlay (font size, background opacity).
 
 ## 4. Completed Legacy Polish

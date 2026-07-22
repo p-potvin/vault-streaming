@@ -30,7 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFolderSizeSmart: (dirPath, fileCount) => ipcRenderer.invoke('get-folder-size-smart', dirPath, fileCount),
   encryptFiles: (data) => ipcRenderer.invoke('encrypt-files', data),
   decryptFiles: (data) => ipcRenderer.invoke('decrypt-files', data),
-  findSubtitles: (videoPath, queryTitle, skipOpenSubtitles) => ipcRenderer.invoke('find-subtitles', videoPath, queryTitle, skipOpenSubtitles),
+  findSubtitles: (videoPath, queryTitle, skipOpenSubtitles, langs) => ipcRenderer.invoke('find-subtitles', videoPath, queryTitle, skipOpenSubtitles, langs),
   downloadSubtitleTrack: (data) => ipcRenderer.invoke('download-subtitle-track', data),
   onWebmProgress: (cb) => ipcRenderer.on('generate-webm-progress', (_, data) => cb(data)),
   offWebmProgress: () => ipcRenderer.removeAllListeners('generate-webm-progress'),

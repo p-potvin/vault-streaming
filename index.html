@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vault Streaming</title>
-  <!-- v1.3.0 -->
+  <!-- v1.4.0 -->
   <link href="themes.css" rel="stylesheet">
   <link href="index.css" rel="stylesheet">
+  <link href="node_modules/flag-icons/css/flag-icons.min.css" rel="stylesheet">
   <script src="themes.js" defer></script>
   <!-- Load client-side JS modular services -->
   <script src="js/translations.en.js" defer></script>
@@ -14,6 +15,8 @@
   <script src="js/translations.js" defer></script>
   <script src="js/utils.js" defer></script>
   <script src="js/icons.js" defer></script>
+  <script src="js/icons.v2.js" defer></script>
+  <script src="js/icon-hydrate.js" defer></script>
   <script src="js/settings/theme.js" defer></script>
   <script src="js/settings/pill-tags.js" defer></script>
   <script src="js/settings/debrid-downloader.js" defer></script>
@@ -251,9 +254,9 @@
   <div id="settings-panel" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Settings Panel" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 2147483647; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: 440px; border-radius: 8px; max-height: 85vh; flex-direction: column; overflow-y: auto;">
     <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-accent); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-border); padding-bottom: 10px; user-select: none;">
       <div style="display: flex; align-items: center; gap: 8px;">
-         ⚙️ <span class="settings-panel-header">Settings / Paramètres</span>
+         <span data-icon="settings" data-icon-style="width:18px;height:18px;vertical-align:middle;"></span> <span class="settings-panel-header">Settings / Paramètres</span>
       </div>
-      <button onclick="document.getElementById('settings-panel').style.display = 'none';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+      <button onclick="document.getElementById('settings-panel').style.display = 'none';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;"><span data-icon="close"></span></button>
     </div>
     <div style="display: flex; flex-direction: column; gap: 14px;">
 
@@ -403,7 +406,7 @@
 
       <div style="margin-top: 8px; border-top: 1px solid var(--vault-warm-border-subtle); padding-top: 10px;">
         <button id="settings-btn-debrid-downloader" style="width: 100%; background: var(--vault-console-surface, #13101c); color: var(--vault-accent, #B07CFF); border: 1px solid var(--vault-accent, #B07CFF); padding: 7px 12px; border-radius: 4px; font-weight: 600; font-family: var(--font-body); cursor: pointer; font-size: 11px; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 6px;" type="button">
-          ⚡ Debrid Downloader
+          <span data-icon="lightning" data-icon-style="width:16px;height:16px;vertical-align:middle;"></span> Debrid Downloader
         </button>
       </div>
 
@@ -420,7 +423,7 @@
       <div style="display: flex; align-items: center; gap: 8px;">
          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent);"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span id="rd-stream-title-text">Real-Debrid Streaming Client</span>
       </div>
-      <button id="btn-close-rd" onclick="document.getElementById('rd-stream-dialog').style.display = 'none'; const bd = document.getElementById('rd-stream-backdrop'); if(bd) bd.style.display = 'none';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+      <button id="btn-close-rd" onclick="document.getElementById('rd-stream-dialog').style.display = 'none'; const bd = document.getElementById('rd-stream-backdrop'); if(bd) bd.style.display = 'none';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;"><span data-icon="close"></span></button>
     </div>
     
     <div id="rd-dialog-body" style="overflow-y: auto; max-height: 50vh; margin-bottom: 15px;">
@@ -443,7 +446,7 @@
       <div style="display: flex; align-items: center; gap: 8px;">
          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent);"><polygon points="5 3 19 12 5 21 5 3"/></svg><span id="streaming-details-header-title">Title Details</span>
       </div>
-      <button onclick="document.getElementById('streaming-details-modal').style.display = 'none'; document.getElementById('movie-trailer-iframe').src='';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+      <button onclick="document.getElementById('streaming-details-modal').style.display = 'none'; document.getElementById('movie-trailer-iframe').src='';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;"><span data-icon="close"></span></button>
     </div>
 
     <!-- Modal Layout -->
@@ -482,7 +485,7 @@
           <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; font-size: 11px; font-weight: 600; color: var(--vault-slate);">
             <span id="streaming-details-year" style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">2026</span>
             <span id="streaming-details-genres">Sci-Fi, Drama</span>
-            <span id="streaming-details-rating" style="color: var(--vault-gold); font-weight: 700;">★ 8.5</span>
+            <span id="streaming-details-rating" style="color: var(--vault-gold); font-weight: 700;"><span data-icon="star" data-icon-style="width:13px;height:13px;vertical-align:middle;"></span> 8.5</span>
           </div>
           <p id="streaming-details-overview" style="margin: 0 0 12px 0; font-size: 12px; line-height: 1.45; color: #ccc; font-family: var(--font-body); display:-webkit-box; -webkit-line-clamp:4; line-clamp: 4; -webkit-box-orient:vertical; overflow:hidden;"></p>
           <!-- Watch Options & External Links Container -->
@@ -536,9 +539,9 @@
   <div id="debrid-download-dialog" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Real-Debrid URL Downloader" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 3360; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: 520px; border-radius: 8px; max-height: 85vh; flex-direction: column;">
     <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-accent); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-border); padding-bottom: 10px; user-select: none;">
       <div style="display: flex; align-items: center; gap: 8px;">
-         ⚡ Real-Debrid URL Downloader
+         <span data-icon="lightning" data-icon-style="width:16px;height:16px;vertical-align:middle;"></span> Real-Debrid URL Downloader
       </div>
-      <button id="btn-close-debrid-download" onclick="document.getElementById('debrid-download-dialog').style.display = 'none'; if (window.electronAPI.offDownloadProgress) window.electronAPI.offDownloadProgress();" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;">✕</button>
+      <button id="btn-close-debrid-download" onclick="document.getElementById('debrid-download-dialog').style.display = 'none'; if (window.electronAPI.offDownloadProgress) window.electronAPI.offDownloadProgress();" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;"><span data-icon="close"></span></button>
     </div>
     
     <div style="display: flex; flex-direction: column; gap: 14px;">
@@ -586,7 +589,7 @@
           
           <div style="display: flex; gap: 8px;">
             <button id="btn-debrid-start-download" style="flex: 1; background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 8px 16px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 6px;">
-              📥 Download File
+              <span data-icon="download" data-icon-style="width:16px;height:16px;vertical-align:middle;"></span> Download File
             </button>
             <button id="btn-debrid-copy-link" style="background: var(--vault-console-surface, #13101c); color: var(--vault-text); border: 1px solid var(--vault-border); padding: 8px 12px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;" title="Copy Direct Link">
               Copy Link
@@ -659,7 +662,7 @@
         </svg>
         <span>ASR Speech & Translation Benchmark</span>
       </div>
-      <button id="btn-close-benchmark" style="background: transparent; border: none; color: var(--vault-console-text-secondary); cursor: pointer; font-size: 16px; line-height: 1; user-select: none;">✕</button>
+      <button id="btn-close-benchmark" style="background: transparent; border: none; color: var(--vault-console-text-secondary); cursor: pointer; font-size: 16px; line-height: 1; user-select: none;"><span data-icon="close"></span></button>
     </div>
 
     <!-- Toggle Hardware / Sim Mode -->
@@ -809,18 +812,18 @@
     <div id="player-topbar">
       <span class="player-title" id="player-title">—</span>
       <div class="player-corner-btns">
-        <button class="player-corner-btn" id="minimize-modal" aria-label="Picture-in-Picture" title="Picture-in-Picture">🗗</button>
-        <button class="player-corner-btn" id="close-modal" aria-label="Close" title="Close (Esc)">✕</button>
+        <button class="player-corner-btn" id="minimize-modal" aria-label="Picture-in-Picture" title="Picture-in-Picture"><span data-icon="pip" data-icon-style="width:15px;height:15px;vertical-align:middle;"></span></button>
+        <button class="player-corner-btn" id="close-modal" aria-label="Close" title="Close (Esc)"><span data-icon="close"></span></button>
       </div>
     </div>
-    <button id="pip-close-btn" aria-label="Close" title="Close" style="display:none; position:absolute; top:6px; right:8px; z-index:203; background:rgba(0,0,0,0.5); border:none; color:#fff; border-radius:50%; width:20px; height:20px; font-size:12px; align-items:center; justify-content:center; cursor:pointer; padding:0; line-height:1;">✕</button>
+    <button id="pip-close-btn" aria-label="Close" title="Close" style="display:none; position:absolute; top:6px; right:8px; z-index:203; background:rgba(0,0,0,0.5); border:none; color:#fff; border-radius:50%; width:20px; height:20px; font-size:12px; align-items:center; justify-content:center; cursor:pointer; padding:0; line-height:1;"><span data-icon="close"></span></button>
     <div class="video-wrapper">
        <video id="video-player" autoplay></video>
        <!-- PiP Controls Hover Overlay -->
        <div id="pip-controls-overlay">
-          <button id="pip-btn-prev" class="pip-ctrl-btn" title="Previous">⏮</button>
-          <button id="pip-btn-play" class="pip-ctrl-btn" title="Play/Pause">⏯</button>
-          <button id="pip-btn-next" class="pip-ctrl-btn" title="Next">⏭</button>
+          <button id="pip-btn-prev" class="pip-ctrl-btn" title="Previous"><span data-icon="skipBack" data-icon-style="width:14px;height:14px;vertical-align:middle;"></span></button>
+          <button id="pip-btn-play" class="pip-ctrl-btn" title="Play/Pause"><span data-icon="play" data-icon-style="width:14px;height:14px;vertical-align:middle;"></span></button>
+          <button id="pip-btn-next" class="pip-ctrl-btn" title="Next"><span data-icon="skipForward" data-icon-style="width:14px;height:14px;vertical-align:middle;"></span></button>
        </div>
         <div id="video-ended-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(7, 8, 10, 0.95); z-index:100; align-items:center; justify-content:center; flex-direction:column; color:var(--console-text); font-family:var(--vault-font-mono), monospace;">
           <div style="display: flex; gap: 20px; margin-bottom: 24px;">
@@ -946,9 +949,9 @@
                        <div id="opt-more-subs" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:11px; color:var(--vault-slate); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;" title="Search OpenSubtitles by language"><span>More subtitles…</span><span id="more-subs-caret" style="font-size:10px;">▸</span></div>
                        <div id="subtitles-more-panel" style="display:none;">
                           <div style="padding:2px 12px 2px; font-size:9px; font-family:var(--font-mono); font-weight:700; text-transform:uppercase; color:var(--vault-slate); letter-spacing:0.05em;">Search OpenSubtitles</div>
-                          <div class="subtitle-quick-lang" data-lang="en" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span>🇬🇧 English</span><span style="font-size:10px; color:var(--vault-slate);">EN</span></div>
-                          <div class="subtitle-quick-lang" data-lang="fr-CA" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span>🇨🇦 French (Canadian)</span><span style="font-size:10px; color:var(--vault-slate);">FR-CA</span></div>
-                          <div class="subtitle-quick-lang" data-lang="fr" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span>🇫🇷 French</span><span style="font-size:10px; color:var(--vault-slate);">FR</span></div>
+                          <div class="subtitle-quick-lang" data-lang="en" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span><span class="fi fi-gb" style="border-radius:2px;"></span> English</span><span style="font-size:10px; color:var(--vault-slate);">EN</span></div>
+                          <div class="subtitle-quick-lang" data-lang="fr-CA" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span><span class="fi fi-ca" style="border-radius:2px;"></span> French (Canadian)</span><span style="font-size:10px; color:var(--vault-slate);">FR-CA</span></div>
+                          <div class="subtitle-quick-lang" data-lang="fr" style="padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-body); font-size:12px; color:var(--vault-text); transition:background 0.2s; display:flex; align-items:center; justify-content:space-between;"><span><span class="fi fi-fr" style="border-radius:2px;"></span> French</span><span style="font-size:10px; color:var(--vault-slate);">FR</span></div>
                        </div>
                        <div class="subtitle-divider" style="height:1px; background:var(--vault-border); margin:4px 0;"></div>
                        <div id="subtitle-sync-row" style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 12px; font-family:var(--font-body); font-size:12px; color:var(--vault-text); user-select:none;">
@@ -1055,7 +1058,7 @@
       <h3 style="margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase; color: var(--vault-text); font-family: var(--font-mono); letter-spacing: 0.05em;">Photo Editor</h3>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="photo-editor-save" style="background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 6px 14px; border-radius: 4px; font-weight: 700; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;">Save</button>
-        <button id="photo-editor-close" title="Close (Esc)" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 18px; padding: 4px;">✕</button>
+        <button id="photo-editor-close" title="Close (Esc)" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 18px; padding: 4px;"><span data-icon="close"></span></button>
       </div>
     </div>
     <!-- Main workspace -->

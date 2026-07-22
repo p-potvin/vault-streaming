@@ -451,10 +451,12 @@ async function saveSettings(settings) {
 
 const { registerSystemIpc } = require('./src/ipc/system.ipc');
 const { registerMediaIpc } = require('./src/ipc/media.ipc');
+const { registerSubtitlesIpc } = require('./src/ipc/subtitles.ipc');
 
 
 registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings);
 registerMediaIpc(ipcMain);
+registerSubtitlesIpc(ipcMain);
 
 // Register Modular Handlers
 tmdbHandlers.registerTmdbHandlers(ipcMain);

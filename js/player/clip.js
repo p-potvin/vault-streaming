@@ -802,7 +802,7 @@ function showClipEditingDialog(clipData) {
     `;
     
     const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '✕';
+    closeBtn.innerHTML = window.icons.close('', 'width:14px;height:14px;vertical-align:middle;');
     closeBtn.style.cssText = `
         background: transparent;
         border: none;
@@ -905,12 +905,12 @@ function showClipEditingDialog(clipData) {
     
     // Add editing option buttons
     const editingButtons = [
-        { id: 'trim', name: 'Trim', icon: '✂️', action: () => adjustClipBounds(clipData) },
-        { id: 'crop', name: 'Crop', icon: '🟪', action: () => showCropDialog(clipData) },
-        { id: 'rotate', name: 'Rotate', icon: '🔄', action: () => rotateClip(clipData) },
-        { id: 'filters', name: 'Filters', icon: '🎨', action: () => showFiltersDialog(clipData) },
-        { id: 'ai-enhance', name: 'AI Enhance', icon: '✨', action: () => showAIEnhancements(clipData) },
-        { id: 'speed', name: 'Speed', icon: '⚡', action: () => adjustPlaybackSpeed(clipData) }
+        { id: 'trim', name: 'Trim', icon: window.icons.scissors('', 'width:18px;height:18px;'), action: () => adjustClipBounds(clipData) },
+        { id: 'crop', name: 'Crop', icon: window.icons.crop('', 'width:18px;height:18px;'), action: () => showCropDialog(clipData) },
+        { id: 'rotate', name: 'Rotate', icon: window.icons.refresh('', 'width:18px;height:18px;'), action: () => rotateClip(clipData) },
+        { id: 'filters', name: 'Filters', icon: window.icons.palette('', 'width:18px;height:18px;'), action: () => showFiltersDialog(clipData) },
+        { id: 'ai-enhance', name: 'AI Enhance', icon: window.icons.magic('', 'width:18px;height:18px;'), action: () => showAIEnhancements(clipData) },
+        { id: 'speed', name: 'Speed', icon: window.icons.fastForward('', 'width:18px;height:18px;'), action: () => adjustPlaybackSpeed(clipData) }
     ];
     
     editingButtons.forEach(btn => {
@@ -1186,7 +1186,7 @@ function showClipExportDialog(clipData) {
     `;
     
     const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '✕';
+    closeBtn.innerHTML = window.icons.close('', 'width:14px;height:14px;vertical-align:middle;');
     closeBtn.style.cssText = `
         background: transparent;
         border: none;
@@ -1409,7 +1409,7 @@ function exportClipToDesktop(clipData, format, quality) {
             
             if (result.success) {
                 const sizeMB = result.outputSize ? (result.outputSize / (1024 * 1024)).toFixed(1) : '?';
-                window.showToast(`✓ Clip saved (${sizeMB} MB): ${result.outputPath}`, 'success');
+                window.showToast(`Clip saved (${sizeMB} MB): ${result.outputPath}`, 'success');
                 return result;
             } else {
                 window.showToast(`Export failed: ${result.error}`, 'error');
@@ -1518,7 +1518,7 @@ function showShareDialogUI(clipData, format, quality) {
     `;
     
     const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '✕';
+    closeBtn.innerHTML = window.icons.close('', 'width:14px;height:14px;vertical-align:middle;');
     closeBtn.style.cssText = `
         background: transparent;
         border: none;
@@ -1755,7 +1755,7 @@ function showPublishDialogUI(clipData, format, quality) {
     `;
     
     const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '✕';
+    closeBtn.innerHTML = window.icons.close('', 'width:14px;height:14px;vertical-align:middle;');
     closeBtn.style.cssText = `
         background: transparent;
         border: none;

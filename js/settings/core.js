@@ -29,7 +29,7 @@ function initSettingsListeners() {
         if (backdrop) backdrop.style.display = isOpening ? 'block' : 'none';
         if (isOpening) {
             pillTagLoad(window.appSettings.globExclusions || []);
-            el('settings-default-folder').value = window.appSettings.defaultFolder || '';
+            if (el('settings-default-folder')) el('settings-default-folder').value = window.appSettings.defaultFolder || '';
             el('settings-default-theme').value = window.appSettings.defaultTheme || 'vaultwares-revisited-console';
             el('settings-default-lang').value = window.appSettings.defaultLang || 'en';
             el('settings-default-sub-lang').value = window.appSettings.defaultSubLang || 'original';
@@ -131,7 +131,7 @@ function initSettingsListeners() {
         const oldDefaultFolder = window.appSettings.defaultFolder || '';
         
         const newGlobExclusions = pillTagGetValues();
-        const newDefaultFolder = el('settings-default-folder').value.trim();
+        const newDefaultFolder = el('settings-default-folder') ? el('settings-default-folder').value.trim() : (window.appSettings.defaultFolder || '');
         
         const hasStructuralChange = 
             JSON.stringify(newGlobExclusions) !== oldGlobExclusions ||

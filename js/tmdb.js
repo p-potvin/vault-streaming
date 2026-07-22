@@ -238,7 +238,7 @@ window.renderTMDB = async function(query = '', append = false) {
                    </button>
                    <img class="thumbnail" src="${movie.poster}" alt="${window.escapeHtml(movie.title)}" style="object-fit: cover; width:100%; height:100%; transition: opacity 0.25s ease;" onerror="this.src='public/poster_placeholder.svg'">
                    <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; width: 28px; height: 28px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8.5px; line-height: 1.1; padding: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
-                      <span>★</span>
+                      <span>${window.icons.star('', 'width:10px;height:10px;', 'currentColor', 'currentColor')}</span>
                       <span style="margin-top:-1px;">${movie.rating}</span>
                    </div>
                 </div>

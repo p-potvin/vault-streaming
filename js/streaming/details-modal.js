@@ -38,7 +38,7 @@ window.showMediaDetails = async function(movie, startAtTime = 0) {
     el('streaming-details-title').textContent = movie.title;
     el('streaming-details-year').textContent = movie.year || '—';
     el('streaming-details-genres').textContent = movie.genres || '—';
-    el('streaming-details-rating').textContent = `★ ${movie.rating || '—'}`;
+    el('streaming-details-rating').innerHTML = `${window.icons.star('', 'width:13px;height:13px;vertical-align:middle;')} ${window.escapeHtml(String(movie.rating || '—'))}`;
     el('streaming-details-overview').textContent = movie.overview || '';
     el('streaming-details-poster').src = movie.poster || 'public/poster_placeholder.svg';
 
@@ -256,8 +256,25 @@ async function _setupTVModal(movie) {
             `<option value="${s.season_number}">${window.escapeHtml(s.name || `Season ${s.season_number}`)} (${s.episode_count} ep.)</option>`
         ).join('');
 
-        // Load episodes for first season
-        await _loadSeasonEpisodes(movie.id, seasons[0].season_number);
+        // Remember the last-watched season for this show and default the picker to it.
+        let defaultSeason = seasons[0].season_number;
+        try {
+            const prog = await window.electronAPI.getWatchProgress({
+                mediaType: 'tv',
+                tmdbId: movie.id,
+                title: movie.title || movie.name
+            });
+            if (prog && prog.season != null && seasons.some(s => s.season_number === prog.season)) {
+                defaultSeason = prog.season;
+                seasonSelect.value = String(prog.season);
+            }
+        } catch (e) {
+            // Non-fatal: fall back to the first season.
+            console.warn('[streaming] Could not resolve remembered season:', e);
+        }
+
+        // Load episodes for the remembered (or first) season
+        await _loadSeasonEpisodes(movie.id, defaultSeason);
 
         // Season change handler
         seasonSelect.onchange = async () => {
@@ -296,7 +313,7 @@ async function _loadSeasonEpisodes(tvId, seasonNumber) {
             const num = ep.episode_number;
             const title = window.escapeHtml(ep.name || `Episode ${num}`);
             const airDate = ep.air_date ? ep.air_date.substring(0, 7) : '';
-            const rating = ep.vote_average ? `★ ${ep.vote_average.toFixed(1)}` : '';
+            const rating = ep.vote_average ? `${window.icons.star('', 'width:10px;height:10px;vertical-align:middle;')} ${ep.vote_average.toFixed(1)}` : '';
             return `
                 <tr style="border-bottom:1px solid var(--vault-border); transition:background 0.15s;" 
                     onmouseenter="this.style.background='rgba(255,255,255,0.03)'"
@@ -317,7 +334,7 @@ async function _loadSeasonEpisodes(tvId, seasonNumber) {
                             onclick="window._streamEpisode(${tvId}, ${seasonNumber}, ${num})"
                             onmouseenter="this.style.opacity='0.8'"
                             onmouseleave="this.style.opacity='1'"
-                        >⚡ Play</button>
+                        >${window.icons.lightning('', 'width:11px;height:11px;vertical-align:middle;')} Play</button>
                     </td>
                 </tr>`;
         }).join('');

@@ -15,7 +15,7 @@ let _torrentRequestCounter = 0;
  * @param {number} [season]   Season number (TV only)
  * @param {number} [episode]  Episode number (TV only)
  */
-window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = 'movie', season = null, episode = null) {
+window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = 'movie', season = null, episode = null, meta = null) {
     _torrentRequestCounter++;
     const currentRequestNum = _torrentRequestCounter;
 
@@ -69,7 +69,9 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     const preferredQuality = getPreferredQuality();
     const preferredLang = getPreferredLang();
 
-    // Cache streaming media metadata for the watch history system
+    // Cache streaming media metadata for the watch history system.
+    // Prefer explicit `meta` (passed by direct-play callers like the Library grid,
+    // where the details-modal DOM holds stale poster/year); fall back to the DOM.
     const posterEl = el('streaming-details-poster');
     const yearEl = el('streaming-details-year');
     window.activeStreamingMedia = {
@@ -78,8 +80,8 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
         title: movieTitle,
         season: isTV ? (season || 1) : null,
         episode: isTV ? (episode || 1) : null,
-        poster: posterEl ? posterEl.src : null,
-        year: yearEl ? yearEl.textContent : null
+        poster: (meta && meta.poster) || (posterEl ? posterEl.src : null),
+        year: (meta && meta.year) || (yearEl ? yearEl.textContent : null)
     };
 
     try {
