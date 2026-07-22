@@ -1068,6 +1068,9 @@ function initPlayer() {
                 const vpEl = el('video-player');
                 const at = vpEl ? vpEl.currentTime : 0;
                 window._resumePosAfterSwitch = at;
+                // Explicit menu pick = play this native quality directly (don't
+                // re-apply the settings ceiling and transcode it back down).
+                window._qualityOverride = (window.qualityToHeight ? window.qualityToHeight(entry.label) : null) || 'original';
                 window.showToast(`Switching to ${entry.label.toUpperCase()}…`, 'info');
                 try { if (vpEl) vpEl.pause(); } catch (_) {}
                 const title = window.currentMovieTitle || (window.activeStreamingMedia && window.activeStreamingMedia.title) || '';
@@ -1422,7 +1425,29 @@ async function playStream(url, title) {
             console.error('[Player] Failed to fetch watch progress:', e);
         }
     }
-    
+
+    // ── Down-transcode decision ─────────────────────────────────────────────
+    // If the source exceeds the user's Max Stream Quality ceiling (or a one-shot
+    // menu/badge override applies), play through the ffmpeg transcoder instead of
+    // the raw URL. ffmpeg -ss handles the resume position, so the loadedmetadata
+    // seeks further down are skipped for transcoded playback (see _transcodePlay).
+    {
+        const srcQ = window.activeStreamingMedia && window.activeStreamingMedia.quality;
+        const tHeight = window.decideTranscodeHeight ? window.decideTranscodeHeight(srcQ) : null;
+        window._qualityOverride = null; // one-shot; consumed after the decision
+        if (tHeight) {
+            const resumeAt = (typeof window._resumePosAfterSwitch === 'number' && window._resumePosAfterSwitch > 0)
+                ? window._resumePosAfterSwitch
+                : (prog && !prog.completed && prog.positionSec > 0 ? prog.positionSec : 0);
+            window._resumePosAfterSwitch = null;   // handled by ffmpeg -ss, not a vp seek
+            window._transcodePlay = true;
+            window.startTranscodePlayback(url, tHeight, resumeAt); // overrides vp.src with a MediaSource
+        } else {
+            window._transcodePlay = false;
+            if (window.stopTranscode) window.stopTranscode(); // tear down any prior session
+        }
+    }
+
     vp.querySelectorAll('track').forEach(t => t.remove());
     try {
         const subs = await window.electronAPI.findSubtitles(url, title);
@@ -1505,7 +1530,7 @@ async function playStream(url, title) {
     // because they were mid-watch when they switched). Also explicitly call
     // play() after the seek — the upfront vp.play() may have been blocked
     // because the new src wasn't ready yet, leaving the player paused.
-    if (typeof window._resumePosAfterSwitch === 'number' && window._resumePosAfterSwitch > 0) {
+    if (!window._transcodePlay && typeof window._resumePosAfterSwitch === 'number' && window._resumePosAfterSwitch > 0) {
         const resumeAt = window._resumePosAfterSwitch;
         window._resumePosAfterSwitch = null;
         const seekOnce = () => {
@@ -1516,7 +1541,7 @@ async function playStream(url, title) {
             vp.removeEventListener('loadedmetadata', seekOnce);
         };
         vp.addEventListener('loadedmetadata', seekOnce);
-    } else if (prog && prog.positionSec > 0 && prog.durationSec > 0 && !prog.completed) {
+    } else if (!window._transcodePlay && prog && prog.positionSec > 0 && prog.durationSec > 0 && !prog.completed) {
         // Restore stream playback progress from saved server-side watch progress.
         const restoreOnce = () => {
             if (prog.positionSec < vp.duration - 15) {

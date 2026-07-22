@@ -38,9 +38,14 @@ function pickH264Encoder() {
 }
 
 function buildArgs({ url, startTime, targetHeight, encoder }) {
+    const nv = encoder === 'h264_nvenc';
     const args = [];
     // Fast input-seek (RD supports range requests). Placed before -i.
     if (startTime && Number(startTime) > 0) args.push('-ss', String(Number(startTime)));
+    // NVDEC hardware decode for the (expensive) 4K decode when using NVENC.
+    // Frames land in system memory so a plain CPU `scale` works — this avoids a
+    // hard dependency on the scale_cuda filter across ffmpeg builds.
+    if (nv) args.push('-hwaccel', 'cuda');
     // Reconnect on transient network hiccups while pulling the remote source.
     args.push(
         '-reconnect', '1',

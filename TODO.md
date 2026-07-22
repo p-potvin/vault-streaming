@@ -12,7 +12,7 @@
 - [x] **Tray icon shows even when the setting is off** — respect `minimizeToTray`/tray setting before `createTray()`.
 
 ### P1 — features
-- [ ] **Transcode-to-ceiling renderer wiring** (see Active Tasks; backend done). Also hosts the <5-min duration guard + fixes DTS/TrueHD audio via `-c:a aac`.
+- [x] **Transcode-to-ceiling renderer wiring** (see Active Tasks; backend done). Also hosts the <5-min duration guard + fixes DTS/TrueHD audio via `-c:a aac`.
 - [ ] **Dynamic search bar with debounce** — port the debounced live search from `vault-tv`.
 - [ ] **Double-click on video → toggle fullscreen.**
 - [ ] **YouTube trailer volume**: default −20%; setting to mute trailers by default; add a volume icon next to the trailer play/pause button.
@@ -31,7 +31,7 @@
 
 ## Active Tasks
 
-- [ ] **Transcode-to-ceiling — renderer wiring** (backend done: `src/ipc/transcode.ipc.js` + preload `transcodeStream*`/`onTranscode*`). Remaining: in `js/player/playStream`, compare `activeStreamingMedia.quality` vs `appSettings.streamQuality` (map 2160p/1080p/720p → height); if source > ceiling, play via MediaSource fed by `transcode-chunk` (codec `avc1.640029, mp4a.40.2`) instead of `vp.src = url`; show a "1080p" badge; use ffmpeg `-ss` for resume (guard the double-seek); seeking mid-stream restarts the transcode at the new position; fall back to direct playback on transcode error.
+- [x] **Transcode-to-ceiling — renderer wiring** (backend done: `src/ipc/transcode.ipc.js` + preload `transcodeStream*`/`onTranscode*`). Remaining: in `js/player/playStream`, compare `activeStreamingMedia.quality` vs `appSettings.streamQuality` (map 2160p/1080p/720p → height); if source > ceiling, play via MediaSource fed by `transcode-chunk` (codec `avc1.640029, mp4a.40.2`) instead of `vp.src = url`; show a "1080p" badge; use ffmpeg `-ss` for resume (guard the double-seek); seeking mid-stream restarts the transcode at the new position; fall back to direct playback on transcode error.
 - [x] **Provider-unavailable fallback**: `stream.js` now size-probes each resolved stream (one GET Range to the Comet proxy); placeholder-sized (<50MB) results return `notCached`, which the existing `startRDDebridFlow` loop already skips to the next ranked source. Wed, 22 Jul 2026.
 - [x] **Multi-debrid via Comet**: Comet config now fans out AllDebrid → TorBox → RealDebrid (manifest reports "AD+TB+RD+TORRENT"). Local-only change (`.env` COMET_STREAM_BASE + `.access/comet_config.txt`, both backed up); TorBox/AllDebrid restore real cache detection that RD lost with instantAvailability. Test: tt0133093 → 1273/1565 cached.
 
