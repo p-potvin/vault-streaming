@@ -36,6 +36,7 @@ function initSettingsListeners() {
             el('settings-sub-font-size').value = window.appSettings.subFontSize || '20px';
             el('settings-remember-position').checked = window.appSettings.rememberPosition !== false;
             el('settings-mute-previews').checked = window.appSettings.mutePreviews === true;
+            if (el('settings-mute-trailers')) el('settings-mute-trailers').checked = window.appSettings.muteTrailers === true;
             el('settings-minimize-to-tray').checked = window.appSettings.minimizeToTray === true;
             if (el('settings-dev-mode')) el('settings-dev-mode').checked = window.appSettings.devMode === true;
             if (el('settings-subs-include-es')) el('settings-subs-include-es').checked = window.appSettings.subsIncludeSpanish === true;
@@ -149,6 +150,7 @@ function initSettingsListeners() {
         
         window.appSettings.rememberPosition = el('settings-remember-position').checked;
         window.appSettings.mutePreviews = el('settings-mute-previews').checked;
+        if (el('settings-mute-trailers')) window.appSettings.muteTrailers = el('settings-mute-trailers').checked;
         window.appSettings.minimizeToTray = el('settings-minimize-to-tray').checked;
         if (el('settings-dev-mode')) window.appSettings.devMode = el('settings-dev-mode').checked;
         if (el('settings-subs-include-es')) window.appSettings.subsIncludeSpanish = el('settings-subs-include-es').checked;

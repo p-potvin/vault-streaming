@@ -23,8 +23,8 @@
 - [x] **Splash**: add an overlay to hide the main container behind the splash; lengthen to ~3s.
 - [x] **Header logo**: put the logo top-left of the window, next to the "Vault Streaming" text.
 - [x] **Recording LED**: move the flashing LED next to the movie title (currently next to settings).
-- [ ] **Settings modal redesign**: split into sections, make larger so it no longer scrolls; add Language selector inside; move region → **nationality** naming in advanced search.
-- [ ] **Settings icons**: modal settings SVG icons should match the main settings icon.
+- [x] **Settings modal redesign**: split into sections, make larger so it no longer scrolls; add Language selector inside; move region → **nationality** naming in advanced search.
+- [x] **Settings icons**: modal settings SVG icons should match the main settings icon.
 - [x] **Remove Debrid Downloader button**; align the Save button to the right.
 - [x] **Advanced search**: rename "Region" → "Nationality".
 - [x] **Main tabs restyle**: make the 3 primary tabs visually distinct from ordinary pills.

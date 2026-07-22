@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vault Streaming</title>
-  <!-- v1.7.0 -->
+  <!-- v1.7.1 -->
   <link href="themes.css" rel="stylesheet">
   <link href="index.css" rel="stylesheet">
   <link href="node_modules/flag-icons/css/flag-icons.min.css" rel="stylesheet">
@@ -79,10 +79,7 @@
       </button>
       <div style="position:relative;">
         <button id="settings-trigger" class="theme-trigger" aria-label="Open Settings">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
+          <span data-icon="settings" data-icon-style="width:13px;height:13px;vertical-align:middle;margin-right:3px;"></span>
           <span id="settings-btn-text">Settings</span>
         </button>
       </div>
@@ -263,16 +260,17 @@
   </div>
 
   <!-- Settings Panel Console Modal -->
-  <div id="settings-panel" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Settings Panel" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 2147483647; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: 440px; border-radius: 8px; max-height: 85vh; flex-direction: column; overflow-y: auto;">
+  <div id="settings-panel" class="vw-console-shell" role="dialog" aria-modal="true" aria-label="Settings Panel" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); padding:24px; border:1px solid var(--vault-border); background: var(--vault-warm-bg, #1a1a24); color: var(--vault-text); z-index: 2147483647; box-shadow: 0 30px 100px rgba(0,0,0,0.85); font-family: var(--font-sans); width: min(820px, 94vw); border-radius: 8px; max-height: 92vh; flex-direction: column; overflow-y: auto;">
     <div style="font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; color: var(--vault-accent); margin-bottom: 16px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--vault-border); padding-bottom: 10px; user-select: none;">
       <div style="display: flex; align-items: center; gap: 8px;">
          <span data-icon="settings" data-icon-style="width:18px;height:18px;vertical-align:middle;"></span> <span class="settings-panel-header">Settings / Paramètres</span>
       </div>
       <button onclick="document.getElementById('settings-panel').style.display = 'none';" style="background: transparent; border: none; color: var(--vault-slate); cursor: pointer; font-size: 16px;"><span data-icon="close"></span></button>
     </div>
-    <div style="display: flex; flex-direction: column; gap: 14px;">
-
-
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; align-items: start;">
+      <!-- Column A: General & Subtitles -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:var(--vault-accent); letter-spacing:0.06em; border-bottom:1px solid var(--vault-border); padding-bottom:5px; display:block;">General &amp; Subtitles</span>
       <div style="display:none;">
         <label for="settings-default-theme" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate); display: block; margin-bottom: 4px;">Default Theme:</label>
         <select id="settings-default-theme" style="width: 100%; background:var(--vt-primary); color:var(--vault-text); border:1px solid var(--vault-border); padding:6px; font-family:var(--font-body); outline:none; border-radius:4px;"></select>
@@ -317,6 +315,11 @@
         <input type="checkbox" id="settings-mute-previews" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
       </div>
 
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;" title="Start trailers muted (they play at 80% volume otherwise).">
+        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Mute Trailers by Default:</span>
+        <input type="checkbox" id="settings-mute-trailers" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
+      </div>
+
       <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
         <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--vault-slate);">Minimize to System Tray:</span>
         <input type="checkbox" id="settings-minimize-to-tray" style="accent-color: var(--vault-accent); width: 16px; height: 16px; cursor: pointer;" />
@@ -339,7 +342,10 @@
 
 
 
-      <div style="border-top: 1px solid var(--vault-warm-border-subtle); margin-top: 8px; padding-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+      </div>
+      <!-- Column B: Streaming & RTX VSR -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
         <span id="label-stream-heading" style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--vault-accent); display: block; margin-bottom: 2px; letter-spacing: 0.05em;">Streaming Settings / Flux</span>
         
         <div>
@@ -416,8 +422,9 @@
         </div>
       </div>
 
-      <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:8px;">
-        <button id="settings-btn-save" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:6px 12px; border-radius:4px; font-weight:600; font-family:var(--font-body); cursor:pointer;">Save</button>
+      </div>
+      <div style="grid-column:1 / -1; display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:8px; border-top:1px solid var(--vault-border); padding-top:12px;">
+        <button id="settings-btn-save" style="background:var(--vault-accent); color:var(--vt-primary); border:none; padding:7px 22px; border-radius:4px; font-weight:700; font-family:var(--font-body); cursor:pointer; text-transform:uppercase; letter-spacing:0.05em; font-size:11px;">Save</button>
       </div>
     </div>
   </div>
