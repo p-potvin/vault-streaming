@@ -369,8 +369,16 @@ window.initTMDBListeners = function() {
     if (tmdbSearchInput) {
         tmdbSearchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
+                clearTimeout(window._tmdbSearchDebounce);
                 window.renderTMDB(tmdbSearchInput.value.trim());
             }
+        });
+        // Dynamic, debounced live search as the user types (mirrors vault-tv).
+        // Clearing the box (empty query) falls back to Discover via renderTMDB.
+        tmdbSearchInput.addEventListener('input', () => {
+            clearTimeout(window._tmdbSearchDebounce);
+            const q = tmdbSearchInput.value.trim();
+            window._tmdbSearchDebounce = setTimeout(() => { window.renderTMDB(q); }, 380);
         });
     }
 

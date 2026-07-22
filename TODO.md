@@ -7,14 +7,14 @@
 ### P0 — bugs / regressions (do first)
 - [ ] **AllDebrid/TorBox appear inactive** — no loading animation while picking a torrent, seems to default to RD. Investigate whether the multi-debrid Comet config is actually being used (needs app restart to reload `.env`?), whether the size-probe misfires on TB/AD stream URLs (flagging them placeholder → skipping to RD), and stream-object parsing for non-RD providers.
 - [x] **Hover effect broken on larger cards** — hover should trigger anywhere on the card (regression after cards were enlarged / 25px padding). Fix the trigger area in `hover-card.js` / card CSS.
-- [ ] **Fullscreen menu disappears + cursor stuck on click action** in the video player.
+- [~] **Fullscreen menu disappears + cursor stuck on click action** in the video player.
 - [ ] **Disk thrashing** — app writes a LOT to disk. Verify cache flushing (resolved-link cache, watch-history writes, thumbnails, any per-frame/temp writes) and stop excessive writes.
 - [x] **Tray icon shows even when the setting is off** — respect `minimizeToTray`/tray setting before `createTray()`.
 
 ### P1 — features
 - [x] **Transcode-to-ceiling renderer wiring** (see Active Tasks; backend done). Also hosts the <5-min duration guard + fixes DTS/TrueHD audio via `-c:a aac`.
-- [ ] **Dynamic search bar with debounce** — port the debounced live search from `vault-tv`.
-- [ ] **Double-click on video → toggle fullscreen.**
+- [x] **Dynamic search bar with debounce** — port the debounced live search from `vault-tv`.
+- [x] **Double-click on video → toggle fullscreen.**
 - [ ] **YouTube trailer volume**: default −20%; setting to mute trailers by default; add a volume icon next to the trailer play/pause button.
 - [ ] **Add-to-library "+" on movie card** (top-right); fills gold on click when added.
 - [ ] **Watch-status cues on cards**: one visual cue for "in watch history", a different one for "watched".

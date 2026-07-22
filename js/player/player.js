@@ -787,6 +787,13 @@ function initPlayer() {
         else { vp.pause(); btnPlay.innerHTML = PLAY_ICON_SVG; }
     });
 
+    // Double-click toggles fullscreen (the two single-clicks net to the same
+    // play/pause state, so no extra handling needed).
+    vp.addEventListener('dblclick', () => {
+        if (!document.fullscreenElement) vp.parentElement.requestFullscreen().catch(() => {});
+        else document.exitFullscreen().catch(() => {});
+    });
+
     vp.addEventListener('ended', () => {
         // Mark as completed on ended
         if (window.activeStreamingMedia) {
@@ -964,9 +971,14 @@ function initPlayer() {
         const modal = el('video-modal');
         if (!modal || modal.style.display !== 'flex') return;
         _idleTimer = setTimeout(() => {
-            // Only hide if the cursor isn't currently over an interactive
-            // control (hover-keep behavior).
-            if (!document.querySelector('#custom-controls:hover, #player-topbar:hover')) {
+            // Never hide while a player menu is open — otherwise the menu vanishes
+            // (opacity 0) or becomes unclickable (pointer-events:none) mid-use.
+            const menuOpen = ['quality-menu', 'subtitles-menu', 'speed-menu'].some(id => {
+                const m = el(id);
+                return m && m.style.display && m.style.display !== 'none';
+            });
+            // Only hide if the cursor isn't over an interactive control (hover-keep).
+            if (!menuOpen && !document.querySelector('#custom-controls:hover, #player-topbar:hover')) {
                 document.body.classList.add('player-idle');
             }
         }, 2000);
