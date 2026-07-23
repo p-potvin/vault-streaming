@@ -704,7 +704,9 @@ function initSubtitleListeners() {
     // Subtitles Dropdown Triggers
     el('btn-subtitles').addEventListener('click', (e) => {
         e.stopPropagation();
-        el('speed-menu').style.display = 'none';
+        // The speed menu was removed from the UI; guard so a missing element
+        // doesn't throw and abort the toggle (which left the CC menu unopenable).
+        const sm = el('speed-menu'); if (sm) sm.style.display = 'none';
         const menu = el('subtitles-menu');
         const isHidden = menu.style.display === 'none';
         menu.style.display = isHidden ? 'block' : 'none';

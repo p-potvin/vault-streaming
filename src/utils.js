@@ -122,6 +122,16 @@ const PRIORITY_BELOW_NORMAL = process.platform === 'win32' ? 16 : 0;
 // Track all FFmpeg processes for cleanup
 const activeFfmpegProcesses = new Set();
 
+// Register/unregister an externally-spawned ffmpeg child (e.g. clip.ipc's
+// execFile) so app-quit cleanup and killAllFfmpegProcesses tear its tree down
+// too. The caller owns the process lifecycle; these only manage tracking.
+function registerFfmpegProcess(proc) {
+    if (proc) activeFfmpegProcesses.add(proc);
+}
+function unregisterFfmpegProcess(proc) {
+    if (proc) activeFfmpegProcesses.delete(proc);
+}
+
 // Max concurrent FFmpeg threads
 const MAX_FFMPEG_THREADS = 4;
 let activeFfmpegCount = 0;
@@ -402,5 +412,7 @@ module.exports = {
     getFFmpegPath,
     getSystemMemoryInfo,
     cleanupTemp,
-    promoteTempFile
+    promoteTempFile,
+    registerFfmpegProcess,
+    unregisterFfmpegProcess
 };

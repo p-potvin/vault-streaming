@@ -882,127 +882,12 @@ function showClipEditingDialog(clipData) {
         <div><strong>Duration:</strong> ${formatClipDuration(clipData.duration)}</div>
     `;
     
-    // Editing options
-    const editingOptions = document.createElement('div');
-    editingOptions.style.cssText = `
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        border-top: 1px solid var(--vault-border);
-        padding-top: 16px;
-    `;
-    
-    const optionsTitle = document.createElement('div');
-    optionsTitle.textContent = 'Basic Editing Options:';
-    optionsTitle.style.cssText = `font-size: 11px; text-transform: uppercase; color: var(--vault-slate); font-weight: bold;`;
-    
-    const optionsGrid = document.createElement('div');
-    optionsGrid.style.cssText = `
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 8px;
-    `;
-    
-    // Add editing option buttons
-    const editingButtons = [
-        { id: 'trim', name: 'Trim', icon: window.icons.scissors('', 'width:18px;height:18px;'), action: () => adjustClipBounds(clipData) },
-        { id: 'crop', name: 'Crop', icon: window.icons.crop('', 'width:18px;height:18px;'), action: () => showCropDialog(clipData) },
-        { id: 'rotate', name: 'Rotate', icon: window.icons.refresh('', 'width:18px;height:18px;'), action: () => rotateClip(clipData) },
-        { id: 'filters', name: 'Filters', icon: window.icons.palette('', 'width:18px;height:18px;'), action: () => showFiltersDialog(clipData) },
-        { id: 'ai-enhance', name: 'AI Enhance', icon: window.icons.magic('', 'width:18px;height:18px;'), action: () => showAIEnhancements(clipData) },
-        { id: 'speed', name: 'Speed', icon: window.icons.fastForward('', 'width:18px;height:18px;'), action: () => adjustPlaybackSpeed(clipData) }
-    ];
-    
-    editingButtons.forEach(btn => {
-        const button = document.createElement('button');
-        button.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            padding: 10px 12px;
-            background: rgba(22, 19, 32, 0.06);
-            border: 1px solid var(--vault-border);
-            border-radius: 6px;
-            cursor: pointer;
-            color: #161320;
-            transition: all 0.2s;
-            font-family: var(--font-body);
-            font-size: 11px;
-            font-weight: 600;
-        `;
-        button.innerHTML = `<span style="font-size: 18px;">${btn.icon}</span><span>${btn.name}</span>`;
-        button.onclick = btn.action;
-        button.onmouseenter = () => {
-            button.style.background = 'rgba(22, 19, 32, 0.12)';
-        };
-        button.onmouseleave = () => {
-            button.style.background = 'rgba(22, 19, 32, 0.06)';
-        };
-        optionsGrid.appendChild(button);
-    });
-    
-    editingOptions.appendChild(optionsTitle);
-    editingOptions.appendChild(optionsGrid);
-    
-    // AI Enhancements section
-    const aiSection = document.createElement('div');
-    aiSection.style.cssText = `
-        border-top: 1px solid var(--vault-border);
-        padding-top: 16px;
-    `;
-    
-    const aiTitle = document.createElement('div');
-    aiTitle.textContent = 'AI Enhancements:';
-    aiTitle.style.cssText = `font-size: 11px; text-transform: uppercase; color: var(--vault-slate); font-weight: bold; margin-bottom: 8px;`;
-    
-    const aiOptionsGrid = document.createElement('div');
-    aiOptionsGrid.style.cssText = `
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 8px;
-    `;
-    
-    const aiButtons = [
-        { name: 'Upscale', description: '4K', action: () => applyAIUpscale(clipData) },
-        { name: 'Stabilize', description: 'Shaky video', action: () => applyAISabilization(clipData) },
-        { name: 'Denoise', description: 'Remove noise', action: () => applyAIDenoise(clipData) },
-        { name: 'Color', description: 'Auto-color', action: () => applyAIColorCorrection(clipData) },
-        { name: 'Frame', description: 'Interpolate', action: () => applyAIFrameInterpolation(clipData) }
-    ];
-    
-    aiButtons.forEach(btn => {
-        const button = document.createElement('button');
-        button.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            padding: 10px 12px;
-            background: linear-gradient(135deg, rgba(245, 185, 41, 0.2), rgba(245, 185, 41, 0.1));
-            border: 1px solid #F5B92B;
-            border-radius: 6px;
-            cursor: pointer;
-            color: #161320;
-            transition: all 0.2s;
-            font-family: var(--font-body);
-            font-size: 11px;
-            font-weight: 600;
-        `;
-        button.innerHTML = `<span>${btn.name}</span><span style="font-size: 10px; opacity: 0.7;">${btn.description}</span>`;
-        button.onclick = btn.action;
-        button.onmouseenter = () => {
-            button.style.background = 'linear-gradient(135deg, rgba(245, 185, 41, 0.3), rgba(245, 185, 41, 0.2))';
-        };
-        button.onmouseleave = () => {
-            button.style.background = 'linear-gradient(135deg, rgba(245, 185, 41, 0.2), rgba(245, 185, 41, 0.1))';
-        };
-        aiOptionsGrid.appendChild(button);
-    });
-    
-    aiSection.appendChild(aiTitle);
-    aiSection.appendChild(aiOptionsGrid);
-    
+    // Note: crop / rotate / filters / speed and AI enhancement passes are not
+    // implemented yet. They were previously shown as buttons that toasted
+    // "coming soon" / "applied (simulated)" — misleading, so they're omitted
+    // until backed by real ffmpeg/AI processing. Trim is handled live via the
+    // seek-bar markers before this dialog opens.
+
     // Actions
     const actionsSection = document.createElement('div');
     actionsSection.style.cssText = `
@@ -1057,57 +942,10 @@ function showClipEditingDialog(clipData) {
     dialogContent.appendChild(header);
     dialogContent.appendChild(previewSection);
     dialogContent.appendChild(infoSection);
-    dialogContent.appendChild(editingOptions);
-    dialogContent.appendChild(aiSection);
     dialogContent.appendChild(actionsSection);
-    
+
     dialogEl.appendChild(dialogContent);
     document.body.appendChild(dialogEl);
-}
-
-// Placeholder functions for editing options
-function adjustClipBounds(clipData) {
-    window.showToast('Trim mode already active - drag the markers to adjust', 'info');
-}
-
-function showCropDialog(clipData) {
-    window.showToast('Crop feature - Coming soon!', 'info');
-}
-
-function rotateClip(clipData) {
-    window.showToast('Rotate feature - Coming soon!', 'info');
-}
-
-function showFiltersDialog(clipData) {
-    window.showToast('Filters feature - Coming soon!', 'info');
-}
-
-function adjustPlaybackSpeed(clipData) {
-    window.showToast('Speed adjustment - Coming soon!', 'info');
-}
-
-function applyAIUpscale(clipData) {
-    window.showToast('AI Upscale applied (simulated)', 'success');
-}
-
-function applyAISabilization(clipData) {
-    window.showToast('AI Stabilization applied (simulated)', 'success');
-}
-
-function applyAIDenoise(clipData) {
-    window.showToast('AI Denoise applied (simulated)', 'success');
-}
-
-function applyAIColorCorrection(clipData) {
-    window.showToast('AI Color Correction applied (simulated)', 'success');
-}
-
-function applyAIFrameInterpolation(clipData) {
-    window.showToast('AI Frame Interpolation applied (simulated)', 'success');
-}
-
-function showAIEnhancements(clipData) {
-    window.showToast('AI Enhancements dialog - Coming soon!', 'info');
 }
 
 // ============================================================================
@@ -1220,9 +1058,13 @@ function showClipExportDialog(clipData) {
     
     const formatSelect = document.createElement('select');
     formatSelect.id = 'clip-format-select';
+    // The dialog is a body-level surface locked to the warm palette (its bg is
+    // var(--vault-warm-bg)); the shell-scoped --vt-primary is undefined here, so
+    // pair an explicit light surface with ink text — otherwise the option text
+    // renders dark-on-dark and is invisible.
     formatSelect.style.cssText = `
-        background: var(--vt-primary);
-        color: var(--vault-text);
+        background: var(--vault-warm-raised, #FCFAF5);
+        color: var(--vault-ink, #161320);
         border: 1px solid var(--vault-border);
         padding: 8px 12px;
         border-radius: 4px;
@@ -1251,8 +1093,8 @@ function showClipExportDialog(clipData) {
     const qualitySelect = document.createElement('select');
     qualitySelect.id = 'clip-quality-select';
     qualitySelect.style.cssText = `
-        background: var(--vt-primary);
-        color: var(--vault-text);
+        background: var(--vault-warm-raised, #FCFAF5);
+        color: var(--vault-ink, #161320);
         border: 1px solid var(--vault-border);
         padding: 8px 12px;
         border-radius: 4px;
@@ -1373,13 +1215,13 @@ function exportClipToDesktop(clipData, format, quality) {
         return Promise.reject(new Error('No video source available'));
     }
     
-    // Properly decode URI-encoded file paths
-    let videoPath = vp.src;
-    try {
-        videoPath = decodeURIComponent(videoPath);
-    } catch (_) {}
-    videoPath = videoPath.replace(/^file:\/\/\//, '');
-    
+    // Pass the raw src through untouched. The clip IPC handler normalizes it
+    // branch-aware: remote (http/https) URLs are forwarded verbatim so signed
+    // debrid/presigned tokens survive, while file:// paths are decoded there.
+    // Decoding here would corrupt percent-encoded query tokens on remote URLs
+    // and double-decode local paths that contain a literal '%'.
+    const videoPath = vp.src;
+
     const outputFormat = format;
     const startTime = clipData.startTime;
     const duration = clipData.duration;
@@ -1411,6 +1253,9 @@ function exportClipToDesktop(clipData, format, quality) {
                 const sizeMB = result.outputSize ? (result.outputSize / (1024 * 1024)).toFixed(1) : '?';
                 window.showToast(`Clip saved (${sizeMB} MB): ${result.outputPath}`, 'success');
                 return result;
+            } else if (result.cancelled) {
+                window.showToast('Clip export cancelled', 'warning');
+                throw new Error('cancelled');
             } else {
                 window.showToast(`Export failed: ${result.error}`, 'error');
                 throw new Error(result.error || 'Export failed');

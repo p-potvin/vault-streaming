@@ -10,19 +10,6 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
     ipcMain.handle('get-settings', () => loadSettings());
     ipcMain.handle('save-settings', async (_e, s) => { return await saveSettings(s); });
 
-    // Themes
-    ipcMain.handle('get-theme', async () => {
-        const appSettings = loadSettings();
-        return { success: true, theme: appSettings.theme || 'golden-slate' };
-    });
-    ipcMain.handle('set-theme', async (_event, theme) => {
-        if (typeof theme !== 'string') return { success: false, error: 'Invalid input' };
-        const appSettings = loadSettings();
-        appSettings.theme = theme;
-        await saveSettings(appSettings);
-        return { success: true };
-    });
-
     // Clipboard
     ipcMain.handle('copy-to-clipboard', (_event, text) => {
         console.log('[system.ipc:clipboard] Copying text');

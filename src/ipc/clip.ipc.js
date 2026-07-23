@@ -6,10 +6,45 @@ const fs = require('fs');
 const { execFile } = require('child_process');
 const utils = require('../utils');
 
+const ALLOWED_FORMATS = new Set(['mp4', 'webm', 'gif']);
+const ALLOWED_QUALITIES = new Set(['original', '1080p', '720p', '480p']);
+const SCALE_MAP = { '1080p': '1920:-2', '720p': '1280:-2', '480p': '854:-2' };
+
+// In-flight clip processes, so a 'clip-cancel' can tear them down and app-quit
+// cleanup (via utils) doesn't leave orphaned ffmpeg trees.
+const activeClips = new Set();
+
 function registerClipIpc(ipcMain) {
+    ipcMain.handle('clip-cancel', () => {
+        let killed = 0;
+        for (const proc of activeClips) {
+            proc.__cancelled = true;
+            try { proc.kill(); killed++; } catch (_) { /* already gone */ }
+        }
+        return { cancelled: killed };
+    });
+
     ipcMain.handle('clipVideo', async (event, { inputPath, outputFormat, startTime, duration, quality }) => {
+        let ffmpegProc = null;
         try {
             console.log('[clip] Clipping video:', { inputPath, outputFormat, startTime, duration, quality });
+
+            // ── Input validation ────────────────────────────────────────────
+            if (typeof inputPath !== 'string' || !inputPath.trim()) {
+                return { success: false, error: 'No input source provided' };
+            }
+            if (!ALLOWED_FORMATS.has(outputFormat)) {
+                return { success: false, error: `Unsupported output format: ${outputFormat}` };
+            }
+            const q = ALLOWED_QUALITIES.has(quality) ? quality : 'original';
+            const start = Number(startTime);
+            const dur = Number(duration);
+            if (!Number.isFinite(start) || start < 0) {
+                return { success: false, error: `Invalid start time: ${startTime}` };
+            }
+            if (!Number.isFinite(dur) || dur <= 0) {
+                return { success: false, error: `Invalid duration: ${duration}` };
+            }
 
             const isRemoteUrl = /^https?:\/\//i.test(inputPath);
             let safeInputPath;
@@ -37,7 +72,8 @@ function registerClipIpc(ipcMain) {
                 console.log('[clip] Input file size:', (stat.size / (1024 * 1024)).toFixed(2), 'MB');
                 fileName = path.basename(safeInputPath, path.extname(safeInputPath));
             }
-            const ext = outputFormat === 'gif' ? 'gif' : outputFormat;
+
+            const ext = outputFormat;
             const outputName = `${fileName}_clip_${Date.now()}.${ext}`;
 
             let outputDir;
@@ -49,33 +85,43 @@ function registerClipIpc(ipcMain) {
             }
             const outputPath = path.join(outputDir, outputName);
 
-            const vfFilters = [];
+            // ── Build the video filter chain ────────────────────────────────
+            // For GIF we build a palettegen/paletteuse graph for far better
+            // quality than ffmpeg's default 256-colour quantizer, folding the
+            // quality downscale into the same chain (no redundant second scale).
+            let vfChain = '';
             if (outputFormat === 'gif') {
-                vfFilters.push('fps=15', 'scale=trunc(iw/2)*2:trunc(ih/2)*2');
-            }
-            if (quality !== 'original') {
-                const scaleMap = { '1080p': '1920:-2', '720p': '1280:-2', '480p': '854:-2' };
-                if (scaleMap[quality]) vfFilters.push(`scale=${scaleMap[quality]}`);
+                const scale = (q !== 'original' && SCALE_MAP[q])
+                    ? SCALE_MAP[q]
+                    : 'trunc(iw/2)*2:trunc(ih/2)*2';
+                vfChain = `fps=15,scale=${scale}:flags=lanczos,split[s0][s1];`
+                    + `[s0]palettegen=stats_mode=diff[p];`
+                    + `[s1][p]paletteuse=dither=bayer:bayer_scale=3`;
+            } else if (q !== 'original' && SCALE_MAP[q]) {
+                vfChain = `scale=${SCALE_MAP[q]}`;
             }
 
             const ffmpegArgs = [
-                '-ss', String(startTime),
+                '-ss', String(start),
                 '-i', safeInputPath,
-                '-t', String(duration)
+                '-t', String(dur)
             ];
 
             if (outputFormat === 'webm') {
-                ffmpegArgs.push('-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '0');
+                // VP9: enable row multithreading + a realtime-ish speed so a
+                // short clip encodes in seconds rather than minutes.
+                ffmpegArgs.push('-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '0',
+                    '-row-mt', '1', '-cpu-used', '2', '-deadline', 'good', '-pix_fmt', 'yuv420p');
                 ffmpegArgs.push('-c:a', 'libopus', '-b:a', '128k');
             } else if (outputFormat === 'mp4') {
-                ffmpegArgs.push('-c:v', 'libx264', '-crf', '23', '-preset', 'fast');
+                ffmpegArgs.push('-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-pix_fmt', 'yuv420p');
                 ffmpegArgs.push('-c:a', 'aac', '-b:a', '192k');
             } else if (outputFormat === 'gif') {
                 ffmpegArgs.push('-f', 'gif');
             }
 
-            if (vfFilters.length > 0) {
-                ffmpegArgs.push('-vf', vfFilters.join(','));
+            if (vfChain) {
+                ffmpegArgs.push('-vf', vfChain);
             }
 
             ffmpegArgs.push('-y', outputPath);
@@ -84,10 +130,12 @@ function registerClipIpc(ipcMain) {
             console.log('[clip] Using ffmpeg at:', ffmpegPath);
             console.log('[clip] ffmpeg args:', ffmpegArgs.join(' '));
 
-            const ffmpegProc = execFile(ffmpegPath, ffmpegArgs, {
+            ffmpegProc = execFile(ffmpegPath, ffmpegArgs, {
                 cwd: isRemoteUrl ? outputDir : path.dirname(safeInputPath),
                 windowsHide: true
             });
+            activeClips.add(ffmpegProc);
+            utils.registerFfmpegProcess(ffmpegProc);
 
             let stderrData = '';
 
@@ -96,18 +144,28 @@ function registerClipIpc(ipcMain) {
             }
 
             ffmpegProc.stderr.on('data', (data) => {
-                stderrData += data.toString();
-                const timeMatch = stderrData.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
-                if (timeMatch && event.sender && !event.sender.isDestroyed()) {
-                    event.sender.send('clip-progress', { currentTime: timeMatch[1] });
+                const chunk = data.toString();
+                // Parse progress from THIS chunk only. ffmpeg overwrites its
+                // status line with \r, so the newest time= lives in the latest
+                // chunk; scanning the whole accumulated buffer would always
+                // re-report the first timestamp (and be O(n^2)).
+                const matches = chunk.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/g);
+                if (matches && event.sender && !event.sender.isDestroyed()) {
+                    const currentTime = matches[matches.length - 1].slice(5);
+                    event.sender.send('clip-progress', { currentTime });
                 }
+                // Retain only a bounded tail for post-failure diagnostics.
+                stderrData = (stderrData + chunk).slice(-4000);
             });
 
-            await new Promise((resolve, reject) => {
+            const cancelled = await new Promise((resolve, reject) => {
                 ffmpegProc.on('close', (code) => {
-                    if (code === 0) {
+                    if (ffmpegProc.__cancelled) {
+                        console.log('[clip] Clipping cancelled by user');
+                        resolve(true);
+                    } else if (code === 0) {
                         console.log('[clip] Clipping completed successfully');
-                        resolve();
+                        resolve(false);
                     } else {
                         console.error('[clip] ffmpeg failed with code:', code);
                         console.error('[clip] stderr (last 500 chars):', stderrData.slice(-500));
@@ -119,6 +177,11 @@ function registerClipIpc(ipcMain) {
                     reject(err);
                 });
             });
+
+            if (cancelled) {
+                try { if (fs.existsSync(outputPath)) fs.rmSync(outputPath, { force: true }); } catch (_) { }
+                return { success: false, cancelled: true, error: 'Clip cancelled' };
+            }
 
             if (!fs.existsSync(outputPath)) {
                 return { success: false, error: 'Output file was not created' };
@@ -137,6 +200,11 @@ function registerClipIpc(ipcMain) {
         } catch (error) {
             console.error('[clip] Error:', error);
             return { success: false, error: error.message };
+        } finally {
+            if (ffmpegProc) {
+                activeClips.delete(ffmpegProc);
+                utils.unregisterFfmpegProcess(ffmpegProc);
+            }
         }
     });
 }

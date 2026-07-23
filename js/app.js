@@ -5,8 +5,6 @@ window.currentLang = 'en';
 
 function setLanguage(lang) {
     window.currentLang = lang;
-    el('lang-text').innerText = (lang === 'en') ? 'EN' : 'QC';
-    console.log('[i18n] Language set to:', lang);
 
     if (el('search-box')) el('search-box').placeholder = window.translations[lang].searchPlaceholder;
 
@@ -81,8 +79,6 @@ async function initApp() {
             getFolderSizeBackground: async (dirPath) => 1073741824,
             getSettings: async () => ({ folders: [], theme: 'golden-slate', lang: 'en' }),
             saveSettings: async (s) => console.log('Mock Save Settings:', s),
-            getTheme: async () => ({ success: true, theme: 'golden-slate' }),
-            setTheme: async (t) => ({ success: true }),
             findSubtitles: async (p) => [],
             onWebmProgress: (cb) => { },
             onNormalizeProgress: (cb) => { },
@@ -123,20 +119,10 @@ async function initApp() {
     const subSize = window.appSettings.subFontSize || '20px';
     document.documentElement.style.setProperty('--sub-font-size', subSize);
 
-    // Populate default theme select inside Settings UI
-    const settingsThemeSelect = el('settings-default-theme');
-    if (settingsThemeSelect) {
-        settingsThemeSelect.innerHTML = '';
-        (window.VAULT_THEMES || []).forEach(theme => {
-            const opt = document.createElement('option');
-            opt.value = theme.id;
-            opt.textContent = theme.name;
-            settingsThemeSelect.appendChild(opt);
-        });
-    }
-
-    window.applyTheme(window.appSettings.theme || window.appSettings.defaultTheme || 'vaultwares-revisited-console');
-    window.initThemeGrid();
+    // Theme switching was removed — the single console shell is applied
+    // statically via <body class="vw-console-shell"> in index.html, so no
+    // theme select population or applyTheme()/initThemeGrid() call is needed
+    // (all were deleted with theme.js). Calling them here aborted initApp().
 
     const preferredLang = window.appSettings.lang || window.appSettings.defaultLang || 'en';
     if (preferredLang && (preferredLang === 'en' || preferredLang === 'fr')) {

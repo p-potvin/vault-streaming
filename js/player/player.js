@@ -4,7 +4,9 @@ window.currentPlayingIndex = -1;
 window.currentPlayingItem = null;
 window.autoplayTimer = null;
 window.autoplayCountdown = 5;
-window.autoplayMode = localStorage.getItem('autoplayMode') || '5s'; // off, instant, 3s, 5s
+// Autoplay is a plain on/off toggle. "On" uses the 5s countdown; older stored
+// values (instant/3s) collapse to on.
+window.autoplayMode = (localStorage.getItem('autoplayMode') === 'off') ? 'off' : '5s';
 window.autoplayEnabled = (window.autoplayMode !== 'off');
 
 const PLAY_ICON_SVG = window.icons ? window.icons.play('', 'width:16px; height:16px; display:block;') : '';
@@ -146,24 +148,14 @@ function updateAutoplayUI() {
 
     if (window.autoplayMode === 'off') {
         btn.classList.remove('active');
-        knob.setAttribute('cx', '8');
+        knob.setAttribute('cx', '8');            // knob left = off
         btn.setAttribute('title', 'Autoplay: Off');
         btn.style.color = '';
-    } else if (window.autoplayMode === 'instant') {
+    } else {
         btn.classList.add('active');
-        knob.setAttribute('cx', '12');
-        btn.setAttribute('title', 'Autoplay: Instant');
+        knob.setAttribute('cx', '20');           // knob right = on
+        btn.setAttribute('title', 'Autoplay: On');
         btn.style.color = 'var(--vault-accent)';
-    } else if (window.autoplayMode === '3s') {
-        btn.classList.add('active');
-        knob.setAttribute('cx', '16');
-        btn.setAttribute('title', 'Autoplay: 3s');
-        btn.style.color = '';
-    } else if (window.autoplayMode === '5s') {
-        btn.classList.add('active');
-        knob.setAttribute('cx', '20');
-        btn.setAttribute('title', 'Autoplay: 5s');
-        btn.style.color = '';
     }
 }
 
@@ -1002,25 +994,13 @@ function initPlayer() {
     // ── Autoplay toggle Switch ──────────────────────────────
     if (el('btn-autoplay')) {
         el('btn-autoplay').addEventListener('click', (e) => {
-            if (window.autoplayMode === '5s') {
-                window.autoplayMode = 'off';
-            } else if (window.autoplayMode === 'off') {
-                window.autoplayMode = 'instant';
-            } else if (window.autoplayMode === 'instant') {
-                window.autoplayMode = '3s';
-            } else if (window.autoplayMode === '3s') {
-                window.autoplayMode = '5s';
-            }
+            // Plain on/off toggle. "On" uses the 5s countdown.
+            window.autoplayMode = (window.autoplayMode === 'off') ? '5s' : 'off';
             window.autoplayEnabled = (window.autoplayMode !== 'off');
             localStorage.setItem('autoplayMode', window.autoplayMode);
             updateAutoplayUI();
 
-            let label = 'Disabled';
-            if (window.autoplayMode === 'instant') label = 'Instant';
-            else if (window.autoplayMode === '3s') label = '3 Seconds';
-            else if (window.autoplayMode === '5s') label = '5 Seconds';
-
-            window.showToast(`Autoplay: ${label}`, 'success');
+            window.showToast(`Autoplay: ${window.autoplayMode === 'off' ? 'Off' : 'On'}`, 'success');
         });
         updateAutoplayUI();
     }
@@ -1105,37 +1085,6 @@ function initPlayer() {
             menu.appendChild(opt);
         });
     };
-
-    // ── Playback Speed Dropdown (kept for code completeness; hidden in UI) ─
-    el('btn-speed').addEventListener('click', (e) => {
-        e.stopPropagation();
-        el('subtitles-menu').style.display = 'none';
-        const menu = el('speed-menu');
-        const isHidden = menu.style.display === 'none';
-        menu.style.display = isHidden ? 'block' : 'none';
-    });
-
-    document.querySelectorAll('.speed-option').forEach(opt => {
-        opt.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const val = parseFloat(opt.dataset.val);
-            vp.playbackRate = val;
-            el('btn-speed').classList.toggle('active', val !== 1);
-
-            document.querySelectorAll('.speed-option').forEach(o => {
-                o.classList.remove('active');
-                o.style.color = 'var(--vault-text)';
-                o.style.fontWeight = 'normal';
-                o.style.fontWeight = 'normal';
-            });
-            opt.classList.add('active');
-            opt.style.color = 'var(--vault-accent)';
-            opt.style.fontWeight = '600';
-
-            el('speed-menu').style.display = 'none';
-            window.showToast(`Playback Speed: ${val}×`, 'success');
-        });
-    });
 
     // Subtitle setup and upscale setup
     if (typeof window.initSubtitleListeners === 'function') {

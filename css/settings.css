@@ -175,20 +175,10 @@
   font-size: 11px;
 }
 
-#settings-panel {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  left: auto;
-  z-index: 100001;
-  background: var(--vt-surface);
-  border: 1px solid var(--vault-border);
-  border-top: none;
-  padding: 16px;
-  min-width: 320px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-  transition: background-color 0.2s, border-color 0.2s;
-}
+/* NOTE: the old `#settings-panel` dropdown rule (position:absolute; top:100%;
+   right:0) was removed — it out-specified the `.settings-panel` modal and,
+   combined with the modal's translate(-50%,-50%), pushed the panel off-centre.
+   The panel is now a centred fixed modal per `.settings-panel`. */
 
 .settings-panel-header {
   font-family: var(--font-display);
@@ -197,9 +187,8 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--vault-gold);
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--vault-border);
+  /* No own border/margin/padding: the header-bar already draws the divider,
+     and these fought the flex row's vertical centring against the close btn. */
 }
 
 /* Glob Exclusions Pill Tags */

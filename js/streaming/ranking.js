@@ -27,6 +27,16 @@ const QUALITY_RANK = { '2160p': 4, '4k': 4, '1080p': 3, '720p': 2, '480p': 1, 's
 // and "camera/campaign" don't trigger the "cam" rule.
 const BAD_RELEASE_RE = /\b(camrip|hdcam|hdts|telesync|telecine|screener|workprint|r5|dvdscr)\b|\bcam\b|\bts(?:rip)?\b/;
 
+// 3D / half-SBS / half-OU prints — the "duplicated screen" side-by-side or
+// over-under releases. Useless in a normal 2D player, so heavily penalized;
+// they stay manually selectable but never auto-win over a flat print.
+const THREE_D_RE = /\b(3d|hsbs|sbs|half-?sbs|h-?sbs|hou|h-?ou)\b/;
+
+// Single foreign-language dubs (e.g. Russian). Penalized only under an English
+// preference and only when the release isn't multi/dual audio, so a lone
+// Russian 4K can't outrank an English UHD on the 4K bonus alone.
+const FOREIGN_DUB_RE = /\b(rus|russian|ita|italian|spanish|espanol|castellano|latino|hindi|tamil|telugu|korean|kor|german|deu|ger|dublado|dubbed|hun|hungarian|pol|polish|ukr|ukrainian|cz|czech|tur|turkish)\b/;
+
 function _parseSize(sizeStr) {
     if (!sizeStr) return 0;
     const m = String(sizeStr).match(/([\d.]+)\s*(B|KB|MB|GB|TB)/i);
@@ -85,6 +95,9 @@ function scoreTorrent(torrent, preferredLang) {
     // ── Reject bad release types (HEAVY penalty) ────────────────────────────
     if (BAD_RELEASE_RE.test(text)) score -= 10000;
 
+    // ── Reject 3D / half-SBS "duplicated screen" prints ─────────────────────
+    if (THREE_D_RE.test(text)) score -= 5000;
+
     // ── Quality scoring ─────────────────────────────────────────────────────
     // The user's "Max Stream Quality" is now enforced at PLAYBACK by transcoding,
     // NOT by torrent selection. So we simply prefer the highest available quality:
@@ -129,6 +142,9 @@ function scoreTorrent(torrent, preferredLang) {
     } else { // English
         if (/\btruefrench\b/.test(text)) score -= 30;
         if (isFR && !isMulti)            score -= 20;
+        // A lone non-English dub (Russian, etc.) shouldn't ride the 4K bonus to
+        // the top; only penalize when it isn't a multi/dual-audio release.
+        if (FOREIGN_DUB_RE.test(text) && !isMulti && !isFR) score -= 60;
     }
 
     // ── Seeder health (log curve, sharp penalty for dead torrents) ──────────

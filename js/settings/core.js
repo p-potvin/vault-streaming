@@ -30,7 +30,6 @@ function initSettingsListeners() {
         if (isOpening) {
             pillTagLoad(window.appSettings.globExclusions || []);
             if (el('settings-default-folder')) el('settings-default-folder').value = window.appSettings.defaultFolder || '';
-            el('settings-default-theme').value = window.appSettings.defaultTheme || 'vaultwares-revisited-console';
             el('settings-default-lang').value = window.appSettings.defaultLang || 'en';
             el('settings-default-sub-lang').value = window.appSettings.defaultSubLang || 'original';
             el('settings-sub-font-size').value = window.appSettings.subFontSize || '20px';
@@ -104,22 +103,9 @@ function initSettingsListeners() {
       });
   });
 
-  const themeTrigger = el('theme-trigger');
-  if (themeTrigger) {
-    themeTrigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const currentTheme = document.documentElement.getAttribute('data-theme') || 'vaultwares-revisited-console';
-      const nextTheme = currentTheme === 'vaultwares-revisited-console' ? 'vaultwares-revisited-warm' : 'vaultwares-revisited-console';
-      applyTheme(nextTheme);
-      if (window.appSettings) {
-         window.appSettings.theme = nextTheme;
-         window.electronAPI.saveSettings(window.appSettings);
-         if (window.electronAPI.setTheme) {
-             window.electronAPI.setTheme(nextTheme);
-         }
-      }
-    });
-  }
+  // Theme switching removed — the console shell is applied statically in
+  // index.html. The old light/dark theme-trigger handler (which called the
+  // now-deleted applyTheme) has been dropped.
 
   const btnSave = el('settings-btn-save');
   if (btnSave) {
@@ -140,7 +126,6 @@ function initSettingsListeners() {
             
         window.appSettings.globExclusions = newGlobExclusions;
         window.appSettings.defaultFolder = newDefaultFolder;
-        window.appSettings.defaultTheme = el('settings-default-theme').value;
         window.appSettings.defaultLang = el('settings-default-lang').value;
         window.appSettings.defaultSubLang = el('settings-default-sub-lang').value;
         

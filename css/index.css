@@ -1,6 +1,6 @@
-@import url("vaultwares-themes/vaultwares-revisited/revisited.css");
-@import url("vaultwares-themes/vaultwares-revisited/components/VideoPlayer/redesign-player.css");
-@import url("css/modals.css");
+@import url("../vaultwares-themes/vaultwares-revisited/revisited.css");
+@import url("../vaultwares-themes/vaultwares-revisited/components/VideoPlayer/redesign-player.css");
+@import url("modals.css");
 
 :root {
   --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
@@ -641,7 +641,7 @@ body.tab-streaming-active #tmdb-container {
 }
 
 /* Animated Switch Toggle */
-.switch input:checked + .slider {
+.switch input:checked+.slider {
   background-color: var(--vault-accent) !important;
   border-color: var(--vault-accent) !important;
 }
@@ -658,7 +658,7 @@ body.tab-streaming-active #tmdb-container {
   border-radius: 50%;
 }
 
-.switch input:checked + .slider:before {
+.switch input:checked+.slider:before {
   transform: translateX(14px);
 }
 

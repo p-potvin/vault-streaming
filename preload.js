@@ -19,8 +19,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFolderSizeBackground: (dirPath) => ipcRenderer.invoke('get-folder-size-background', dirPath),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (s) => ipcRenderer.invoke('save-settings', s),
-  getTheme: () => ipcRenderer.invoke('get-theme'),
-  setTheme: (t) => ipcRenderer.invoke('set-theme', t),
   setWindowFullScreen: (on) => ipcRenderer.invoke('set-window-fullscreen', !!on),
   scheduleIdlePreviews: (items) => ipcRenderer.invoke('schedule-idle-previews', items),
   generateIdlePreviewBatch: (items) => ipcRenderer.invoke('generate-idle-preview-batch', items),
@@ -111,6 +109,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Video Clipping API
   clipVideo: (data) => ipcRenderer.invoke('clipVideo', data),
+  cancelClip: () => ipcRenderer.invoke('clip-cancel'),
   onClipProgress: (cb) => ipcRenderer.on('clip-progress', (_, data) => cb(data)),
   offClipProgress: () => ipcRenderer.removeAllListeners('clip-progress'),
 
