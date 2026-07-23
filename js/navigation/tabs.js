@@ -4,7 +4,7 @@
 
 window.currentStreamingSubtab = 'discover';
 
-window.switchStreamingSubtab = function(subtab) {
+window.switchStreamingSubtab = function (subtab) {
     window.currentStreamingSubtab = subtab;
 
     // Toggle active classes on subnav pills
@@ -34,7 +34,7 @@ window.switchStreamingSubtab = function(subtab) {
     const tmdbContainer = document.getElementById('tmdb-container');
     const libGrid = document.getElementById('library-grid');
     const histGrid = document.getElementById('history-grid');
-    
+
     if (subtab === 'discover') {
         // Edge-to-edge: #tmdb-container owns its own scroll
         document.body.classList.add('tab-streaming-active');
@@ -57,7 +57,7 @@ window.switchStreamingSubtab = function(subtab) {
     }
 };
 
-window.initTabListeners = function() {
+window.initTabListeners = function () {
     console.log('[tabs] Initializing navigation click listeners...');
 
     // Boot default is the Discover grid
@@ -74,10 +74,4 @@ window.initTabListeners = function() {
     // NOTE: the initial Discover load is triggered at the END of initApp (app.js)
     // — firing it here ran renderTMDB before initTMDBListeners had initialized
     // the TMDB state, which silently produced an empty grid at boot.
-};
-
-// Legacy shim for `switchTab` if other parts of the app still call it
-window.switchTab = function(tabName) {
-    console.log('[tabs] Legacy switchTab called with:', tabName);
-    // Ignore all other tabs
 };

@@ -15,7 +15,7 @@
  *     entry can't break the whole tab.
  *   - Reports how many paths were dropped via a small notice atop the grid.
  */
-window.renderFavorites = async function(useCache = false) {
+window.renderFavorites = async function (useCache = false) {
     const grid = el('favorites-grid');
     if (!grid) return;
 
@@ -133,14 +133,14 @@ window.renderFavorites = async function(useCache = false) {
 /**
  * Render Streaming Media Library items only.
  */
-window.renderLibrary = async function(useCache = false) {
+window.renderLibrary = async function (useCache = false) {
     const grid = el('library-grid');
     if (!grid) return;
-    
+
     window.appSettings.library = window.appSettings.library || [];
     const hasLibrary = window.appSettings.library.length > 0;
     const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
-    
+
     if (!hasLibrary) {
         const libIcon = window.icons ? window.icons.library('', 'width: 48px; height: 48px; margin-bottom: 12px; display: inline-block; stroke: var(--vault-gold);') : '';
         grid.innerHTML = `
@@ -159,6 +159,11 @@ window.renderLibrary = async function(useCache = false) {
 
     grid.innerHTML = '';
 
+    // Ensure watch-status map is loaded for card cues
+    if (typeof window.refreshWatchStatusMap === 'function') {
+        await window.refreshWatchStatusMap();
+    }
+
     const term = (el('search-box')?.value || '').toLowerCase();
     const filterAttr = el('filter-type')?.value || 'all';
     const sortBy = el('sort-by')?.value || 'title';
@@ -167,9 +172,9 @@ window.renderLibrary = async function(useCache = false) {
     // 1. Filter and sort Streaming items
     let filteredLibrary = [...window.appSettings.library];
     if (term) {
-        filteredLibrary = filteredLibrary.filter(m => 
-            (m.title || m.name || '').toLowerCase().includes(term) || 
-            (m.genres || '').toLowerCase().includes(term) || 
+        filteredLibrary = filteredLibrary.filter(m =>
+            (m.title || m.name || '').toLowerCase().includes(term) ||
+            (m.genres || '').toLowerCase().includes(term) ||
             (m.overview || '').toLowerCase().includes(term)
         );
     }
@@ -213,7 +218,7 @@ window.renderLibrary = async function(useCache = false) {
         const card = document.createElement('div');
         card.className = 'file-card tmdb-movie-card in-library';
         card.style.cssText = 'cursor: pointer; background: var(--vault-warm-card); border: 1.5px solid var(--vault-console-gold); border-radius: 6px; box-shadow: 0 0 12px rgba(214, 164, 65, 0.35); position: relative;';
-        
+
         card.addEventListener('click', async () => {
             try {
                 const prog = await window.electronAPI.getWatchProgress({
@@ -260,13 +265,13 @@ window.renderLibrary = async function(useCache = false) {
                 }
             }
         });
-        
+
         const isTV = movie.media_type === 'tv';
         const tvSvg = window.icons ? window.icons.tv('', 'width:11px; height:11px; display:inline-block;') : '';
         const movieSvg = window.icons ? window.icons.movie('', 'width:11px; height:11px; display:inline-block;') : '';
         const plusSvg = window.icons ? window.icons.plus('', 'width: 10px; height: 10px; display: inline-block;') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
         const closeSvg = window.icons ? window.icons.close('', 'width: 10px; height: 10px; display: inline-block;') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-        
+
         card.innerHTML = `
             <div class="thumbnail-container" style="position:relative; background:#111; height: 180px; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
                <button onclick="event.stopPropagation(); window.showMediaDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})" style="position: absolute; top: 8px; left: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-gold); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-gold); transition: all 0.2s;" title="${isTV ? t.browseSeasons : t.streamMovie}">
@@ -291,6 +296,7 @@ window.renderLibrary = async function(useCache = false) {
             </div>
         `;
         card.setAttribute('data-id', String(movie.id));
+        if (typeof window.applyWatchStatusCues === 'function') window.applyWatchStatusCues(card, movie);
         window.attachPremiumHoverCard(card, movie);
         grid.appendChild(card);
     });
@@ -299,7 +305,7 @@ window.renderLibrary = async function(useCache = false) {
 /**
  * Toggle a movie/show in the streaming library. Returns true if it was ADDED.
  */
-window.toggleLibrarySave = function(movie) {
+window.toggleLibrarySave = function (movie) {
     window.appSettings.library = window.appSettings.library || [];
     const idx = window.appSettings.library.findIndex(m => m.id === movie.id && m.media_type === movie.media_type);
     let added;
@@ -313,7 +319,7 @@ window.toggleLibrarySave = function(movie) {
  * Card "+" button handler — toggles library membership and paints the button
  * gold when the item is in the library.
  */
-window.handleCardLibToggle = function(btn, movie) {
+window.handleCardLibToggle = function (btn, movie) {
     const added = window.toggleLibrarySave(movie);
     btn.style.background = added ? 'var(--vault-gold)' : 'rgba(0,0,0,0.8)';
     btn.style.color = added ? 'var(--vt-primary)' : 'var(--vault-gold)';
@@ -324,21 +330,21 @@ window.handleCardLibToggle = function(btn, movie) {
 /**
  * Remove an item from the streaming library.
  */
-window.removeFromLibrary = async function(movieId, movieTitle) {
+window.removeFromLibrary = async function (movieId, movieTitle) {
     const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
     const confirmTitle = t.removeFromLibrary || 'Remove from Library';
-    const confirmMsg = t.confirmRemoveFromLibrary 
-        ? t.confirmRemoveFromLibrary.replace('{0}', movieTitle) 
+    const confirmMsg = t.confirmRemoveFromLibrary
+        ? t.confirmRemoveFromLibrary.replace('{0}', movieTitle)
         : `Are you sure you want to remove "${movieTitle}" from your library?`;
-        
+
     if (await window.showConfirmDialog(confirmMsg, confirmTitle)) {
         window.appSettings.library = window.appSettings.library || [];
         window.appSettings.library = window.appSettings.library.filter(m => m.id !== movieId);
         window.electronAPI.saveSettings(window.appSettings);
-        
+
         const successMsg = t.removedFromLibrary || 'Removed from Library';
         window.showToast(successMsg, 'success');
-        
+
         // Reload Library
         window.renderLibrary();
     }
@@ -347,7 +353,7 @@ window.removeFromLibrary = async function(movieId, movieTitle) {
 /**
  * Open Collection Selection Dialog for TMDB streaming media.
  */
-window.showAddToFolderDialogForStreaming = function(movie) {
+window.showAddToFolderDialogForStreaming = function (movie) {
     const virtualItem = {
         name: movie.title || movie.name,
         path: 'tmdb://metadata:' + JSON.stringify(movie),
@@ -363,12 +369,12 @@ window.showAddToFolderDialogForStreaming = function(movie) {
 /**
  * Toggle local file favorite status.
  */
-window.toggleFavorite = function(filePath, btnEl) {
+window.toggleFavorite = function (filePath, btnEl) {
     window.appSettings.favorites = window.appSettings.favorites || [];
     const idx = window.appSettings.favorites.indexOf(filePath);
     let isNowStarred = false;
     const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
-    
+
     if (idx !== -1) {
         window.appSettings.favorites.splice(idx, 1);
         window.showToast(t.removedFromFavorites || 'Removed from Favorites', 'success');
@@ -377,7 +383,7 @@ window.toggleFavorite = function(filePath, btnEl) {
         // Don't show toast - yellow star provides visual feedback
         isNowStarred = true;
     }
-    
+
     // Save settings persistently
     window.electronAPI.saveSettings(window.appSettings);
 
@@ -388,7 +394,7 @@ window.toggleFavorite = function(filePath, btnEl) {
 
     // Invalidate local favorites cache to ensure freshness on next tab render/filter
     window.favoriteLocalItems = null;
-    
+
     // Update SVG icon in any matching card elements
     const normPath = (p) => (p || '').replace(/\\/g, '/').toLowerCase();
     const targetPath = normPath(filePath);

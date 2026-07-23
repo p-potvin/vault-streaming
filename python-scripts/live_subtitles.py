@@ -179,11 +179,14 @@ def load_model():
 def run_session(model, opts, stop_event):
     import numpy as np
 
-    video_path = os.path.abspath(opts["videoPath"])
-    if not os.path.exists(video_path):
-        emit("JSON_STATUS", {"status": "FAILED", "error": f"File not found: {video_path}",
-                             "videoPath": video_path, "final": True})
-        return
+    video_path = opts["videoPath"]
+    is_remote = video_path.lower().startswith(("http://", "https://"))
+    if not is_remote:
+        video_path = os.path.abspath(video_path)
+        if not os.path.exists(video_path):
+            emit("JSON_STATUS", {"status": "FAILED", "error": f"File not found: {video_path}",
+                                 "videoPath": video_path, "final": True})
+            return
 
     langs = [l for l in (opts.get("langs") or ["en"]) if l] or ["en"]
     primary_lang = langs[0]

@@ -1,0 +1,128 @@
+/* ==========================================================================
+   CLIP MODE STYLES
+   ========================================================================== */
+
+/* Clip button styling */
+#btn-clip {
+  position: relative;
+}
+
+#btn-clip.active,
+#btn-clip:hover {
+  color: var(--vault-accent) !important;
+}
+
+/* Clip markers */
+#clip-markers-container {
+  pointer-events: none;
+}
+
+#clip-marker-start,
+#clip-marker-end {
+  pointer-events: auto;
+}
+
+#clip-marker-start:hover,
+#clip-marker-end:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(245, 185, 41, 0.6);
+}
+
+#clip-marker-start.active,
+#clip-marker-end.active {
+  background: #fff;
+  border-color: var(--vault-accent);
+}
+
+/* Clip region highlight */
+#clip-region-highlight {
+  transition: left 0.1s ease, width 0.1s ease;
+}
+
+/* Clip duration display */
+#clip-duration-display {
+  transition: left 0.1s ease;
+}
+
+/* Clip preview canvas */
+#clip-preview-canvas {
+  animation: fadeInScale 0.2s ease;
+}
+
+#clip-preview-canvas.hidden {
+  display: none !important;
+}
+
+/* Clip mode active state */
+body.clip-mode-active .ctrl-btn:not(#btn-clip),
+body.clip-mode-active .ctrl-btn-sm,
+body.clip-mode-active #seek-bg {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+body.clip-mode-active #btn-clip {
+  opacity: 1;
+  pointer-events: auto;
+  background: rgba(245, 185, 41, 0.15) !important;
+  border: 1px solid var(--vault-accent) !important;
+}
+
+/* Clip mode video overlay hint */
+#clip-mode-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: white;
+  text-align: center;
+}
+
+/* Clip export dialog */
+#clip-export-dialog {
+  animation: fadeIn 0.2s ease;
+}
+
+#clip-export-dialog > div {
+  animation: slideUp 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Force warm-mode dark text inside all clip dialogs regardless of active theme.
+   Scoping --vault-text here means every descendant that uses var(--vault-text)
+   for color resolves to the warm-mode dark instead of dark-mode white. */
+#clip-editing-dialog > div,
+#clip-export-dialog > div,
+#clip-share-dialog > div {
+  --vault-text: #161320;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

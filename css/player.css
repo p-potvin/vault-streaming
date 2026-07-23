@@ -1,0 +1,449 @@
+/* Video Player Modal */
+/* Idle state: 2s without mouse movement -> hide custom controls + cursor
+   while the player is visible. JS sets body.player-idle. */
+body.player-idle #video-modal #custom-controls,
+body.player-idle #video-modal #player-topbar {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.3s ease;
+}
+
+body.player-idle #video-modal .video-wrapper {
+  cursor: none !important;
+}
+
+/* Force cursor repaint after exiting idle in fullscreen (Chromium bug). */
+#video-modal.cursor-refresh {
+  cursor: default;
+}
+
+#video-modal {
+  display: none;
+  position: fixed;
+  top: 31px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--vt-primary);
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+  outline: none !important;
+}
+
+/* Player title bar */
+#player-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 202;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 44px;
+  background: linear-gradient(rgba(0, 0, 0, 0.7), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#player-topbar .player-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+  opacity: 0.9;
+}
+
+#player-topbar .player-corner-btns {
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.player-corner-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.2s, background 0.2s;
+  transform: none !important;
+}
+
+.player-corner-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+/* hide top bar in PiP */
+#video-modal.minimized #player-topbar {
+  display: none;
+}
+
+.video-wrapper {
+  position: relative;
+  width: 100vw;
+  height: calc(100vh - 31px);
+  overflow: hidden;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Add padding when subtitles are active to prevent text overlap */
+.video-wrapper.subtitles-active #video-player {
+  padding-bottom: 40px;
+}
+
+#custom-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 16px 20px;
+  background: linear-gradient(transparent, rgba(7, 8, 10, 0.95));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-controls-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.controls-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  order: 1;
+}
+
+.controls-center-seek {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-grow: 1;
+  order: 2;
+}
+
+.controls-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  order: 3;
+}
+
+.seek-time-lbl {
+  font-size: 11px;
+  font-family: var(--vault-font-mono), monospace;
+  color: rgba(255, 255, 255, 0.8);
+  min-width: 32px;
+  text-align: center;
+}
+
+/* On large screens (width >= 800px) */
+@media (min-width: 800px) {
+  .player-controls-container {
+    flex-wrap: nowrap;
+  }
+
+  .controls-center-seek {
+    margin: 0 8px;
+    order: 2;
+  }
+
+  .seek-time-lbl {
+    display: none;
+  }
+
+  #time-display {
+    display: inline-block !important;
+  }
+}
+
+/* On small screens (width < 800px) */
+@media (max-width: 799px) {
+  .player-controls-container {
+    flex-wrap: wrap;
+  }
+
+  .controls-center-seek {
+    order: 0;
+    width: 100%;
+    flex-basis: 100%;
+    margin-bottom: 4px;
+  }
+
+  .seek-time-lbl {
+    display: inline-block;
+  }
+
+  #time-display {
+    display: none !important;
+  }
+}
+
+#video-modal:hover #custom-controls,
+#video-modal:focus-within #custom-controls,
+#video-modal:hover #player-topbar,
+#video-modal:focus-within #player-topbar {
+  opacity: 1;
+}
+
+/* Hide player controls when cursor hovers over the app titlebar (above the modal) */
+body.titlebar-hovered #video-modal #custom-controls,
+body.titlebar-hovered #video-modal #player-topbar {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.volume-container:hover .volume-slider-wrapper,
+.volume-container:focus-within .volume-slider-wrapper {
+  display: flex !important;
+}
+
+/* Dropdown Hover Effects */
+.speed-option:hover,
+.subtitle-option:hover,
+.subtitle-option-upload:hover {
+  background: var(--vault-hover) !important;
+  color: var(--vault-accent) !important;
+}
+
+/* Center loading screen */
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--vault-border);
+  border-top: 2px solid var(--vault-accent);
+  border-radius: 50%;
+  animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  margin-bottom: 24px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 14px;
+  font-family: var(--font-body);
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--vault-gold-muted);
+  background: var(--vt-primary);
+  z-index: 100;
+}
+
+#video-modal.minimized {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  top: auto;
+  left: auto;
+  width: 400px;
+  height: 225px;
+  background: var(--vt-surface-alt);
+  border: 1px solid var(--vault-border);
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.85);
+  border-radius: 0;
+  z-index: 9999;
+  cursor: pointer;
+}
+
+#pip-controls-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(7, 8, 10, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  pointer-events: none;
+  z-index: 200;
+}
+
+#video-modal.minimized .video-wrapper:hover #pip-controls-overlay {
+  display: flex !important;
+}
+
+.pip-ctrl-btn {
+  pointer-events: auto;
+  background: rgba(15, 17, 23, 0.85);
+  border: 1px solid var(--vault-border);
+  color: #fff;
+  font-size: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.pip-ctrl-btn:hover {
+  background: var(--vault-accent);
+  color: #000;
+  border-color: var(--vault-accent);
+  transform: scale(1.1);
+}
+
+#video-modal.minimized .player-corner-btns {
+  display: none;
+}
+
+#video-modal.minimized #pip-close-btn {
+  display: flex !important;
+  pointer-events: auto;
+}
+
+#video-modal.minimized .video-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+#video-modal.minimized .video-wrapper:hover #video-ended-overlay {
+  display: none !important;
+}
+
+#video-modal.minimized #custom-controls {
+  display: none;
+}
+
+#video-modal.minimized #seek-area {
+  height: 8px;
+  margin-top: 4px;
+}
+
+#video-modal.minimized #seek-bg {
+  margin-top: 2px !important;
+}
+
+/* time ticks below seek bar */
+#seek-time-row {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-family: var(--font-body);
+  padding: 2px 2px 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Customizable HTML5 Video Subtitles */
+video::cue {
+  font-size: var(--sub-font-size, 20px);
+  font-family: var(--font-body), sans-serif;
+  background-color: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  border-radius: 4px;
+}
+
+/* Shrink subtitles in Picture-in-Picture: the mini player is a fraction of the
+   size, so the full-size cue font is oversized. The variable cascades from the
+   modal down to the <video> and is picked up by ::cue. */
+#video-modal.minimized {
+  --sub-font-size: 11px;
+}
+
+/* player control icon size */
+.ctrl-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 26px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.2s, background 0.2s;
+  transform: none !important;
+}
+
+.ctrl-btn:hover {
+  color: var(--vault-accent);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.ctrl-btn-sm {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 4px;
+  line-height: 1;
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  transform: none !important;
+}
+
+.ctrl-btn-sm:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: none;
+}
+
+.ctrl-btn-sm.active {
+  color: var(--vault-accent);
+  border-color: var(--vault-accent);
+  background: rgba(116, 177, 190, 0.1);
+}

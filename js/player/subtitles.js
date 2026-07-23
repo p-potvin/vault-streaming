@@ -69,7 +69,7 @@ async function selectSubtitleTrack(trackIdx) {
     if (btn) {
         btn.classList.toggle('active', trackIdx >= 0);
         // Show only 2-letter language code in button
-        const rawLang = (trackIdx >= 0 && vp.textTracks[trackIdx]) 
+        const rawLang = (trackIdx >= 0 && vp.textTracks[trackIdx])
             ? (vp.textTracks[trackIdx].language || vp.textTracks[trackIdx].label || 'CC')
             : 'CC';
         const ccText = rawLang.substring(0, 2).toUpperCase();
@@ -111,10 +111,10 @@ function selectSubtitleByIndex(idx) {
     const sub = window._allAvailableSubtitles[idx];
     const vp = el('video-player');
     if (!vp) return;
-    
+
     // Remove all existing tracks
     vp.querySelectorAll('track').forEach(t => t.remove());
-    
+
     // Create and load the selected subtitle
     const track = document.createElement('track');
     track.kind = 'subtitles';
@@ -131,7 +131,7 @@ function selectSubtitleByIndex(idx) {
         track.src = window.sanitizePath(sub.path);
     }
     vp.appendChild(track);
-    
+
     // Set it as showing
     const trackIndex = vp.textTracks.length - 1;
     selectSubtitleTrack(trackIndex);
@@ -432,11 +432,11 @@ function showAsrContextMenu(anchorEl, defaultLangs) {
 
         const btnRow = document.createElement('div');
         btnRow.style.cssText = 'display:flex; justify-content:flex-end; gap:6px; border-top:1px solid rgba(255,255,255,0.08); padding-top:6px; margin-top:4px;';
-        
+
         const cancelBtn = document.createElement('button');
         cancelBtn.style.cssText = 'background:transparent; border:1px solid var(--vault-border, rgba(255,255,255,0.15)); color:var(--vault-text, #fff); font-size:10px; font-weight:600; padding:4px 8px; border-radius:4px; cursor:pointer; font-family:var(--font-mono);';
         cancelBtn.textContent = t.cancel || 'Cancel';
-        
+
         const cleanup = () => {
             menu.remove();
             document.removeEventListener('mousedown', onMouseDown);
@@ -613,7 +613,7 @@ function ensureLiveSubtitleListeners() {
 
             const vp = el('video-player');
             console.log(`[live-subs] +FINAL [${s.toFixed(2)}-${e.toFixed(2)}] "${cue.text}" ` +
-                        `(playhead=${vp ? vp.currentTime.toFixed(1) : '?'}s, offset=${off.toFixed(2)}s, cues=${track.cues ? track.cues.length : '?'})`);
+                `(playhead=${vp ? vp.currentTime.toFixed(1) : '?'}s, offset=${off.toFixed(2)}s, cues=${track.cues ? track.cues.length : '?'})`);
         } catch (e) {
             console.warn('[live-subs] addCue failed', cue, e);
         }
@@ -775,9 +775,17 @@ function initSubtitleListeners() {
                 const itm = window.displayedItems[window.currentPlayingIndex];
                 if (itm) { videoPath = itm.path; itemName = itm.name; }
             }
+            // Fallback for remote streams: pull the URL straight from the <video> element.
+            if (!videoPath) {
+                const vp = el('video-player');
+                if (vp && vp.src) videoPath = vp.src;
+            }
+            if (window.activeStreamingMedia && window.activeStreamingMedia.title) {
+                itemName = window.activeStreamingMedia.title;
+            }
 
-            if (!videoPath || videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
-                window.showToast('Live subtitles require a local playback source.', 'error');
+            if (!videoPath) {
+                window.showToast('No playback source for live subtitles.', 'error');
                 return;
             }
 
@@ -853,8 +861,8 @@ async function searchAndLoadSubtitlesByLang(lang) {
     // Translate the picker code to OpenSubtitles language codes. fr-CA is
     // a valid OpenSubtitles language code; we ask for fr too as a fallback.
     const langsParam = lang === 'fr-CA' ? 'fr-CA,fr'
-                    : lang === 'fr'    ? 'fr,fr-CA'
-                    : 'en';
+        : lang === 'fr' ? 'fr,fr-CA'
+            : 'en';
 
     window.showToast(`Searching OpenSubtitles for ${lang.toUpperCase()}…`, 'info');
     let results = [];
@@ -910,20 +918,20 @@ async function loadActiveSubtitles(videoPath) {
     vpReal.querySelectorAll('track').forEach(t => t.remove());
     try {
         const subs = await window.electronAPI.findSubtitles(videoPath, null, true);
-        
+
         // Store all available subtitles for the menu
         window._allAvailableSubtitles = subs || [];
-        
+
         if (subs && subs.length > 0) {
             // Find the best matching subtitle for user's preferred language
             const prefLang = (window.appSettings && window.appSettings.defaultSubLang) || 'original';
             let bestSub = null;
-            
+
             // Priority order: 1. Exact match with prefLang, 2. Language starts with prefLang, 3. Original, 4. First available
             for (const sub of subs) {
                 const subLang = sub.lang || '';
                 const subLabel = sub.label || '';
-                
+
                 if (prefLang === 'original' && subLabel.toLowerCase() === 'original') {
                     bestSub = sub;
                     break;
@@ -935,12 +943,12 @@ async function loadActiveSubtitles(videoPath) {
                     break;
                 }
             }
-            
+
             // If no exact match, fall back to first subtitle
             if (!bestSub && subs.length > 0) {
                 bestSub = subs[0];
             }
-            
+
             // Only load the best matching subtitle
             if (bestSub) {
                 const track = document.createElement('track');
@@ -959,7 +967,7 @@ async function loadActiveSubtitles(videoPath) {
                 }
                 vpReal.appendChild(track);
             }
-            
+
             refreshSubtitlesList();
             selectSubtitleTrack(bestSub ? 0 : -1);
         } else {

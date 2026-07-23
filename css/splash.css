@@ -1,0 +1,99 @@
+html,
+body {
+    margin: 0;
+    height: 100%;
+    width: 100%;
+    background: transparent;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.card {
+    position: absolute;
+    inset: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: radial-gradient(120% 120% at 50% 0%, #22202e 0%, #16131f 60%, #0f0c17 100%);
+    border: 1px solid rgba(176, 124, 255, 0.25);
+    border-radius: 16px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6), 0 0 40px rgba(176, 124, 255, 0.12);
+    -webkit-app-region: drag;
+}
+
+.logo {
+    width: 128px;
+    height: 128px;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 18px rgba(176, 124, 255, 0.35));
+    animation: pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.92;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+    }
+}
+
+.name {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #fff;
+}
+
+.name span {
+    color: #B07CFF;
+}
+
+.bar {
+    width: 180px;
+    height: 3px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    position: relative;
+}
+
+.bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -40%;
+    width: 40%;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, transparent, #B07CFF, #F5B929, transparent);
+    animation: slide 1.15s ease-in-out infinite;
+}
+
+@keyframes slide {
+    0% {
+        left: -40%;
+    }
+
+    100% {
+        left: 100%;
+    }
+}
+
+.status {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: #8b8698;
+    min-height: 14px;
+    font-variant-numeric: tabular-nums;
+}

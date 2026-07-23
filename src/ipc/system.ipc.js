@@ -1,6 +1,6 @@
 // system.ipc.js — handles settings, themes, clipboard, external shells, and native context menus.
 
-const { Menu, BrowserWindow, clipboard, shell } = require('electron');
+const { Menu, BrowserWindow, clipboard, shell, dialog, app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { safeOpenFile } = require('./files.ipc');
@@ -44,21 +44,21 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
             let resolved = false;
             const once = (val) => { if (!resolved) { resolved = true; resolve(val); } };
             let templ = [];
-            
+
             const folderSubmenu = (item.folders && item.folders.length > 0)
                 ? item.folders.map(f => ({
                     label: f.label || f.name,
                     click: () => once(`add-to-folder:${f.id || f.name}`)
-                  }))
+                }))
                 : [{ label: 'No virtual folders created', enabled: false }];
-            
+
             if (item.isMultiSelect) {
                 const selected = item.selectedItems || [];
                 const hasVideo = selected.some(s => s.type === 'video');
                 const hasEncrypted = selected.some(s => s.path && s.path.toLowerCase().endsWith('.enc'));
                 const hasNonEncrypted = selected.some(s => s.path && !s.path.toLowerCase().endsWith('.enc'));
                 const hasEnhanced = selected.some(s => s.enhancedPath || (s.enhancements && (s.enhancements.audio || s.enhancements.video || s.enhancements.subtitles || s.enhancements.translation)));
- 
+
                 const aiSubmenu = [];
                 if (hasVideo) {
                     aiSubmenu.push(
@@ -74,7 +74,7 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
                         );
                     }
                 }
- 
+
                 templ = [
                     { label: 'Add to Favorites', click: () => once('toggle-favorite') },
                     { label: 'Add Selection to Virtual Folder', submenu: folderSubmenu },
@@ -197,14 +197,16 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
                     { label: item.isPlaying ? 'Pause' : 'Play', click: () => once('play-pause') },
                     { label: item.isMuted ? 'Unmute' : 'Mute', click: () => once('mute') },
                     { type: 'separator' },
-                    { label: 'Playback Speed', submenu: [
-                        { label: '0.5x', type: 'radio', checked: item.speed === 0.5, click: () => once('speed:0.5') },
-                        { label: '0.75x', type: 'radio', checked: item.speed === 0.75, click: () => once('speed:0.75') },
-                        { label: 'Normal', type: 'radio', checked: !item.speed || item.speed === 1, click: () => once('speed:1') },
-                        { label: '1.25x', type: 'radio', checked: item.speed === 1.25, click: () => once('speed:1.25') },
-                        { label: '1.5x', type: 'radio', checked: item.speed === 1.5, click: () => once('speed:1.5') },
-                        { label: '2x', type: 'radio', checked: item.speed === 2, click: () => once('speed:2') }
-                    ]},
+                    {
+                        label: 'Playback Speed', submenu: [
+                            { label: '0.5x', type: 'radio', checked: item.speed === 0.5, click: () => once('speed:0.5') },
+                            { label: '0.75x', type: 'radio', checked: item.speed === 0.75, click: () => once('speed:0.75') },
+                            { label: 'Normal', type: 'radio', checked: !item.speed || item.speed === 1, click: () => once('speed:1') },
+                            { label: '1.25x', type: 'radio', checked: item.speed === 1.25, click: () => once('speed:1.25') },
+                            { label: '1.5x', type: 'radio', checked: item.speed === 1.5, click: () => once('speed:1.5') },
+                            { label: '2x', type: 'radio', checked: item.speed === 2, click: () => once('speed:2') }
+                        ]
+                    },
                     { label: 'Picture-in-Picture', click: () => once('pip') },
                     { label: 'Fullscreen', click: () => once('fullscreen') },
                     { type: 'separator' }
@@ -236,6 +238,72 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
             menu.popup({ window: BrowserWindow.fromWebContents(event.sender) });
             menu.once('menu-will-close', () => { setTimeout(() => once('closed'), 50); });
         });
+    });
+
+    // ── Library sync / backup ────────────────────────────────────────────
+    // Export: bundle settings + watch history into a single JSON file.
+    ipcMain.handle('library-export-backup', async () => {
+        try {
+            const result = await dialog.showSaveDialog({
+                title: 'Export Library Backup',
+                defaultPath: `vault-backup-${new Date().toISOString().slice(0, 10)}.json`,
+                filters: [{ name: 'JSON', extensions: ['json'] }],
+            });
+            if (result.canceled || !result.filePath) return { success: false, error: 'Cancelled' };
+
+            const settings = loadSettings();
+            const watchHistoryPath = path.join(app.getPath('userData'), 'vault-watch-history.json');
+            let watchHistory = { items: {} };
+            try {
+                if (fs.existsSync(watchHistoryPath)) {
+                    watchHistory = JSON.parse(fs.readFileSync(watchHistoryPath, 'utf8'));
+                }
+            } catch (_) { /* best-effort */ }
+
+            const backup = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                settings,
+                watchHistory,
+            };
+            fs.writeFileSync(result.filePath, JSON.stringify(backup, null, 2), 'utf8');
+            return { success: true, path: result.filePath };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
+
+    // Import: restore settings + watch history from a backup JSON file.
+    ipcMain.handle('library-import-backup', async () => {
+        try {
+            const result = await dialog.showOpenDialog({
+                title: 'Import Library Backup',
+                filters: [{ name: 'JSON', extensions: ['json'] }],
+                properties: ['openFile'],
+            });
+            if (result.canceled || !result.filePaths.length) return { success: false, error: 'Cancelled' };
+
+            const raw = fs.readFileSync(result.filePaths[0], 'utf8');
+            const backup = JSON.parse(raw);
+            if (!backup || backup.version !== 1) {
+                return { success: false, error: 'Invalid or unsupported backup format' };
+            }
+
+            // Restore settings
+            if (backup.settings) {
+                await saveSettings(backup.settings);
+            }
+
+            // Restore watch history
+            if (backup.watchHistory) {
+                const watchHistoryPath = path.join(app.getPath('userData'), 'vault-watch-history.json');
+                fs.writeFileSync(watchHistoryPath, JSON.stringify(backup.watchHistory, null, 2), 'utf8');
+            }
+
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
     });
 }
 

@@ -10,10 +10,10 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
 
     const iframeWrapper = el('movie-trailer-wrapper');
     const loadingEl = el('movie-trailer-loading');
-    
+
     if (iframeWrapper) iframeWrapper.style.display = 'block';
     if (loadingEl) loadingEl.style.display = 'flex';
-    
+
     try {
         let trailerKey = null;
         const cacheKey = `${mediaType}_${tmdbId}`;
@@ -25,7 +25,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
             // API Key Priority Tracking
             const statsJson = localStorage.getItem('vault_trailer_api_stats');
             const stats = statsJson ? JSON.parse(statsJson) : { kinocheck: 0, tmdb: 0 };
-            
+
             const providers = [
                 {
                     id: 'kinocheck',
@@ -114,7 +114,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
         // -----------------------------------------------------------------
         window._directTrailerUrlCache = window._directTrailerUrlCache || {};
         let directUrl = window._directTrailerUrlCache[trailerKey];
-        
+
         if (!directUrl && window.electronAPI && window.electronAPI.extractYouTubeURL) {
             try {
                 const result = await window.electronAPI.extractYouTubeURL(trailerKey);
@@ -141,10 +141,10 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                 window.removeEventListener('message', window._ytTrailerListener);
                 window._ytTrailerListener = null;
             }
-            
+
             // Remove any existing video or iframe, keeping the loading element
             iframeWrapper.querySelectorAll('video, iframe').forEach(e => e.remove());
-            
+
             const vid = document.createElement('video');
             vid.id = 'movie-trailer-iframe';
             vid.style.cssText = 'width:100%; height:100%; border:none; background:#000; display:block;';
@@ -156,17 +156,17 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
             // Trailers at 80% (−20%) by default; muted if the user opted in.
             vid.muted = !!(window.appSettings && window.appSettings.muteTrailers);
             vid.volume = 0.8;
-            
+
             // Hide loading indicator when video metadata is loaded
             vid.addEventListener('loadedmetadata', () => {
                 if (loadingEl) loadingEl.style.display = 'none';
             });
-            
+
             // Autoplay safety
             vid.addEventListener('canplay', () => {
                 vid.play().catch(err => console.warn('[Trailer] Autoplay failed:', err));
             }, { once: true });
-            
+
             // Restore persisted current time if available
             if (window._persistedTrailerTime) {
                 const targetTime = window._persistedTrailerTime;
@@ -181,9 +181,31 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                     vid.addEventListener('loadedmetadata', restoreTime, { once: true });
                 }
             }
-            
+
             iframeWrapper.appendChild(vid);
             iframeWrapper.style.display = 'block';
+
+            // ── Trailer mute/unmute button ───────────────────────────────
+            const muteBtn = el('btn-trailer-mute');
+            if (muteBtn) {
+                const updateMuteIcon = () => {
+                    const isMuted = vid.muted || vid.volume === 0;
+                    muteBtn.innerHTML = isMuted
+                        ? (window.icons ? window.icons.eyeOff('', 'width:16px; height:16px;') : '🔇')
+                        : (window.icons ? window.icons.eye('', 'width:16px; height:16px;') : '🔊');
+                    muteBtn.title = isMuted ? 'Unmute Trailer' : 'Mute Trailer';
+                };
+                updateMuteIcon();
+                muteBtn.style.display = 'flex';
+                muteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    vid.muted = !vid.muted;
+                    if (!vid.muted && vid.volume === 0) vid.volume = 0.8;
+                    updateMuteIcon();
+                };
+                vid.addEventListener('volumechange', updateMuteIcon);
+            }
+
             return;
         }
 
@@ -213,7 +235,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                 origin: spoofedOrigin,
                 widget_referrer: spoofedOrigin,
             });
-            
+
             if (window._persistedTrailerTime) {
                 const secs = Math.floor(window._persistedTrailerTime);
                 if (secs > 0) {
@@ -221,7 +243,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                 }
                 window._persistedTrailerTime = 0; // reset
             }
-            
+
             // Hide loading element when the iframe finishes loading
             iframe.onload = () => {
                 if (loadingEl) loadingEl.style.display = 'none';
@@ -236,7 +258,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                     );
                 } catch (_) { /* cross-origin write — non-fatal */ }
             };
-            
+
             iframe.src = `https://www.youtube.com/embed/${trailerKey}?${params.toString()}`;
             iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
             iframe.setAttribute('allowfullscreen', 'true');
@@ -289,14 +311,14 @@ async function _getTMDBToken() {
     return null; // Trailer fetch will silently skip — movie info still works
 }
 
-window.destroyTrailer = function() {
+window.destroyTrailer = function () {
     // Invalidate any in-flight _fetchAndInjectTrailer so a late resolution can't
     // re-attach an autoplaying trailer after we tear down.
     window._modalTrailerGen = (window._modalTrailerGen || 0) + 1;
 
     const iframeWrapper = document.getElementById('movie-trailer-wrapper');
     if (!iframeWrapper) return;
-    
+
     // Completely destroy native <video> elements to ensure background streams are cleaned up
     const videos = iframeWrapper.querySelectorAll('video');
     videos.forEach(v => {
@@ -305,16 +327,18 @@ window.destroyTrailer = function() {
         v.load();
         v.remove();
     });
-    
+
     // Destroy iframe elements 
     const iframes = iframeWrapper.querySelectorAll('iframe');
     iframes.forEach(i => {
         i.src = '';
         i.remove();
     });
-    
+
     // Hide wrapper
     iframeWrapper.style.display = 'none';
     const loadingEl = document.getElementById('movie-trailer-loading');
     if (loadingEl) loadingEl.style.display = 'none';
+    const muteBtn = document.getElementById('btn-trailer-mute');
+    if (muteBtn) muteBtn.style.display = 'none';
 };

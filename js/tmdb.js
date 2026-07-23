@@ -104,7 +104,7 @@ function updateFiltersUI() {
 window.updateProviderButtonsUI = updateProviderButtonsUI;
 window.updateFiltersUI = updateFiltersUI;
 
-window.renderTMDB = async function(query = '', append = false) {
+window.renderTMDB = async function (query = '', append = false) {
     if (!append) {
         const detailsModal = document.getElementById('streaming-details-modal');
         if (detailsModal) detailsModal.style.display = 'none';
@@ -117,17 +117,17 @@ window.renderTMDB = async function(query = '', append = false) {
         console.log('[TMDB] Fetch already in progress, ignoring duplicate load-more call.');
         return;
     }
-    
+
     const grid = el('tmdb-results-grid');
     if (!grid) return;
-    
+
     window.tmdbIsFetching = true;
     window.tmdbRequestId = (window.tmdbRequestId || 0) + 1;
     const currentRequestId = window.tmdbRequestId;
-    
+
     const loadMoreContainer = el('tmdb-load-more-container');
     const loadMoreText = el('tmdb-load-more-text');
-    
+
     if (!append) {
         grid.innerHTML = '';
         window.tmdbCurrentPage = 1;
@@ -171,7 +171,7 @@ window.renderTMDB = async function(query = '', append = false) {
         } else {
             if (loadMoreText) loadMoreText.innerText = 'Load More';
         }
-        
+
         if (!response || !response.success) {
             const errMsg = response ? response.error : 'Unknown error';
             if (!append) {
@@ -206,14 +206,19 @@ window.renderTMDB = async function(query = '', append = false) {
             return;
         }
 
+        // Ensure watch-status map is loaded before rendering cards
+        if (typeof window.refreshWatchStatusMap === 'function') {
+            await window.refreshWatchStatusMap();
+        }
+
         results.forEach(movie => {
             const card = document.createElement('div');
-            
+
             // Check if movie is currently saved in the library to apply the premium highlight state
             window.appSettings = window.appSettings || {};
             window.appSettings.library = window.appSettings.library || [];
             const isCurrentlySaved = window.appSettings.library.some(item => item.id === movie.id && item.media_type === movie.media_type);
-            
+
             if (isCurrentlySaved) {
                 card.className = 'file-card tmdb-movie-card in-library';
                 card.style.cssText = 'cursor: pointer; background: var(--vault-warm-card); border: 1.5px solid var(--vault-console-gold); border-radius: 6px; box-shadow: 0 0 12px rgba(214, 164, 65, 0.35); position: relative;';
@@ -221,17 +226,17 @@ window.renderTMDB = async function(query = '', append = false) {
                 card.className = 'file-card tmdb-movie-card';
                 card.style.cssText = 'cursor: pointer; background: var(--vault-warm-card); border: 1px solid var(--vault-border); border-radius: 6px; position: relative;';
             }
-            
+
             card.addEventListener('click', () => {
                 window.showMediaDetails(movie);
             });
-            
+
             const isTV = movie.media_type === 'tv';
-            
+
             // Modernized SVGs for standard badging
             const tvSvg = window.icons ? window.icons.tv('', 'width:11px; height:11px; display:inline-block;') : '';
             const movieSvg = window.icons ? window.icons.movie('', 'width:11px; height:11px; display:inline-block;') : '';
-            
+
             card.innerHTML = `
                 <div class="thumbnail-container" style="position:relative; background:#111; height: 180px; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
                    <button onclick="event.stopPropagation(); window.showMediaDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})" style="position: absolute; top: 8px; left: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-gold); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-gold); transition: all 0.2s;" title="${isTV ? 'Browse Seasons' : 'Stream Movie'}">
@@ -253,6 +258,7 @@ window.renderTMDB = async function(query = '', append = false) {
                 </div>
             `;
             card.setAttribute('data-id', String(movie.id));
+            if (typeof window.applyWatchStatusCues === 'function') window.applyWatchStatusCues(card, movie);
             window.attachPremiumHoverCard(card, movie);
             grid.appendChild(card);
         });
@@ -261,7 +267,7 @@ window.renderTMDB = async function(query = '', append = false) {
         if (loadMoreContainer) {
             loadMoreContainer.style.display = 'flex';
         }
-        
+
         window.updateStatusBar();
     } catch (e) {
         console.error("TMDB render error:", e);
@@ -326,7 +332,7 @@ function updateGenreOptions() {
     const genreSelect = el('filter-genre');
     if (!genreSelect) return;
     const genres = window.tmdbCurrentMediaType === 'movie' ? MOVIE_GENRES : TV_GENRES;
-    
+
     // Remember currently selected genre if valid in target format
     const oldVal = genreSelect.value;
     genreSelect.innerHTML = genres.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
@@ -339,9 +345,9 @@ function updateGenreOptions() {
     }
 }
 
-window.initTMDBListeners = function() {
+window.initTMDBListeners = function () {
     console.log('[tmdb] Initializing TMDB listeners...');
-    
+
     // Initialize global TMDB streaming state
     window.tmdbIsFetching = false;
     window.tmdbRequestId = 0;
@@ -349,7 +355,7 @@ window.initTMDBListeners = function() {
     window.tmdbCurrentMediaType = 'movie';
     window.tmdbCurrentPage = 1;
     window.tmdbCurrentQuery = '';
-    
+
     // Advanced Filters State
     window.tmdbCurrentGenre = 'all';
     window.tmdbCurrentDecade = 'all';
@@ -492,13 +498,13 @@ window.initTMDBListeners = function() {
             window.tmdbCurrentSort = 'popularity.desc';
             window.tmdbCurrentPage = 1;
             window.tmdbCurrentQuery = '';
-            
+
             if (tmdbSearchInput) tmdbSearchInput.value = '';
             if (filterGenre) filterGenre.value = 'all';
             if (filterDecade) filterDecade.value = 'all';
             if (filterRegion) filterRegion.value = 'all';
             if (filterSort) filterSort.value = 'popularity.desc';
-            
+
             updateGenreOptions();
             window.renderTMDB();
         });
@@ -532,7 +538,7 @@ window.initTMDBListeners = function() {
             const loadMoreContainer = el('tmdb-load-more-container');
             if (!loadMoreContainer || loadMoreContainer.style.display === 'none') return;
             const nearBottom = tmdbContainer.scrollTop + tmdbContainer.clientHeight
-                            >= tmdbContainer.scrollHeight - 600;
+                >= tmdbContainer.scrollHeight - 600;
             if (nearBottom) {
                 window.tmdbCurrentPage++;
                 window.renderTMDB(window.tmdbCurrentQuery, true);

@@ -4,76 +4,42 @@ window.appSettings = { folders: [] };
 window.currentLang = 'en';
 
 function setLanguage(lang) {
-  window.currentLang = lang;
-  el('lang-text').innerText = (lang === 'en') ? 'EN' : 'FR';
-  console.log('[i18n] Language set to:', lang);
-  
-  if (el('path-display')) el('path-display').title = window.translations[lang].browseVault;
-  
-  // Files-tab controls (filter/search/sort) were removed with the local-vault
-  // features — guard every lookup so the language pass can't crash.
-  const filterType = el('filter-type');
-  if (filterType && filterType.options.length >= 4) {
-    filterType.options[0].text = window.translations[lang].videos;
-    filterType.options[1].text = window.translations[lang].images;
-    filterType.options[2].text = window.translations[lang].music;
-    filterType.options[3].text = window.translations[lang].allFiles;
-  }
+    window.currentLang = lang;
+    el('lang-text').innerText = (lang === 'en') ? 'EN' : 'QC';
+    console.log('[i18n] Language set to:', lang);
 
-  if (el('search-box')) el('search-box').placeholder = window.translations[lang].searchPlaceholder;
-  if (el('btn-new-folder')) el('btn-new-folder').title = window.translations[lang].addFolder;
-  if (el('btn-refresh')) el('btn-refresh').title = window.translations[lang].refresh;
-  if (el('sort-label')) el('sort-label').innerText = window.translations[lang].sortLabel;
+    if (el('search-box')) el('search-box').placeholder = window.translations[lang].searchPlaceholder;
 
-  const sortBy = el('sort-by');
-  if (sortBy && sortBy.options.length >= 5) {
-    sortBy.options[0].text = window.translations[lang].dateModified;
-    sortBy.options[1].text = window.translations[lang].name;
-    sortBy.options[2].text = window.translations[lang].size;
-    sortBy.options[3].text = window.translations[lang].type;
-    sortBy.options[4].text = window.translations[lang].duration;
-  }
+    if (el('loading-text')) el('loading-text').innerText = window.translations[lang].scanning;
 
-  if (typeof window.updateSortOrderButtonUI === 'function') window.updateSortOrderButtonUI();
-  if (el('loading-text')) el('loading-text').innerText = window.translations[lang].scanning;
-  
-  const dialogLabel = document.querySelector('#fake-folder-dialog label');
-  if (dialogLabel) dialogLabel.innerText = window.translations[lang].enterFolderName;
-  if (el('btn-cancel-folder')) el('btn-cancel-folder').innerText = window.translations[lang].cancel;
-  if (el('btn-create-folder')) el('btn-create-folder').innerText = window.translations[lang].create;
-  
-  if (el('theme-btn-text')) el('theme-btn-text').innerText = window.translations[lang].theme;
-  const themeHeader = document.querySelector('.theme-panel-header');
-  if (themeHeader) themeHeader.innerText = window.translations[lang].theme;
-  
-  if (el('settings-btn-text')) el('settings-btn-text').innerText = window.translations[lang].settings;
-  const sHeader = document.querySelector('.settings-panel-header');
-  if (sHeader) sHeader.innerText = window.translations[lang].settings;
-  if (el('glob-exclusions-label')) el('glob-exclusions-label').innerText = window.translations[lang].globExclusionsLabel;
-  if (el('settings-btn-save')) el('settings-btn-save').innerText = window.translations[lang].save;
-  if (el('label-mute-previews')) el('label-mute-previews').innerText = window.translations[lang].mutePreviews;
+    if (el('settings-btn-text')) el('settings-btn-text').innerText = window.translations[lang].settings;
+    const sHeader = document.querySelector('.settings-panel-header');
+    if (sHeader) sHeader.innerText = window.translations[lang].settings;
+    if (el('glob-exclusions-label')) el('glob-exclusions-label').innerText = window.translations[lang].globExclusionsLabel;
+    if (el('settings-btn-save')) el('settings-btn-save').innerText = window.translations[lang].save;
+    if (el('label-mute-previews')) el('label-mute-previews').innerText = window.translations[lang].mutePreviews;
 
-  // Translate top-level application navigation tabs
-  const iconStyle = "width:13px; height:13px; flex-shrink:0;";
-  if (el('tab-library')) el('tab-library').innerHTML = `${window.icons ? window.icons.library('tab-icon', iconStyle) : ''}${window.translations[lang].tabLibrary}`;
-  if (el('tab-tmdb')) el('tab-tmdb').innerHTML = `${window.icons ? window.icons.filmRoll('tab-icon', iconStyle) : ''}${window.translations[lang].tabMoviesSeries}`;
+    // Translate top-level application navigation tabs
+    const iconStyle = "width:13px; height:13px; flex-shrink:0;";
+    if (el('tab-library')) el('tab-library').innerHTML = `${window.icons ? window.icons.library('tab-icon', iconStyle) : ''}${window.translations[lang].tabLibrary}`;
+    if (el('tab-tmdb')) el('tab-tmdb').innerHTML = `${window.icons ? window.icons.filmRoll('tab-icon', iconStyle) : ''}${window.translations[lang].tabMoviesSeries}`;
 
-  // Translate TMDB subtabs
-  if (el('subtab-movies')) el('subtab-movies').innerText = window.translations[lang].tabMovies;
-  if (el('subtab-series')) el('subtab-series').innerText = window.translations[lang].tabSeries;
+    // Translate TMDB subtabs
+    if (el('subtab-movies')) el('subtab-movies').innerText = window.translations[lang].tabMovies;
+    if (el('subtab-series')) el('subtab-series').innerText = window.translations[lang].tabSeries;
 
-  if (!window.currentRealPath && el('path-display')) {
-    el('path-display').innerText = window.translations[lang].noFolderSelected;
-  }
-  
-  const emptyStateH3 = document.querySelector('#file-grid .empty-state h3');
-  const emptyStateP = document.querySelector('#file-grid .empty-state p');
-  const emptyStateBtn = document.querySelector('#file-grid .empty-state button');
-  if (emptyStateH3) emptyStateH3.innerText = window.translations[lang].vaultEmpty;
-  if (emptyStateP) emptyStateP.innerText = window.translations[lang].clickBrowse;
-  if (emptyStateBtn) emptyStateBtn.innerText = window.translations[lang].browseVault;
-  
-  if (typeof window.updateStatusBar === 'function') window.updateStatusBar();
+    if (!window.currentRealPath && el('path-display')) {
+        el('path-display').innerText = window.translations[lang].noFolderSelected;
+    }
+
+    const emptyStateH3 = document.querySelector('#file-grid .empty-state h3');
+    const emptyStateP = document.querySelector('#file-grid .empty-state p');
+    const emptyStateBtn = document.querySelector('#file-grid .empty-state button');
+    if (emptyStateH3) emptyStateH3.innerText = window.translations[lang].vaultEmpty;
+    if (emptyStateP) emptyStateP.innerText = window.translations[lang].clickBrowse;
+    if (emptyStateBtn) emptyStateBtn.innerText = window.translations[lang].browseVault;
+
+    if (typeof window.updateStatusBar === 'function') window.updateStatusBar();
 }
 
 function updateSortOrderButtonUI() {
@@ -118,15 +84,15 @@ async function initApp() {
             getTheme: async () => ({ success: true, theme: 'golden-slate' }),
             setTheme: async (t) => ({ success: true }),
             findSubtitles: async (p) => [],
-            onWebmProgress: (cb) => {},
-            onNormalizeProgress: (cb) => {},
-            offNormalizeProgress: () => {},
-            offUpscaleChunk: () => {},
-            offUpscaleStatus: () => {},
-            onUpscaleStatus: (cb) => {},
-            onUpscaleChunk: (cb) => {},
+            onWebmProgress: (cb) => { },
+            onNormalizeProgress: (cb) => { },
+            offNormalizeProgress: () => { },
+            offUpscaleChunk: () => { },
+            offUpscaleStatus: () => { },
+            onUpscaleStatus: (cb) => { },
+            onUpscaleChunk: (cb) => { },
             startUpscaleStream: async () => ({ success: true }),
-            stopUpscaleStream: () => {},
+            stopUpscaleStream: () => { },
             encryptFiles: async () => ({ success: true }),
             decryptFiles: async () => ({ success: true }),
             pasteFiles: async () => ({ success: true }),
@@ -151,7 +117,7 @@ async function initApp() {
     if (window.appSettings.mutePreviews === undefined) window.appSettings.mutePreviews = false;
     if (!window.appSettings.lastPath) window.appSettings.lastPath = { navPath: 'root', realPath: '' };
     if (!window.appSettings.scrollPositions) window.appSettings.scrollPositions = {};
-    
+
     window.scrollPositions = window.appSettings.scrollPositions;
 
     const subSize = window.appSettings.subFontSize || '20px';
@@ -227,7 +193,7 @@ async function initApp() {
             const normPath = (p) => (p || '').replace(/\\/g, '/').toLowerCase();
             const card = Array.from(document.querySelectorAll('.file-card'))
                 .find(c => normPath(c.dataset.path) === normPath(videoPath));
-                
+
             if (card) {
                 let overlay = card.querySelector('.webm-loading-overlay');
                 if (percent < 100) {
@@ -285,7 +251,7 @@ async function initApp() {
             if (!badge) return;
 
             badge.style.display = 'inline-flex';
-            
+
             // Get the label span (second child span)
             const labelSpan = badge.querySelector('span:nth-child(2)');
             if (labelSpan) {
@@ -309,14 +275,14 @@ async function initApp() {
 
     // Focus Lost (Window Blur) -> Pause hover webms cleanly
     window.addEventListener('blur', () => {
-         console.log('[window] Blur focus lost: pausing previews.');
-         if (window.killAllHoverVideos) {
-             window.killAllHoverVideos();
-         }
-         document.querySelectorAll('.file-card').forEach(card => {
-             const mainImg = card.querySelector('.thumbnail');
-             if (mainImg) mainImg.style.display = 'block';
-         });
+        console.log('[window] Blur focus lost: pausing previews.');
+        if (window.killAllHoverVideos) {
+            window.killAllHoverVideos();
+        }
+        document.querySelectorAll('.file-card').forEach(card => {
+            const mainImg = card.querySelector('.thumbnail');
+            if (mainImg) mainImg.style.display = 'block';
+        });
     });
 
     // Failsafe: Clear task badge after 5 minutes to prevent stuck messages
@@ -331,6 +297,13 @@ async function initApp() {
             }
         }
     }, 5 * 60 * 1000);
+
+    // Warm the live-subtitle daemon behind the splash so the model is loaded
+    // by the time the user opens the player. Only preloads if the model is
+    // already on disk — no surprise 2.5 GB download on launch.
+    if (window.electronAPI && typeof window.electronAPI.warmLiveSubtitles === 'function') {
+        window.electronAPI.warmLiveSubtitles().catch(() => { /* daemon warm-up is best-effort */ });
+    }
 
     // Boot straight into Discover — must run AFTER initTMDBListeners so the
     // TMDB state (providers, search) is initialized before the first render.

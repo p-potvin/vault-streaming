@@ -1,0 +1,271 @@
+/* ===== Settings Panel ===== */
+.settings-panel {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 24px;
+  border: 1px solid var(--vault-border);
+  background: var(--vault-warm-bg, #1a1a24);
+  color: var(--vault-text);
+  z-index: 2147483647;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.85);
+  font-family: var(--font-sans);
+  width: min(820px, 94vw);
+  border-radius: 8px;
+  max-height: 92vh;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.settings-panel-header-bar {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--vault-accent);
+  margin-bottom: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--vault-border);
+  padding-bottom: 10px;
+  user-select: none;
+}
+
+.settings-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-panel-close {
+  background: transparent;
+  border: none;
+  color: var(--vault-slate);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.settings-panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 28px;
+  align-items: start;
+}
+
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-section-heading {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--vault-accent);
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--vault-border);
+  padding-bottom: 5px;
+  display: block;
+}
+
+.settings-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--vault-slate);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.settings-select {
+  width: 100%;
+  background: var(--vt-primary);
+  color: var(--vault-text);
+  border: 1px solid var(--vault-border);
+  padding: 6px;
+  font-family: var(--font-body);
+  outline: none;
+  border-radius: 4px;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.settings-toggle-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--vault-slate);
+}
+
+.settings-checkbox {
+  accent-color: var(--vault-accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.settings-api-key-input {
+  width: 100%;
+  background: var(--vt-primary);
+  color: var(--vault-text);
+  border: 1px solid var(--vault-border);
+  padding: 6.5px 8px;
+  font-family: var(--font-body);
+  outline: none;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.settings-sub-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-sub-heading {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--vault-accent);
+  display: block;
+  margin-bottom: 2px;
+  letter-spacing: 0.05em;
+}
+
+.settings-vsr-group {
+  border-top: 1px solid var(--vault-warm-border-subtle);
+  margin-top: 8px;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-save-row {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  border-top: 1px solid var(--vault-border);
+  padding-top: 12px;
+}
+
+.settings-btn-save {
+  background: var(--vault-accent);
+  color: var(--vt-primary);
+  border: none;
+  padding: 7px 22px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+}
+
+#settings-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: auto;
+  z-index: 100001;
+  background: var(--vt-surface);
+  border: 1px solid var(--vault-border);
+  border-top: none;
+  padding: 16px;
+  min-width: 320px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.settings-panel-header {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--vault-gold);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--vault-border);
+}
+
+/* Glob Exclusions Pill Tags */
+.pill-tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  background: var(--vt-primary);
+  border: 1px solid var(--vault-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  min-height: 36px;
+  cursor: text;
+  transition: border-color 0.2s;
+}
+
+.pill-tag-container:focus-within {
+  border-color: var(--vault-accent);
+}
+
+.pill-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--vt-warning-bg);
+  border: 1px solid var(--vault-accent);
+  color: var(--vault-text);
+  border-radius: 100px;
+  padding: 2px 8px 2px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: fadeInScale 0.15s ease forwards;
+}
+
+.pill-tag-remove {
+  background: none;
+  border: none;
+  color: var(--vault-slate);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 1px;
+  margin: 0;
+  transform: none !important;
+  transition: color 0.15s;
+}
+
+.pill-tag-remove:hover {
+  color: var(--vt-error) !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.pill-tag-input {
+  border: none;
+  background: transparent;
+  color: var(--vault-text);
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 12px;
+  min-width: 80px;
+  flex: 1;
+}

@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, shell } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
@@ -39,6 +39,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offNormalizeProgress: () => ipcRenderer.removeAllListeners('normalize-progress'),
   onUpscaleProgress: (cb) => ipcRenderer.on('upscale-progress', (_, data) => cb(data)),
   offUpscaleProgress: () => ipcRenderer.removeAllListeners('upscale-progress'),
+  // Real-time RTX VSR upscale stream
+  startUpscaleStream: (opts) => ipcRenderer.invoke('upscale-stream-start', opts),
+  stopUpscaleStream: () => ipcRenderer.invoke('upscale-stream-stop'),
+  onUpscaleChunk: (cb) => ipcRenderer.on('upscale-chunk', (_, data) => cb(data)),
+  offUpscaleChunk: () => ipcRenderer.removeAllListeners('upscale-chunk'),
+  onUpscaleStatus: (cb) => ipcRenderer.on('upscale-status', (_, data) => cb(data)),
+  offUpscaleStatus: () => ipcRenderer.removeAllListeners('upscale-status'),
   // Real-time down-transcode (Max Stream Quality ceiling → h264_nvenc/libx264)
   transcodeStreamStart: (opts) => ipcRenderer.invoke('transcode-stream-start', opts),
   transcodeStreamStop: () => ipcRenderer.invoke('transcode-stream-stop'),
@@ -48,7 +55,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offTranscodeStatus: () => ipcRenderer.removeAllListeners('transcode-status'),
   runASRBenchmark: (forceSimulation) => ipcRenderer.invoke('run-asr-benchmark', { forceSimulation }),
   revertEnhancements: (p) => ipcRenderer.invoke('revert-enhancements', p),
-  
+
   // TMDB / KinoCheck API
   searchTMDB: (query, page = 1, language = 'en-US') => ipcRenderer.invoke('search-tmdb', { query, page, language }),
   discoverTMDB: (providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort) => ipcRenderer.invoke('discover-tmdb', { providerId, mediaType, page, language, withGenres, decade, region, sort }),
@@ -67,7 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testDebridProxy: (proxy) => ipcRenderer.invoke('rd-test-proxy', proxy),
   onDownloadProgress: (cb) => ipcRenderer.on('rd-download-progress', (_, data) => cb(data)),
   offDownloadProgress: () => ipcRenderer.removeAllListeners('rd-download-progress'),
-  
+
   // Usenet API
   searchUsenet: (data) => ipcRenderer.invoke('search-usenet', data),
   verifyUsenetHealth: (data) => ipcRenderer.invoke('verify-usenet-health', data),
@@ -86,16 +93,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLiveSubtitleStatus: (cb) => ipcRenderer.on('live-subtitle-status', (_, data) => cb(data)),
   offLiveSubtitleStatus: () => ipcRenderer.removeAllListeners('live-subtitle-status'),
 
-  // Live streaming ASR subtitles (Parakeet)
-
-  startLivestream: (data) => ipcRenderer.invoke('start-livestream', data),
-  stopLivestream: () => ipcRenderer.invoke('stop-livestream'),
-  onLivestreamLog: (cb) => ipcRenderer.on('livestream-log', (_, data) => cb(data)),
-  offLivestreamLog: () => ipcRenderer.removeAllListeners('livestream-log'),
-  onLivestreamVisualizer: (cb) => ipcRenderer.on('livestream-visualizer', (_, data) => cb(data)),
-  offLivestreamVisualizer: () => ipcRenderer.removeAllListeners('livestream-visualizer'),
-  openExternalURL: (url) => ipcRenderer.invoke('open-external-url', url),
-  
   // Watch History API
   setWatchProgress: (data) => ipcRenderer.invoke('watch-history:set-progress', data),
   getWatchProgress: (data) => ipcRenderer.invoke('watch-history:get-progress', data),
@@ -111,9 +108,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onImageEnhanced: (cb) => ipcRenderer.on('image-enhanced', (_, data) => cb(data)),
   offImageEnhanced: () => ipcRenderer.removeAllListeners('image-enhanced'),
   onAppHidden: (cb) => ipcRenderer.on('app-hidden', (_, data) => cb(data)),
-  
+
   // Video Clipping API
   clipVideo: (data) => ipcRenderer.invoke('clipVideo', data),
   onClipProgress: (cb) => ipcRenderer.on('clip-progress', (_, data) => cb(data)),
-  offClipProgress: () => ipcRenderer.removeAllListeners('clip-progress')
+  offClipProgress: () => ipcRenderer.removeAllListeners('clip-progress'),
+
+  // Library sync / backup
+  exportBackup: () => ipcRenderer.invoke('library-export-backup'),
+  importBackup: () => ipcRenderer.invoke('library-import-backup'),
+
+  openExternalURL: (url) => shell.openExternal(url)
 });

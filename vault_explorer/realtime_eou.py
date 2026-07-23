@@ -2,7 +2,7 @@
 realtime_eou.py — lightweight wrapper around ``nvidia/parakeet_realtime_eou_120m-v1``.
 
 This is the *streaming* transcription model: 120M params (vs. 600M for
-parakeet-tdt-v3), English-only, ~7-12x real-time, and — crucially — it emits an
+parakeet-tdt-v3), English-only, ~1-300 RTX, and — crucially — it emits an
 ``<EOU>`` (end-of-utterance) token when a spoken phrase completes. That single
 signal replaces everything the offline path needed timestamps + silence-gap
 grouping (or Silero VAD) for: we segment subtitles on ``<EOU>`` and take the

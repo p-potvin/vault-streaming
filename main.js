@@ -131,6 +131,7 @@ function killAllOwnProcesses(includeSelf = true) {
 function performFullAppCleanup() {
     console.log('[main:cleanup] Full app cleanup requested');
     try { liveSubtitlesHandlers.shutdownLiveSubtitles(); } catch (e) { /* noop */ }
+    try { watchHistoryHandlers.flushNow(); } catch (e) { /* noop */ }
     // NOTE: the old killNodeProcesses() nuked EVERY node.exe on the machine —
     // removed. utils.killAllActiveSubprocesses() already kills our own tracked
     // subprocess trees.
@@ -216,7 +217,7 @@ function createWindow() {
     // YouTube Referer & Origin overrides to fix Error 152/153/4 (domain embedding restrictions)
     // Apply to ALL sessions to cover iframe requests
     const youtubeUrls = ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.googlevideo.com/*'];
-    
+
     session.defaultSession.webRequest.onBeforeSendHeaders(
         { urls: youtubeUrls },
         (details, callback) => {
@@ -272,35 +273,35 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-	try {
-		// Clean up any orphaned vault-explorer processes from a previous bad exit
-		killAllOwnProcesses(false);
-		
-		// wait for Widevine CDM installation to finish
-		// this is from the castlabs branch of electron
-		await components.whenReady();
-		
-		createSplash();
-		createWindow();
-		// Safety net: never let a missed 'ready-to-show' strand the app on the splash.
-		setTimeout(finishSplash, 8000);
-		app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+    try {
+        // Clean up any orphaned vault-explorer processes from a previous bad exit
+        killAllOwnProcesses(false);
 
-		// Remove leftover .tmp files from previous crashes/kills in the background.
-		// This runs after the window is created so startup is never blocked by I/O.
-		cleanupAllVaultTempFiles().catch(err => {
-			console.warn('[main:cleanup] Startup temp-file cleanup failed:', err.message);
-		});
-	} catch (err) {
-		console.error('[main:startup] App initialization failed:', err);
-		// Proceed to launch or gracefully show error UI if Widevine/process cleanup fails
-		createWindow();
-	}
+        // wait for Widevine CDM installation to finish
+        // this is from the castlabs branch of electron
+        await components.whenReady();
+
+        createSplash();
+        createWindow();
+        // Safety net: never let a missed 'ready-to-show' strand the app on the splash.
+        setTimeout(finishSplash, 8000);
+        app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+
+        // Remove leftover .tmp files from previous crashes/kills in the background.
+        // This runs after the window is created so startup is never blocked by I/O.
+        cleanupAllVaultTempFiles().catch(err => {
+            console.warn('[main:cleanup] Startup temp-file cleanup failed:', err.message);
+        });
+    } catch (err) {
+        console.error('[main:startup] App initialization failed:', err);
+        // Proceed to launch or gracefully show error UI if Widevine/process cleanup fails
+        createWindow();
+    }
 })
-.catch(err => {
-	console.error('[main:fatal] app.whenReady rejected:', err);
-});
-	
+    .catch(err => {
+        console.error('[main:fatal] app.whenReady rejected:', err);
+    });
+
 app.on('before-quit', () => {
     isQuitting = true;
     performFullAppCleanup();
@@ -321,158 +322,6 @@ ipcMain.handle('set-window-fullscreen', (_e, on) => {
 // Automatic clean exit subprocess killing hooks
 app.on('will-quit', performFullAppCleanup);
 process.on('exit', performFullAppCleanup);
-
-// Clip Handler for video clipping
-function registerClipHandler(ipcMain) {
-    ipcMain.handle('clipVideo', async (event, { inputPath, outputFormat, startTime, duration, quality }) => {
-        try {
-            console.log('[main:clip] Clipping video:', { inputPath, outputFormat, startTime, duration, quality });
-
-            const isRemoteUrl = /^https?:\/\//i.test(inputPath);
-            let safeInputPath;
-            let fileName;
-
-            if (isRemoteUrl) {
-                safeInputPath = inputPath;
-                try {
-                    const u = new URL(inputPath);
-                    const last = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || 'remote');
-                    fileName = path.basename(last, path.extname(last)).replace(/[\\/:*?"<>|]/g, '_') || 'remote';
-                } catch (_) {
-                    fileName = 'remote';
-                }
-                console.log('[main:clip] Remote input detected, passing URL directly to ffmpeg');
-            } else {
-                safeInputPath = decodeURIComponent(inputPath).replace(/^file:\/\/\//, '');
-                safeInputPath = path.normalize(safeInputPath);
-
-                if (!fs.existsSync(safeInputPath)) {
-                    return { success: false, error: `Input file not found: ${safeInputPath}` };
-                }
-
-                const stat = fs.statSync(safeInputPath);
-                console.log('[main:clip] Input file size:', (stat.size / (1024 * 1024)).toFixed(2), 'MB');
-                fileName = path.basename(safeInputPath, path.extname(safeInputPath));
-            }
-            const ext = outputFormat === 'gif' ? 'gif' : outputFormat;
-            const outputName = `${fileName}_clip_${Date.now()}.${ext}`;
-            
-            // Default output to user's Videos folder or Desktop
-            let outputDir;
-            try {
-                outputDir = app.getPath('videos');
-                if (!fs.existsSync(outputDir)) throw new Error('videos dir missing');
-            } catch (_) {
-                outputDir = app.getPath('desktop');
-            }
-            const outputPath = path.join(outputDir, outputName);
-            
-            // Build -vf filter chain — collect filters, join at end
-            const vfFilters = [];
-            
-            // Format-specific video filters
-            if (outputFormat === 'gif') {
-                vfFilters.push('fps=15', 'scale=trunc(iw/2)*2:trunc(ih/2)*2');
-            }
-            
-            // Quality/scale filters
-            if (quality !== 'original') {
-                const scaleMap = { '1080p': '1920:-2', '720p': '1280:-2', '480p': '854:-2' };
-                if (scaleMap[quality]) vfFilters.push(`scale=${scaleMap[quality]}`);
-            }
-            
-            // Build ffmpeg args — put -ss BEFORE -i for fast input seeking
-            const ffmpegArgs = [
-                '-ss', String(startTime),
-                '-i', safeInputPath,
-                '-t', String(duration)
-            ];
-            
-            // Output format specific codec options
-            if (outputFormat === 'webm') {
-                ffmpegArgs.push('-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '0');
-                ffmpegArgs.push('-c:a', 'libopus', '-b:a', '128k');
-            } else if (outputFormat === 'mp4') {
-                ffmpegArgs.push('-c:v', 'libx264', '-crf', '23', '-preset', 'fast');
-                ffmpegArgs.push('-c:a', 'aac', '-b:a', '192k');
-            } else if (outputFormat === 'gif') {
-                ffmpegArgs.push('-f', 'gif');
-            }
-            
-            // Apply combined -vf chain (single flag, avoids conflicts)
-            if (vfFilters.length > 0) {
-                ffmpegArgs.push('-vf', vfFilters.join(','));
-            }
-            
-            // Force overwrite + output
-            ffmpegArgs.push('-y', outputPath);
-            
-            // Resolve ffmpeg executable
-            const ffmpegPath = utils.getFFmpegPath();
-            console.log('[main:clip] Using ffmpeg at:', ffmpegPath);
-            console.log('[main:clip] ffmpeg args:', ffmpegArgs.join(' '));
-            
-            // Run ffmpeg (remote inputs must not set cwd to the URL path)
-            const ffmpegProc = execFile(ffmpegPath, ffmpegArgs, {
-                cwd: isRemoteUrl ? outputDir : path.dirname(safeInputPath),
-                windowsHide: true
-            });
-            
-            // Track progress — ffmpeg logs to stderr, not stdout
-            let stderrData = '';
-            
-            if (ffmpegProc.stdout) {
-                ffmpegProc.stdout.on('data', () => {});
-            }
-            
-            ffmpegProc.stderr.on('data', (data) => {
-                stderrData += data.toString();
-                // ffmpeg progress lines include time= in stderr
-                const timeMatch = stderrData.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
-                if (timeMatch && event.sender && !event.sender.isDestroyed()) {
-                    event.sender.send('clip-progress', { currentTime: timeMatch[1] });
-                }
-            });
-            
-            // Wait for completion
-            await new Promise((resolve, reject) => {
-                ffmpegProc.on('close', (code) => {
-                    if (code === 0) {
-                        console.log('[main:clip] Clipping completed successfully');
-                        resolve();
-                    } else {
-                        console.error('[main:clip] ffmpeg failed with code:', code);
-                        console.error('[main:clip] stderr (last 500 chars):', stderrData.slice(-500));
-                        reject(new Error(`ffmpeg exited with code ${code}: ${stderrData.slice(-200)}`));
-                    }
-                });
-                ffmpegProc.on('error', (err) => {
-                    console.error('[main:clip] ffmpeg spawn error:', err);
-                    reject(err);
-                });
-            });
-            
-            // Verify output exists
-            if (!fs.existsSync(outputPath)) {
-                return { success: false, error: 'Output file was not created' };
-            }
-            
-            const outputStat = fs.statSync(outputPath);
-            const outputSizeMB = outputStat.size / (1024 * 1024);
-            console.log('[main:clip] Output file size:', outputSizeMB.toFixed(2), 'MB');
-            
-            return {
-                success: true,
-                outputPath: outputPath,
-                outputSize: outputStat.size
-            };
-            
-        } catch (error) {
-            console.error('[main:clip] Error:', error);
-            return { success: false, error: error.message };
-        }
-    });
-}
 
 // Load / Save Settings
 const settingsPath = path.join(app.getPath('userData'), 'vault-settings.json');
@@ -505,12 +354,14 @@ const { registerSystemIpc } = require('./src/ipc/system.ipc');
 const { registerMediaIpc } = require('./src/ipc/media.ipc');
 const { registerSubtitlesIpc } = require('./src/ipc/subtitles.ipc');
 const { registerTranscodeIpc } = require('./src/ipc/transcode.ipc');
+const { registerClipIpc } = require('./src/ipc/clip.ipc');
 
 
 registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings);
 registerMediaIpc(ipcMain);
-registerSubtitlesIpc(ipcMain);
+registerSubtitlesIpc(ipcMain, settingsPath, loadSettings);
 registerTranscodeIpc(ipcMain);
+registerClipIpc(ipcMain);
 
 // Register Modular Handlers
 tmdbHandlers.registerTmdbHandlers(ipcMain);
@@ -518,5 +369,3 @@ realDebridHandlers.registerRealDebridHandlers(ipcMain);
 watchHistoryHandlers.registerWatchHistoryHandlers(ipcMain, app);
 liveSubtitlesHandlers.registerLiveSubtitlesHandlers(ipcMain);
 
-// Register Clip Handler
-registerClipHandler(ipcMain);

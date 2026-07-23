@@ -1,21 +1,17 @@
 // src/ipc/subtitles.ipc.js — subtitle discovery for the player.
 //
-// Restores the 'find-subtitles' handler that was dropped during the
-// streaming-only trim while its preload binding and renderer callers stayed.
-// Without it, `ipcRenderer.invoke('find-subtitles', ...)` rejects with
-// "No handler registered for 'find-subtitles'", which surfaces as an unhandled
-// rejection during the player's track setup.
-//
 //   • Local files  → scans for sidecar .srt/.vtt subtitles beside the video.
 //   • Stream URLs  → returns [] gracefully (nothing local to find).
-//
-// OpenSubtitles remote lookup is intentionally NOT reimplemented here yet; the
-// `queryTitle` / `langs` args and settings.openSubtitlesKey are reserved for it.
+//   • OpenSubtitles remote → searches via v5 API when queryTitle + API key are available.
 
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 const SUB_EXTS = ['.srt', '.vtt'];
+
+const OS_API_BASE = 'api.opensubtitles.com';
+const OS_API_PATH = '/api/v1';
 
 // Map a trailing language token in a sidecar filename to a label/lang code.
 function parseLangToken(token) {
@@ -62,16 +58,139 @@ function findLocalSidecars(videoPath) {
     }
 }
 
-function registerSubtitlesIpc(ipcMain) {
+// ── OpenSubtitles v5 API helpers ───────────────────────────────────────
+
+function osRequest(endpoint, apiKey, method = 'GET', body = null) {
+    return new Promise((resolve, reject) => {
+        const headers = {
+            'Api-Key': apiKey,
+            'User-Agent': 'VaultStreaming v1.0',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        };
+        const opts = {
+            hostname: OS_API_BASE,
+            path: OS_API_PATH + endpoint,
+            method,
+            headers,
+        };
+        if (body) {
+            const payload = JSON.stringify(body);
+            headers['Content-Length'] = Buffer.byteLength(payload);
+            opts.body = payload;
+        }
+        const req = https.request(opts, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    resolve({ status: res.statusCode, data: JSON.parse(data) });
+                } catch (_) {
+                    resolve({ status: res.statusCode, data: null });
+                }
+            });
+        });
+        req.on('error', reject);
+        req.setTimeout(10000, () => { req.destroy(); reject(new Error('OpenSubtitles request timed out')); });
+        if (opts.body) req.write(opts.body);
+        req.end();
+    });
+}
+
+async function searchOpenSubtitles(apiKey, queryTitle, langs) {
+    if (!apiKey || !queryTitle) return [];
+    try {
+        const langParam = langs && Array.isArray(langs) && langs.length > 0 ? langs.join(',') : 'en';
+        const qs = new URLSearchParams({ query: queryTitle, languages: langParam });
+        const res = await osRequest(`/subtitles?${qs.toString()}`, apiKey);
+        if (res.status !== 200 || !res.data || !res.data.data) {
+            console.warn('[subtitles] OpenSubtitles search returned status', res.status);
+            return [];
+        }
+        return res.data.data.slice(0, 20).map(entry => {
+            const attrs = entry.attributes || {};
+            const file = (attrs.files && attrs.files[0]) || {};
+            return {
+                label: `${attrs.language || 'und'} — ${attrs.release || 'unknown'}`,
+                lang: attrs.language || 'und',
+                fileId: file.file_id || null,
+                isLocal: false,
+                isOpenSubtitles: true,
+                downloads: attrs.download_count || 0,
+                rating: attrs.ratings || 0,
+            };
+        }).filter(s => s.fileId);
+    } catch (e) {
+        console.error('[subtitles] OpenSubtitles search failed:', e.message);
+        return [];
+    }
+}
+
+async function downloadOpenSubtitles(apiKey, fileId) {
+    if (!apiKey || !fileId) return { success: false, error: 'Missing API key or file ID' };
+    try {
+        const res = await osRequest('/download', apiKey, 'POST', { file_id: fileId });
+        if (res.status !== 200 || !res.data || !res.data.link) {
+            return { success: false, error: `OpenSubtitles download failed (status ${res.status})` };
+        }
+        return { success: true, link: res.data.link, fileName: res.data.file_name || 'subtitle.srt' };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+}
+
+function registerSubtitlesIpc(ipcMain, _settingsPath, loadSettings) {
     // Signature mirrors the preload binding:
     //   (videoPath, queryTitle, skipOpenSubtitles, langs)
-    ipcMain.handle('find-subtitles', async (_event, videoPath, _queryTitle, _skipOpenSubtitles, _langs) => {
-        // Always resolve to an array — never throw — so the player's track setup
-        // can't be broken by a rejected invoke.
-        return findLocalSidecars(videoPath);
+    ipcMain.handle('find-subtitles', async (event, videoPath, queryTitle, skipOpenSubtitles, langs) => {
+        const local = findLocalSidecars(videoPath);
+
+        // Remote OpenSubtitles lookup — only if not skipped and we have a query title
+        if (!skipOpenSubtitles && queryTitle) {
+            const settings = (typeof loadSettings === 'function') ? loadSettings() : {};
+            const apiKey = settings.openSubtitlesKey || process.env.OPENSUBTITLES_API_KEY;
+            if (apiKey) {
+                const remote = await searchOpenSubtitles(apiKey, queryTitle, langs);
+                return [...local, ...remote];
+            }
+        }
+
+        return local;
     });
 
-    console.log('[subtitles] IPC handler registered (find-subtitles).');
+    // Download a remote OpenSubtitles track by fileId
+    ipcMain.handle('download-subtitle-track', async (_event, { fileId, apiKey, outputDir, videoPath } = {}) => {
+        const settings = (typeof loadSettings === 'function') ? loadSettings() : {};
+        const key = apiKey || settings.openSubtitlesKey || process.env.OPENSUBTITLES_API_KEY;
+        if (!key) return { success: false, error: 'No OpenSubtitles API key configured' };
+
+        const result = await downloadOpenSubtitles(key, fileId);
+        if (!result.success) return result;
+
+        // Download the actual subtitle file
+        try {
+            const downloadUrl = result.link;
+            const dir = outputDir || (videoPath ? path.dirname(videoPath) : process.cwd());
+            const fileName = result.fileName || `subtitle_${fileId}.srt`;
+            const outPath = path.join(dir, fileName);
+
+            await new Promise((resolve, reject) => {
+                https.get(downloadUrl, (res) => {
+                    if (res.statusCode !== 200) { reject(new Error(`Download failed: HTTP ${res.statusCode}`)); return; }
+                    const ws = fs.createWriteStream(outPath);
+                    res.pipe(ws);
+                    ws.on('finish', () => { ws.close(); resolve(); });
+                    ws.on('error', reject);
+                }).on('error', reject);
+            });
+
+            return { success: true, path: outPath };
+        } catch (e) {
+            return { success: false, error: `Failed to save subtitle: ${e.message}` };
+        }
+    });
+
+    console.log('[subtitles] IPC handler registered (find-subtitles, download-subtitle-track).');
 }
 
 module.exports = { registerSubtitlesIpc };

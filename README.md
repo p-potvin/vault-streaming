@@ -15,6 +15,7 @@ Vault Streaming is a lightweight, high-performance desktop application for disco
 This application is built with **Electron** and utilizes local FFmpeg and Python scripts for backend processing and AI workloads.
 
 ### Tech Stack
+
 - **Frontend**: Vanilla HTML/CSS/JS (No frameworks, pure performance).
 - **Backend**: Electron (Node.js) IPC handling.
 - **AI Daemon**: Python-based daemon managing NVIDIA NeMo (Parakeet-TDT) models for real-time transcription.
@@ -24,6 +25,7 @@ This application is built with **Electron** and utilizes local FFmpeg and Python
 
 1. Ensure you have Node.js and npm installed.
 2. Clone the repository and run:
+
 ```bash
 npm install
 npm start
@@ -38,14 +40,14 @@ When you start a stream, a Python daemon is spawned that processes audio via FFm
 
 ## 📋 FFmpeg Requirements
 
-Vault Streaming uses FFmpeg for audio extraction and video manipulation. 
+Vault Streaming uses FFmpeg for audio extraction and video manipulation.
 
 **Recommended Version**: FFmpeg 6.0 or later
-**Minimum Version**: FFmpeg 4.4 
+**Minimum Version**: FFmpeg 4.4
 
 ### Installation (Windows)
 
-1. Download from: https://ffmpeg.org/download.html
+1. Download from: <https://ffmpeg.org/download.html>
 2. Choose: **Windows builds from gyan.dev**
 3. Extract to `C:\ffmpeg` and add `C:\ffmpeg\bin` to your system PATH.
 
@@ -59,6 +61,7 @@ Vault Streaming uses FFmpeg for audio extraction and video manipulation.
 ## Theming & UI Architecture
 
 The UI is built on a custom design system with two primary canonical shells:
+
 - **Console Mode**: Deep purple/black aesthetic (`#0b0813` background).
 - **Warm Mode**: Light, approachable aesthetic (`#F5F1E8` background).
 

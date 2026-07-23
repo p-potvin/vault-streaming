@@ -6,6 +6,12 @@ const fs = require('fs');
 let _app = null;
 let _historyPath = null;
 
+// In-memory cache to avoid reading/writing the JSON file on every progress tick.
+let _cache = null;
+let _dirty = false;
+let _flushTimer = null;
+const FLUSH_DELAY_MS = 15000; // flush at most once per 15s
+
 function getHistoryPath() {
     if (!_historyPath) {
         _historyPath = path.join(_app.getPath('userData'), 'vault-watch-history.json');
@@ -14,23 +20,38 @@ function getHistoryPath() {
 }
 
 function loadHistory() {
+    if (_cache) return _cache;
     try {
         const p = getHistoryPath();
-        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (fs.existsSync(p)) _cache = JSON.parse(fs.readFileSync(p, 'utf8'));
     } catch (e) {
         console.error('[watch-history] Failed to load:', e.message);
     }
-    return { items: {} };
+    _cache = _cache || { items: {} };
+    return _cache;
+}
+
+function scheduleFlush() {
+    _dirty = true;
+    if (_flushTimer) return;
+    _flushTimer = setTimeout(flushNow, FLUSH_DELAY_MS);
+}
+
+function flushNow() {
+    if (_flushTimer) { clearTimeout(_flushTimer); _flushTimer = null; }
+    if (!_dirty || !_cache) return;
+    _dirty = false;
+    try {
+        fs.writeFileSync(getHistoryPath(), JSON.stringify(_cache, null, 2), 'utf8');
+    } catch (e) {
+        console.error('[watch-history] Failed to flush:', e.message);
+    }
 }
 
 function saveHistory(history) {
-    try {
-        fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2), 'utf8');
-        return true;
-    } catch (e) {
-        console.error('[watch-history] Failed to save:', e.message);
-        return false;
-    }
+    _cache = history;
+    scheduleFlush();
+    return true;
 }
 
 /**
@@ -83,8 +104,8 @@ function registerWatchHistoryHandlers(ipcMain, app) {
     ipcMain.handle('watch-history:get-progress', (_e, { mediaType, tmdbId, title, season, episode }) => {
         const history = loadHistory();
         if (mediaType === 'tv' && (season == null || episode == null)) {
-            const tvItems = Object.values(history.items).filter(item => 
-                item.mediaType === 'tv' && 
+            const tvItems = Object.values(history.items).filter(item =>
+                item.mediaType === 'tv' &&
                 ((tmdbId != null && item.tmdbId === tmdbId) || (title != null && item.title === title))
             );
             if (tvItems.length > 0) {
@@ -157,4 +178,4 @@ function registerWatchHistoryHandlers(ipcMain, app) {
     console.log('[watch-history] IPC handlers registered. Storage:', getHistoryPath());
 }
 
-module.exports = { registerWatchHistoryHandlers, loadHistory, makeKey };
+module.exports = { registerWatchHistoryHandlers, loadHistory, makeKey, flushNow };
