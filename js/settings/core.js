@@ -36,6 +36,7 @@ function initSettingsListeners() {
             el('settings-remember-position').checked = window.appSettings.rememberPosition !== false;
             el('settings-mute-previews').checked = window.appSettings.mutePreviews === true;
             if (el('settings-mute-trailers')) el('settings-mute-trailers').checked = window.appSettings.muteTrailers === true;
+            if (el('settings-auto-cache-trailers')) el('settings-auto-cache-trailers').checked = window.appSettings.autoCacheTrailers === true;
             el('settings-minimize-to-tray').checked = window.appSettings.minimizeToTray === true;
             if (el('settings-dev-mode')) el('settings-dev-mode').checked = window.appSettings.devMode === true;
             if (el('settings-subs-include-es')) el('settings-subs-include-es').checked = window.appSettings.subsIncludeSpanish === true;
@@ -165,6 +166,7 @@ function initSettingsListeners() {
         if (el('settings-vsr-chroma')) window.appSettings.vsrChroma = el('settings-vsr-chroma').value;
         window.appSettings.debridProxyEnable = el('debrid-proxy-enable').checked;
         window.appSettings.debridProxyAddress = el('debrid-proxy-address-input').value.trim();
+        if (el('settings-auto-cache-trailers')) window.appSettings.autoCacheTrailers = el('settings-auto-cache-trailers').checked;
         await window.electronAPI.saveSettings(window.appSettings);
         showToast(window.currentLang === 'fr' ? 'Paramètres enregistrés' : 'Settings saved', 'success');
         el('settings-panel').style.display = 'none';

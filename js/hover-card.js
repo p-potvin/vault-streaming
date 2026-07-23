@@ -407,6 +407,19 @@ async function loadHoverTrailer(popup, movie, title, year) {
     // trailers reliable; the iframe is only a last resort.
     window._directTrailerUrlCache = window._directTrailerUrlCache || {};
     let directUrl = trailerKey ? window._directTrailerUrlCache[trailerKey] : '';
+
+    // Prefer a durable cached copy (hosted via pixeldrain/etc.) over the ephemeral
+    // yt-dlp URL — no external call, pure lookup. See src/ipc/trailer-cache.ipc.js.
+    if (!directUrl && trailerKey && window.electronAPI && window.electronAPI.getCachedTrailer) {
+        try {
+            const cached = await window.electronAPI.getCachedTrailer(trailerKey);
+            if (cached && cached.primary_url) {
+                directUrl = cached.primary_url;
+                window._directTrailerUrlCache[trailerKey] = directUrl;
+            }
+        } catch (_) { }
+    }
+
     if (!directUrl && trailerKey && window.electronAPI && window.electronAPI.extractYouTubeURL) {
         try {
             const result = await window.electronAPI.extractYouTubeURL(trailerKey);
@@ -416,6 +429,15 @@ async function loadHoverTrailer(popup, movie, title, year) {
             }
         } catch (e) {
             console.warn('[HoverCard] yt-dlp extraction failed, will fall back to iframe:', e.message);
+        }
+
+        // Cache miss → warm a durable copy for next time (yt-dlp download + upload,
+        // deduped in main). OPT-IN only: fires solely when autoCacheTrailers is on
+        // and the proxy tunnel is configured, so no host traffic happens unprompted.
+        if (trailerKey && window.electronAPI.cacheTrailer && window.appSettings
+            && window.appSettings.autoCacheTrailers && window.appSettings.debridProxyEnable) {
+            const proxy = window.appSettings.debridProxyAddress || '';
+            window.electronAPI.cacheTrailer({ youtubeId: trailerKey, title: movie.title || movie.name || '', proxy }).catch(() => { });
         }
     }
 

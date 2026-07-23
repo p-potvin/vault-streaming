@@ -224,4 +224,66 @@ function downloadFileWithProxy(downloadUrl, destPath, proxyStr, onProgress) {
     });
 }
 
-module.exports = { parseProxyString, makeProxiedRequest, downloadFileWithProxy };
+// Proxied binary upload over a CONNECT tunnel. Unlike makeProxiedRequest (which
+// coerces the body to a string and would corrupt binary payloads), this writes
+// the raw Buffer untouched — required for uploading media to pixeldrain/gofile/etc.
+// Falls back to a direct request when no proxy is configured.
+function uploadBufferWithProxy(url, buffer, { method = 'PUT', headers = {} } = {}, proxyStr) {
+    return new Promise((resolve, reject) => {
+        let urlObj;
+        try { urlObj = new URL(url); } catch (e) { return reject(e); }
+
+        const reqHeaders = { 'Content-Length': buffer.length, ...headers };
+
+        const doRequest = (socket) => {
+            const opts = {
+                hostname: urlObj.hostname,
+                port: urlObj.port || 443,
+                path: urlObj.pathname + urlObj.search,
+                method,
+                headers: reqHeaders,
+            };
+            if (socket) opts.createConnection = () => socket;
+
+            const clientReq = https.request(opts, (res) => {
+                const chunks = [];
+                res.on('data', (c) => chunks.push(c));
+                res.on('end', () => {
+                    const body = Buffer.concat(chunks).toString('utf8');
+                    resolve({
+                        ok: res.statusCode >= 200 && res.statusCode < 300,
+                        status: res.statusCode,
+                        text: async () => body,
+                        json: async () => JSON.parse(body),
+                    });
+                });
+            });
+            clientReq.on('error', reject);
+            clientReq.write(buffer);
+            clientReq.end();
+        };
+
+        if (!proxyStr) { doRequest(null); return; }
+
+        const proxyConfig = parseProxyString(proxyStr);
+        if (!proxyConfig) return reject(new Error('Invalid proxy address format'));
+        const connectHeaders = {};
+        if (proxyConfig.authHeader) connectHeaders['Proxy-Authorization'] = proxyConfig.authHeader;
+
+        const req = http.request({
+            host: proxyConfig.host,
+            port: proxyConfig.port,
+            method: 'CONNECT',
+            path: `${urlObj.hostname}:${urlObj.port || 443}`,
+            headers: connectHeaders,
+        });
+        req.on('connect', (res, socket) => {
+            if (res.statusCode !== 200) return reject(new Error(`Proxy CONNECT failed with status: ${res.statusCode}`));
+            doRequest(socket);
+        });
+        req.on('error', (err) => reject(new Error(`Proxy connection error: ${err.message}`)));
+        req.end();
+    });
+}
+
+module.exports = { parseProxyString, makeProxiedRequest, downloadFileWithProxy, uploadBufferWithProxy };

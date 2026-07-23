@@ -107,6 +107,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offImageEnhanced: () => ipcRenderer.removeAllListeners('image-enhanced'),
   onAppHidden: (cb) => ipcRenderer.on('app-hidden', (_, data) => cb(data)),
 
+  // Trailer cache (durable per-instance hosted copies of YouTube trailers)
+  getCachedTrailer: (youtubeId) => ipcRenderer.invoke('trailer-cache:get', youtubeId),
+  cacheTrailer: (data) => ipcRenderer.invoke('trailer-cache:put', data),
+
   // Video Clipping API
   clipVideo: (data) => ipcRenderer.invoke('clipVideo', data),
   cancelClip: () => ipcRenderer.invoke('clip-cancel'),

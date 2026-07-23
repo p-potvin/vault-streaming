@@ -355,6 +355,7 @@ const { registerMediaIpc } = require('./src/ipc/media.ipc');
 const { registerSubtitlesIpc } = require('./src/ipc/subtitles.ipc');
 const { registerTranscodeIpc } = require('./src/ipc/transcode.ipc');
 const { registerClipIpc } = require('./src/ipc/clip.ipc');
+const { registerTrailerCacheIpc } = require('./src/ipc/trailer-cache.ipc');
 
 
 registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings);
@@ -362,6 +363,7 @@ registerMediaIpc(ipcMain);
 registerSubtitlesIpc(ipcMain, settingsPath, loadSettings);
 registerTranscodeIpc(ipcMain);
 registerClipIpc(ipcMain);
+registerTrailerCacheIpc(ipcMain);
 
 // Register Modular Handlers
 tmdbHandlers.registerTmdbHandlers(ipcMain);
