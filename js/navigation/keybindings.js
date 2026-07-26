@@ -5,18 +5,7 @@
 window.initKeybindingsAndFolderListeners = function () {
     console.log('[navigation] Initializing hotkeys and folder dialog setup listeners...');
 
-    // Language switcher trigger click listener
-    const langTrigger = el('lang-trigger');
-    if (langTrigger) {
-        langTrigger.addEventListener('click', () => {
-            const nextLang = window.currentLang === 'en' ? 'fr' : 'en';
-            window.setLanguage(nextLang);
-            if (window.appSettings) {
-                window.appSettings.lang = nextLang;
-                window.electronAPI.saveSettings(window.appSettings);
-            }
-        });
-    }
+    // Language is now chosen in Settings → "App Language"; the top-bar toggle was removed.
 
     // Refresh directory hotkey (F5)
     document.addEventListener('keydown', async (e) => {

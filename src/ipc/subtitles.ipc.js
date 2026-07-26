@@ -100,8 +100,18 @@ function osRequest(endpoint, apiKey, method = 'GET', body = null) {
 async function searchOpenSubtitles(apiKey, queryTitle, langs) {
     if (!apiKey || !queryTitle) return [];
     try {
-        const langParam = langs && Array.isArray(langs) && langs.length > 0 ? langs.join(',') : 'en';
+        // OpenSubtitles wants ISO-639-1 codes ('fr', not 'fr-CA'); only a few
+        // regional variants are valid. Normalize so a 'fr-CA' pick still matches.
+        const OS_REGIONAL = new Set(['pt-br', 'pt-pt', 'zh-cn', 'zh-tw']);
+        const normLangs = (Array.isArray(langs) && langs.length > 0)
+            ? langs.map(l => { const x = String(l).toLowerCase(); return OS_REGIONAL.has(x) ? x : x.split('-')[0]; })
+            : ['en'];
+        const langParam = [...new Set(normLangs)].join(',');
         const qs = new URLSearchParams({ query: queryTitle, languages: langParam });
+        // OpenSubtitles requires query params in ALPHABETICAL order and 301-redirects
+        // otherwise. Node's https doesn't follow the redirect, so the response was a
+        // 301 body -> parsed as no results -> "no subs found" every time. Sort fixes it.
+        qs.sort();
         const res = await osRequest(`/subtitles?${qs.toString()}`, apiKey);
         if (res.status !== 200 || !res.data || !res.data.data) {
             console.warn('[subtitles] OpenSubtitles search returned status', res.status);

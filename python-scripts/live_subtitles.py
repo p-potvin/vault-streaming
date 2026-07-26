@@ -126,6 +126,12 @@ def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost):
         cmd += ["-ss", f"{start:.3f}"]
     cmd += [
         "-i", video_path,
+        # Force the FIRST audio track. Without -map, ffmpeg auto-selects the
+        # stream with the most channels, which on a multi-audio release is often a
+        # 5.1 foreign dub — so the model transcribed Czech/Polish while the <video>
+        # element (which plays the first/default track) played English. 0:a:0
+        # matches what the browser plays, keeping ASR and playback on the same audio.
+        "-map", "0:a:0",
         "-vn",
         "-af", af,
         "-f", "s16le", "-ac", "1", "-ar", str(sample_rate),

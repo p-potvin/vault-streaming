@@ -1021,6 +1021,17 @@ function initPlayer() {
         });
     }
 
+    // Shared quality-label classifier (used by the picker and by the RD flow to
+    // record what's currently playing).
+    window.qualityLabelOf = function (t) {
+        const text = `${t.quality || ''} ${t.type || ''} ${t.desc || ''}`.toLowerCase();
+        if (/\b(2160p?|4k|uhd)\b/.test(text)) return '2160p';
+        if (/\b1080p?\b/.test(text)) return '1080p';
+        if (/\b720p?\b/.test(text)) return '720p';
+        if (/\b480p?\b/.test(text)) return '480p';
+        return (t.quality || 'HD').toUpperCase();
+    };
+
     window.refreshQualityMenu = function () {
         const menu = el('quality-menu');
         const container = el('quality-dropdown-container');
@@ -1033,23 +1044,17 @@ function initPlayer() {
         // representative per group (currentTorrentList is already ranked).
         const buckets = new Map();
         const rankOrder = { '2160p': 4, '4k': 4, 'uhd': 4, '1080p': 3, '720p': 2, '480p': 1 };
-        const labelOf = (t) => {
-            const text = `${t.quality || ''} ${t.type || ''} ${t.desc || ''}`.toLowerCase();
-            if (/\b(2160p?|4k|uhd)\b/.test(text)) return '2160p';
-            if (/\b1080p?\b/.test(text)) return '1080p';
-            if (/\b720p?\b/.test(text)) return '720p';
-            if (/\b480p?\b/.test(text)) return '480p';
-            return (t.quality || 'HD').toUpperCase();
-        };
+        const labelOf = window.qualityLabelOf;
         list.forEach((t, idx) => {
             const lbl = labelOf(t);
             if (!buckets.has(lbl)) buckets.set(lbl, { label: lbl, torrent: t, idx });
         });
         const ordered = [...buckets.values()].sort((a, b) => (rankOrder[b.label] || 0) - (rankOrder[a.label] || 0));
 
-        const currentLabel = (window.activeStreamingMedia && window.activeStreamingMedia.quality)
-            ? labelOf({ quality: window.activeStreamingMedia.quality, type: '', desc: '' })
-            : null;
+        // The currently-playing quality is recorded by the RD flow when a torrent
+        // is committed (window._activeStreamLabel) — activeStreamingMedia has no
+        // quality field, so the old lookup never matched and nothing was marked active.
+        const currentLabel = window._activeStreamLabel || null;
 
         const txt = el('quality-btn-text');
         if (txt) txt.innerText = currentLabel ? currentLabel.toUpperCase() : 'AUTO';
@@ -1058,11 +1063,13 @@ function initPlayer() {
         ordered.forEach(entry => {
             const opt = document.createElement('div');
             const isActive = currentLabel === entry.label;
-            opt.style.cssText = `padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-mono); font-size:11px; transition:background 0.2s; color:${isActive ? 'var(--vault-accent)' : 'var(--vault-text)'}; font-weight:${isActive ? '700' : '500'};`;
+            const activeBg = 'rgba(245,185,41,0.18)';
+            opt.style.cssText = `padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-mono); font-size:11px; transition:background 0.2s; color:${isActive ? 'var(--vault-accent)' : 'var(--vault-text)'}; font-weight:${isActive ? '700' : '500'}; background:${isActive ? activeBg : 'transparent'}; border-left:3px solid ${isActive ? 'var(--vault-accent)' : 'transparent'};`;
+            const nowPlaying = isActive ? ` <span style="color:var(--vault-accent); font-weight:700; font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">● now playing</span>` : '';
             const sizeStr = entry.torrent.size ? ` <span style="color:var(--vault-slate); font-weight:400; font-size:10px;">${entry.torrent.size}</span>` : '';
-            opt.innerHTML = `${entry.label.toUpperCase()}${sizeStr}`;
+            opt.innerHTML = `${entry.label.toUpperCase()}${sizeStr}${nowPlaying}`;
             opt.addEventListener('mouseenter', () => { opt.style.background = 'rgba(245,185,41,0.08)'; });
-            opt.addEventListener('mouseleave', () => { opt.style.background = 'transparent'; });
+            opt.addEventListener('mouseleave', () => { opt.style.background = isActive ? activeBg : 'transparent'; });
             opt.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 menu.style.display = 'none';

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v1.7.4 -->
+<!-- v1.7.5 -->
 <html lang="en">
 
 <head>
@@ -67,15 +67,15 @@
     <span class="title-led" style="display:none; margin-left:20px;"></span>
     <span id="titlebar-video-title" class="titlebar-video-title"></span>
     <div id="titlebar-menus" class="titlebar-menus">
-      <button id="lang-trigger" class="theme-trigger" aria-label="Switch Language">
-        <span data-icon="globe" data-icon-style="width:13px;height:13px;vertical-align:middle;margin-right:3px;"></span>
-        <span id="lang-text">EN</span>
-      </button>
       <div class="titlebar-menu-wrapper">
-        <button id="settings-trigger" class="theme-trigger" aria-label="Open Settings">
-          <span data-icon="settings"
-            data-icon-style="width:13px;height:13px;vertical-align:middle;margin-right:3px;"></span>
-          <span id="settings-btn-text">Settings</span>
+        <button id="settings-trigger" aria-label="Open Settings" title="Settings"
+          style="background:none; border:none; padding:4px; cursor:pointer; -webkit-app-region:no-drag; display:flex; align-items:center; gap:5px; color:var(--vault-text);">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--vault-gold)" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" style="display:block;">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <span id="settings-btn-text" style="font-size:13px;">Settings</span>
         </button>
       </div>
     </div>
@@ -291,7 +291,7 @@
       <div class="settings-col">
         <span class="settings-section-heading">General &amp; Subtitles</span>
         <div>
-          <label for="settings-default-lang" class="settings-label">Default Language:</label>
+          <label for="settings-default-lang" class="settings-label">App Language:</label>
           <select id="settings-default-lang" class="settings-select">
             <option value="en">English</option>
             <option value="fr">Québécois</option>

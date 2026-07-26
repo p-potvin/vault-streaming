@@ -30,11 +30,13 @@ function initSettingsListeners() {
         if (isOpening) {
             pillTagLoad(window.appSettings.globExclusions || []);
             if (el('settings-default-folder')) el('settings-default-folder').value = window.appSettings.defaultFolder || '';
-            el('settings-default-lang').value = window.appSettings.defaultLang || 'en';
+            el('settings-default-lang').value = window.appSettings.lang || window.appSettings.defaultLang || 'en';
             el('settings-default-sub-lang').value = window.appSettings.defaultSubLang || 'original';
             el('settings-sub-font-size').value = window.appSettings.subFontSize || '20px';
             el('settings-remember-position').checked = window.appSettings.rememberPosition !== false;
-            el('settings-mute-previews').checked = window.appSettings.mutePreviews === true;
+            // settings-mute-previews was removed from the UI; guard so opening the
+            // modal doesn't throw a TypeError (which broke the Settings button).
+            if (el('settings-mute-previews')) el('settings-mute-previews').checked = window.appSettings.mutePreviews === true;
             if (el('settings-mute-trailers')) el('settings-mute-trailers').checked = window.appSettings.muteTrailers === true;
             if (el('settings-auto-cache-trailers')) el('settings-auto-cache-trailers').checked = window.appSettings.autoCacheTrailers === true;
             el('settings-minimize-to-tray').checked = window.appSettings.minimizeToTray === true;
@@ -127,7 +129,12 @@ function initSettingsListeners() {
             
         window.appSettings.globExclusions = newGlobExclusions;
         window.appSettings.defaultFolder = newDefaultFolder;
-        window.appSettings.defaultLang = el('settings-default-lang').value;
+        // App Language now lives in Settings (top-bar toggle removed). Persist it
+        // as both the startup default and the active language, and apply it live.
+        const chosenLang = el('settings-default-lang').value;
+        window.appSettings.defaultLang = chosenLang;
+        window.appSettings.lang = chosenLang;
+        if (typeof window.setLanguage === 'function') window.setLanguage(chosenLang);
         window.appSettings.defaultSubLang = el('settings-default-sub-lang').value;
         
         const subSize = el('settings-sub-font-size').value;
@@ -135,7 +142,7 @@ function initSettingsListeners() {
         document.documentElement.style.setProperty('--sub-font-size', subSize);
         
         window.appSettings.rememberPosition = el('settings-remember-position').checked;
-        window.appSettings.mutePreviews = el('settings-mute-previews').checked;
+        if (el('settings-mute-previews')) window.appSettings.mutePreviews = el('settings-mute-previews').checked;
         if (el('settings-mute-trailers')) window.appSettings.muteTrailers = el('settings-mute-trailers').checked;
         window.appSettings.minimizeToTray = el('settings-minimize-to-tray').checked;
         if (el('settings-dev-mode')) window.appSettings.devMode = el('settings-dev-mode').checked;

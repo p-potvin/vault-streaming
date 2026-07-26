@@ -4,6 +4,10 @@
 
 > Note: user swapped to the **castlabs Electron build + Widevine** (main.js imports `components`) — AC3/E-AC3 audio + HEVC now decode natively; DTS/TrueHD still need transcode-remux to AAC.
 
+### Roadmap — deferred
+
+- [ ] **Playback volume boost (>100%, up to 150%) on the player volume control** (deferred Sat, 25 Jul 2026 per user). The slider in the subtitles/ASR modal is *ASR input gain* (`asrVolumeBoost` → live_subtitles.py ffmpeg volume filter feeding the recognizer), NOT playback — leave it there. For real playback boost: it's **not** an ffmpeg flag or stream restart. `<video>.volume` caps at 1.0; exceed it with the **Web Audio API** — `AudioContext` + `MediaElementAudioSourceNode(video)` + `GainNode` (gain 1.0–1.5), created lazily on first >100%. Add a color gradient on the volume bar past the 100% mark. **CAVEAT:** MediaElementSource requires CORS-clean media (`crossOrigin="anonymous"` + host CORS headers) or the browser silences the audio — set `crossOrigin` at stream-load and fall back to ≤100% if the source taints; verify pixeldrain/Comet stream audio survives before shipping.
+
 ### P0 — bugs / regressions (do first)
 
 - [ ] **AllDebrid/TorBox appear inactive** — no loading animation while picking a torrent, seems to default to RD. Investigate whether the multi-debrid Comet config is actually being used (needs app restart to reload `.env`?), whether the size-probe misfires on TB/AD stream URLs (flagging them placeholder → skipping to RD), and stream-object parsing for non-RD providers.

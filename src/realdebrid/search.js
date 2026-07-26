@@ -4,34 +4,52 @@ const { fetchWithTimeout, checkRealDebridCache, TMDB_BEARER_TOKEN, COMET_STREAM_
 async function fetchCometStreams(streamType, idParam, cleanTitle) {
     if (!COMET_STREAM_BASE) return null;
     const url = `${COMET_STREAM_BASE}/stream/${streamType}/${idParam}.json`;
-    try {
-        console.log(`[Comet] Fetching: ${url.replace(/\/eyJ[^/]+/, '/<config>')}`);
-        const res = await fetchWithTimeout(url, {}, 8000);
-        if (!res.ok) {
-            console.warn(`[Comet] HTTP ${res.status}`);
-            return null;
-        }
-        const data = await res.json();
-        if (!data || !Array.isArray(data.streams) || data.streams.length === 0) {
-            console.log(`[Comet] No streams returned`);
-            return null;
-        }
-        console.log(`[Comet] Found ${data.streams.length} streams`);
-        // Provider breakdown — makes it obvious in the console whether TorBox /
-        // AllDebrid are actually returning results (vs everything falling to RD).
+
+    // Comet fans out to indexers + AllDebrid/TorBox/RD on a rotating IP; a cold,
+    // uncached query routinely takes 15-40s (hence the 45s per-attempt timeout).
+    // It also frequently returns an EMPTY list on the first hit for a title while
+    // it's still scraping server-side, then populates seconds later. So retry on
+    // empty — otherwise a popular movie is wrongly reported "no sources" and, since
+    // nothing was cached, stayed that way until an app restart.
+    const MAX_ATTEMPTS = 3;
+    let streams = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
-            const counts = { TorBox: 0, AllDebrid: 0, RealDebrid: 0, other: 0, cached: 0 };
-            for (const s of data.streams) {
-                const n = s.name || '';
-                if (/\bTB\b|torbox/i.test(n)) counts.TorBox++;
-                else if (/\bAD\b|alldebrid/i.test(n)) counts.AllDebrid++;
-                else if (/RD\+?|real-?debrid/i.test(n)) counts.RealDebrid++;
-                else counts.other++;
-                if (s.url) counts.cached++;
+            console.log(`[Comet] Fetching (attempt ${attempt}/${MAX_ATTEMPTS}): ${url.replace(/\/eyJ[^/]+/, '/<config>')}`);
+            const res = await fetchWithTimeout(url, {}, 45000);
+            if (!res.ok) {
+                console.warn(`[Comet] HTTP ${res.status}`);
+            } else {
+                const data = await res.json();
+                if (data && Array.isArray(data.streams) && data.streams.length > 0) {
+                    streams = data.streams;
+                    console.log(`[Comet] Found ${streams.length} streams`);
+                    break;
+                }
+                console.log(`[Comet] No streams returned${attempt < MAX_ATTEMPTS ? ' — retrying (Comet may still be scraping)…' : ''}`);
             }
-            console.log('[Comet] provider breakdown:', counts);
-        } catch (_) { /* diagnostics only */ }
-        return data.streams.map(s => {
+        } catch (err) {
+            console.warn(`[Comet] Fetch failed: ${err.message}`);
+        }
+        if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 3000));
+    }
+    if (!streams) return null;
+
+    // Provider breakdown — makes it obvious in the console whether TorBox /
+    // AllDebrid are actually returning results (vs everything falling to RD).
+    try {
+        const counts = { TorBox: 0, AllDebrid: 0, RealDebrid: 0, other: 0, cached: 0 };
+        for (const s of streams) {
+            const n = s.name || '';
+            if (/\bTB\b|torbox/i.test(n)) counts.TorBox++;
+            else if (/\bAD\b|alldebrid/i.test(n)) counts.AllDebrid++;
+            else if (/RD\+?|real-?debrid/i.test(n)) counts.RealDebrid++;
+            else counts.other++;
+            if (s.url) counts.cached++;
+        }
+        console.log('[Comet] provider breakdown:', counts);
+    } catch (_) { /* diagnostics only */ }
+    return streams.map(s => {
             const nameStr = s.name || '';
             const descStr = s.description || s.title || '';
             const qualMatch = nameStr.match(/(4[Kk]|2160[Pp]|1080[Pp]|720[Pp]|480[Pp]|HDR10\+?|HDR|DV|DoVi)/i)
@@ -63,11 +81,7 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
                 url: s.url || null,
                 cached: hasRdUrl
             };
-        });
-    } catch (err) {
-        console.warn(`[Comet] Fetch failed: ${err.message}`);
-        return null;
-    }
+    });
 }
 
 function registerSearchHandlers(ipcMain) {

@@ -180,6 +180,9 @@ window.showPremiumHoverCard = function(card, movie) {
         <button class="btn-hover-playpause" title="Play / pause preview" style="position:absolute; bottom:8px; right:8px; z-index:12; width:30px; height:30px; border-radius:50%; border:none; background:rgba(0,0,0,0.6); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; backdrop-filter:blur(4px); transition:background 0.15s;">
           <svg class="pp-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
         </button>
+        <button class="btn-hover-mute" title="Mute / unmute preview" style="position:absolute; bottom:8px; right:44px; z-index:12; width:30px; height:30px; border-radius:50%; border:none; background:rgba(0,0,0,0.6); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; backdrop-filter:blur(4px); transition:background 0.15s;">
+          <svg class="mute-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="currentColor"></svg>
+        </button>
       </div>
       <div class="details-container" style="padding:14px; background:linear-gradient(180deg, rgba(20,18,30,0.95), rgba(11,8,19,0.99)); color:#fff; text-align:left; border-top:1px solid rgba(255,255,255,0.06); font-family: var(--font-sans);">
         <div class="title-row" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -335,6 +338,32 @@ window.showPremiumHoverCard = function(card, movie) {
             } else {
                 setPPIcon(true);
                 loadHoverTrailer(popup, movie, title, year);
+            }
+        });
+    }
+
+    // Mute/unmute toggle for the hover trailer preview, next to play/pause.
+    const btnMute = popup.querySelector('.btn-hover-mute');
+    const SPEAKER = '<path d="M3 9v6h4l5 5V4L7 9H3z"/>';
+    const setMuteIcon = (muted) => {
+        const ic = btnMute && btnMute.querySelector('.mute-icon');
+        if (!ic) return;
+        ic.innerHTML = muted
+            ? SPEAKER + '<line x1="16" y1="9" x2="22" y2="15" stroke-width="2"/><line x1="22" y1="9" x2="16" y2="15" stroke-width="2"/>'
+            : SPEAKER + '<path d="M16 8a5 5 0 0 1 0 8" fill="none" stroke-width="2"/>';
+        btnMute.title = muted ? 'Unmute preview' : 'Mute preview';
+    };
+    // Initial icon reflects the "Mute Trailers by Default" setting.
+    setMuteIcon(!!(window.appSettings && window.appSettings.muteTrailers));
+    if (btnMute) {
+        btnMute.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const v = popup.querySelector('.trailer-iframe-container video');
+            if (v) {
+                v.muted = !v.muted;
+                if (!v.muted && v.volume === 0) v.volume = 0.8;
+                setMuteIcon(v.muted);
             }
         });
     }

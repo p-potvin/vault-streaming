@@ -20,14 +20,18 @@ async function selectSubtitleTrack(trackIdx) {
     }
 
     // Toggle subtitle padding class on video wrapper
+    const subsOn = trackIdx >= 0 && !!vp.textTracks[trackIdx];
     const videoWrapper = document.querySelector('.video-wrapper');
     if (videoWrapper) {
-        if (trackIdx >= 0 && vp.textTracks[trackIdx]) {
+        if (subsOn) {
             videoWrapper.classList.add('subtitles-active');
         } else {
             videoWrapper.classList.remove('subtitles-active');
         }
     }
+    // The sync-delay row only makes sense when a subtitle track is active.
+    const syncRow = el('subtitle-sync-row');
+    if (syncRow) syncRow.style.display = subsOn ? '' : 'none';
 
     const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
     if (trackIdx >= 0 && vp.textTracks[trackIdx]) {
@@ -230,8 +234,11 @@ function showAsrContextMenu(anchorEl, defaultLangs) {
         menu.id = 'asr-generation-context-menu';
         menu.style.cssText = `
             position: fixed;
-            background: var(--vault-card-bg, rgba(25, 20, 35, 0.95));
-            border: 1px solid var(--vault-border, rgba(255,255,255,0.08));
+            /* Explicit dark console surface — this menu is appended to <body>,
+               outside the shell, so var(--vault-card-bg) resolves to the light
+               warm value and clashed with the dark player. */
+            background: rgba(19, 16, 28, 0.97);
+            border: 1px solid rgba(255,255,255,0.08);
             border-radius: 8px;
             padding: 12px;
             z-index: 10006;
@@ -249,6 +256,15 @@ function showAsrContextMenu(anchorEl, defaultLangs) {
         title.style.cssText = 'font-size:10px; font-weight:700; text-transform:uppercase; color:var(--vault-gold); letter-spacing:0.05em; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.08); user-select:none;';
         title.textContent = t.asrGenerateSubtitles || 'Generate Subtitles';
         menu.appendChild(title);
+
+        // Explicit one-time-download warning — the first generation pulls a large
+        // on-device speech model.
+        if (!(window.appSettings && window.appSettings.asrModelReady)) {
+            const warn = document.createElement('div');
+            warn.style.cssText = 'font-size:10px; color:#F0B94B; background:rgba(240,185,75,0.10); border:1px solid rgba(240,185,75,0.28); border-radius:4px; padding:6px 8px; line-height:1.4; user-select:none;';
+            warn.innerHTML = '⚠️ First run downloads a <strong>~2.5 GB</strong> speech-recognition model (one-time). It runs entirely on your device and may take a minute to start.';
+            menu.appendChild(warn);
+        }
 
         const listContainer = document.createElement('div');
         listContainer.style.cssText = 'display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; padding-right:2px;';
@@ -528,6 +544,10 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
     window._liveSubActive = true;
     window._selectedSubtitleIdx = -1; // our track isn't in the sidecar catalog
 
+    // A live track counts as active subtitles → reveal the sync-delay row.
+    const _liveSyncRow = el('subtitle-sync-row');
+    if (_liveSyncRow) _liveSyncRow.style.display = '';
+
     // The picked primary language is the desired output language: transcribe in
     // the spoken language (auto-detected) and translate finals to it. Same-lang
     // is a near-passthrough.
@@ -553,6 +573,11 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
         if (!res || !res.success) {
             window.showToast('Live subtitles failed to start: ' + ((res && res.error) || 'unknown'), 'error');
             window.stopLiveSubtitles(true);
+        } else if (window.appSettings && !window.appSettings.asrModelReady) {
+            // Session started successfully → model is present; suppress the
+            // one-time ~2.5 GB download warning on future runs.
+            window.appSettings.asrModelReady = true;
+            try { window.electronAPI.saveSettings(window.appSettings); } catch (_) { }
         }
     }).catch((err) => {
         window.showToast('Live subtitles failed to start: ' + err.message, 'error');
@@ -583,6 +608,9 @@ window.stopLiveSubtitles = function stopLiveSubtitles(clearTrack) {
         window._liveSubVideoPath = null;
         window._livePartialCue = null;
         window._lastLiveCue = null;
+        // No active subs anymore → hide the sync-delay row.
+        const _sr = el('subtitle-sync-row');
+        if (_sr) _sr.style.display = 'none';
     }
     updateLiveSubButton(false);
 };
@@ -725,11 +753,14 @@ function initSubtitleListeners() {
     if (offMinus) offMinus.addEventListener('click', (e) => { e.stopPropagation(); adjustSubtitleOffset(-0.25); });
     if (offPlus) offPlus.addEventListener('click', (e) => { e.stopPropagation(); adjustSubtitleOffset(0.25); });
 
-    // Collapsible "More subtitles…" section — keeps the menu compact.
+    // OpenSubtitles language search. Expanded by default so the preferred-language
+    // searches are instantly visible rather than buried behind the dropdown.
     const moreBtn = el('opt-more-subs');
     const morePanel = el('subtitles-more-panel');
     const moreCaret = el('more-subs-caret');
     if (moreBtn && morePanel) {
+        morePanel.style.display = 'block';
+        if (moreCaret) moreCaret.textContent = '▾';
         moreBtn.addEventListener('mouseenter', () => { moreBtn.style.background = 'rgba(245,185,41,0.08)'; });
         moreBtn.addEventListener('mouseleave', () => { moreBtn.style.background = 'transparent'; });
         moreBtn.addEventListener('click', (e) => {
@@ -739,6 +770,10 @@ function initSubtitleListeners() {
             if (moreCaret) moreCaret.textContent = open ? '▸' : '▾';
         });
     }
+
+    // The sync-delay row starts hidden — it's only relevant once a track is active.
+    const _initSyncRow = el('subtitle-sync-row');
+    if (_initSyncRow) _initSyncRow.style.display = 'none';
 
     // ── Quick-lang search buttons (English / French CA / French) ─────────
     // Searches OpenSubtitles with a narrow `languages` filter for the

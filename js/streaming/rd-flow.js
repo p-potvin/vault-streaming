@@ -35,6 +35,10 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     const backdrop = el('rd-stream-backdrop');
     if (backdrop) backdrop.style.display = 'block';
     loadingStatus.style.display = 'block';
+    // Re-show the spinner — prior runs hide it (display:none) on completion/error,
+    // and it was never reset, so subsequent searches showed a spinner-less dialog.
+    const _spin = loadingStatus.querySelector('.spinner');
+    if (_spin) _spin.style.display = 'block';
     torrentsList.style.display = 'none';
     torrentsList.innerHTML = '';
     const chooseManuallyBtn = el('btn-rd-choose-manually');
@@ -511,6 +515,11 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
     const loadingStatus = el('rd-loading-status');
     const statusText = el('rd-status-text');
     const torrentsList = el('rd-torrents-list');
+
+    // Record the committed quality so the quality picker can mark "now playing".
+    if (torrent && typeof window.qualityLabelOf === 'function') {
+        window._activeStreamLabel = window.qualityLabelOf(torrent);
+    }
 
     torrentsList.style.display = 'none';
     loadingStatus.style.display = 'block';
