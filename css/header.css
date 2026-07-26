@@ -20,7 +20,7 @@
 
 /* Vault Streaming: Advanced Filters and Layout Customizations */
 .tmdb-grid {
-  grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)) !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
 }
 
 .tmdb-movie-card .thumbnail-container {
@@ -248,16 +248,21 @@
 }
 
 .sub-nav-pill-active {
-  color: var(--vt-primary);
-  background: var(--vault-accent);
-  border: none;
+  color: var(--vault-accent);
+  background: rgba(176, 124, 255, 0.12);
+  border-bottom: 2px solid var(--vault-accent);
 }
 
 .sub-nav-pill-inactive {
-  color: var(--vault-text);
+  color: var(--vault-slate);
   background: transparent;
-  border: 1px solid var(--vault-border);
-  opacity: 0.8;
+  border-bottom: 2px solid transparent;
+  opacity: 1;
+}
+
+.sub-nav-pill-inactive:hover {
+  color: var(--vault-text);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 #subtab-streaming-library {
@@ -290,7 +295,11 @@
   gap: 6px;
   align-items: center;
   flex-wrap: nowrap;
-  overflow: hidden;
+  /* was overflow:hidden, which clipped the provider buttons' hover glow/lift.
+     Small vertical padding gives the effect room without letting the row
+     overflow its toolbar. */
+  overflow: visible;
+  padding: 4px 0;
 }
 
 .provider-btn {

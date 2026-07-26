@@ -543,6 +543,10 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
     window._liveSubVideoPath = videoPath;
     window._liveSubActive = true;
     window._selectedSubtitleIdx = -1; // our track isn't in the sidecar catalog
+    // Remembered so a seek can restart the ASR feed from the new position.
+    window._liveSubLangs = langs;
+    window._liveSubBoost = volumeBoost;
+    window._liveSubItemName = itemName;
 
     // A live track counts as active subtitles → reveal the sync-delay row.
     const _liveSyncRow = el('subtitle-sync-row');
@@ -620,6 +624,28 @@ function ensureLiveSubtitleListeners() {
     if (_liveListenersBound) return;
     _liveListenersBound = true;
 
+    // When the user seeks, the ASR feed keeps reading linearly from its original
+    // start, so cues drift out / disappear ahead of the new position. Restart the
+    // session from the new spot (debounced so scrubbing doesn't thrash the daemon).
+    const vpSeek = el('video-player');
+    if (vpSeek) {
+        let _seekRestartTimer = null;
+        vpSeek.addEventListener('seeked', () => {
+            if (!window._liveSubActive || !window._liveSubVideoPath) return;
+            clearTimeout(_seekRestartTimer);
+            _seekRestartTimer = setTimeout(() => {
+                if (!window._liveSubActive || !window._liveSubVideoPath) return;
+                console.log('[live-subs] seek detected → restarting ASR from new position');
+                startLiveSubtitleSession(
+                    window._liveSubVideoPath,
+                    window._liveSubItemName || 'Active Video',
+                    window._liveSubLangs || ['en'],
+                    window._liveSubBoost || 1.5
+                );
+            }, 700);
+        });
+    }
+
     window.electronAPI.onLiveSubtitleCue((cue) => {
         if (!window._liveSubActive || !window._liveSubTrack) return;
         if (_liveNormPath(cue.videoPath) !== _liveNormPath(window._liveSubVideoPath)) return;
@@ -658,7 +684,11 @@ function ensureLiveSubtitleListeners() {
             }
             return;
         }
-        if (s.status === 'downloaded') { window.showToast('Model downloaded — starting…', 'success'); return; }
+        if (s.status === 'downloaded') {
+            window.showToast('Model downloaded — starting…', 'success');
+            if (window.appSettings) { window.appSettings.asrModelReady = true; try { window.electronAPI.saveSettings(window.appSettings); } catch (_) { } }
+            return;
+        }
         if (s.status === 'download-failed') {
             window.showToast('Model download failed: ' + (s.error || 'unknown'), 'error');
             window.stopLiveSubtitles(true);

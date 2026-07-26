@@ -60,6 +60,27 @@ window.renderWatchHistoryTab = async function() {
                         };
                         window.playStream(item.streamUrl, item.streamTitle || item.title);
                         window.showToast(t.resumingStream || 'Resuming stream...', 'success');
+
+                        // The cached debrid URL can expire. If it fails to load,
+                        // fall back to a fresh Comet search for the same title.
+                        const _vp = document.getElementById('video-player');
+                        if (_vp) {
+                            const _clear = () => {
+                                _vp.removeEventListener('error', _onErr);
+                                _vp.removeEventListener('loadeddata', _clear);
+                            };
+                            const _onErr = () => {
+                                _clear();
+                                window.showToast('Cached stream expired — finding a fresh source…', 'warning');
+                                if (typeof window.triggerRDStream === 'function') {
+                                    window.triggerRDStream(item.title, item.tmdbId, item.mediaType || 'movie',
+                                        item.season || null, item.episode || null,
+                                        { poster: item.poster, year: item.year });
+                                }
+                            };
+                            _vp.addEventListener('error', _onErr, { once: true });
+                            _vp.addEventListener('loadeddata', _clear, { once: true });
+                        }
                     } else {
                         // Fallback to media details
                         const movieMeta = {

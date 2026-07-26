@@ -13,20 +13,21 @@ window.switchStreamingSubtab = function (subtab) {
         const id = pill.id;
         const targetId = `subtab-streaming-${subtab}`;
         if (id === targetId) {
-            // Distinct "tab" look (not a floating pill): filled head + gold underline.
+            // Clean underline tab: accent text + subtle tint + accent underline
+            // (replaces the heavy solid-purple fill).
             pill.classList.add('active');
-            pill.style.background = 'var(--vault-accent)';
-            pill.style.color = 'var(--vt-primary)';
+            pill.style.background = 'rgba(176, 124, 255, 0.12)';
+            pill.style.color = 'var(--vault-accent)';
             pill.style.border = 'none';
-            pill.style.borderBottom = '2px solid var(--vault-gold)';
+            pill.style.borderBottom = '2px solid var(--vault-accent)';
             pill.style.opacity = '1';
         } else {
             pill.classList.remove('active');
             pill.style.background = 'transparent';
-            pill.style.color = 'var(--vault-text)';
+            pill.style.color = 'var(--vault-slate)';
             pill.style.border = 'none';
             pill.style.borderBottom = '2px solid transparent';
-            pill.style.opacity = '0.7';
+            pill.style.opacity = '1';
         }
     });
 
