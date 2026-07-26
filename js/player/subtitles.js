@@ -557,7 +557,13 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
     // is a near-passthrough.
     const translateTo = primaryLang;
 
-    console.log('[live-subs] session start', { videoPath, primaryLang, translateTo, langs, volumeBoost, startTime: startTime.toFixed(2) });
+    // The Comet playback URL embeds the debrid API keys as a base64 config
+    // segment — never print it raw to the console.
+    const _redactUrl = (u) => String(u || '').replace(/\/eyJ[^/]+/, '/<config>');
+    console.log('[live-subs] session start', {
+        videoPath: _redactUrl(videoPath),
+        primaryLang, translateTo, langs, volumeBoost, startTime: startTime.toFixed(2),
+    });
 
     updateLiveSubButton(true);
     window.showToast(`Live subtitles started for "${itemName}" (${primaryLang.toUpperCase()})…`, 'success');

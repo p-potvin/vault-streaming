@@ -111,8 +111,13 @@ body.player-idle #video-modal .video-wrapper {
   cursor: pointer;
 }
 
-/* Add padding when subtitles are active to prevent text overlap */
+/* Add padding when subtitles are active to prevent text overlap.
+   box-sizing is REQUIRED here: #video-player is height:100% and content-box by
+   default, so the padding was added ON TOP of the full height, overflowing the
+   wrapper. object-fit:contain then scaled the video down to fit that taller box,
+   which showed up as thick black bars down each side (pillarboxing). */
 .video-wrapper.subtitles-active #video-player {
+  box-sizing: border-box;
   padding-bottom: 40px;
 }
 

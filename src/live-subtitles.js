@@ -8,11 +8,17 @@ const { pipeline } = require('stream/promises');
 const { Transform } = require('stream');
 const utils = require('./utils');
 
-// The TDT model (~2.5 GB) is NOT shipped in the installer. It's fetched on first
-// use into userData/models/ (writable), the way apps download large runtime
-// components after install. Dev machines already have it extracted in the repo.
-const TDT_URL = 'https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/resolve/main/parakeet-tdt-0.6b-v3.nemo?download=true';
-const TDT_NEMO_NAME = 'parakeet-tdt-0.6b-v3.nemo';
+// The streaming ASR model (~2.5 GB) is NOT shipped in the installer. It's fetched
+// on first use into userData/models/ (writable), the way apps download large
+// runtime components after install. Dev machines may have it extracted in the repo.
+//
+// Engine: nvidia/nemotron-3.5-asr-streaming-0.6b (cache-aware streaming RNNT).
+// The direct .nemo download below is only a *fast path* with a progress bar — if
+// it fails (e.g. the asset is named differently in the repo), we fall through and
+// let NeMo's from_pretrained() pull it from HF on the Python side instead.
+const MODEL_REPO = 'nvidia/nemotron-3.5-asr-streaming-0.6b';
+const TDT_NEMO_NAME = 'nemotron-3.5-asr-streaming-0.6b.nemo';
+const TDT_URL = `https://huggingface.co/${MODEL_REPO}/resolve/main/${TDT_NEMO_NAME}?download=true`;
 
 function userModelsDir() {
     return path.join(app.getPath('userData'), 'models');
@@ -21,12 +27,12 @@ function userNemoPath() {
     return path.join(userModelsDir(), TDT_NEMO_NAME);
 }
 function devExtractedDir() {
-    const cfg = path.join(__dirname, '..', 'tools', 'models', 'parakeet-tdt-0.6b-v3', 'model_config.yaml');
+    const cfg = path.join(__dirname, '..', 'tools', 'models', 'nemotron-3.5-asr-streaming-0.6b', 'model_config.yaml');
     return fs.existsSync(cfg) ? path.dirname(cfg) : null;
 }
 function hfCacheNemo() {
     const base = path.join(os.homedir(), '.cache', 'huggingface', 'hub',
-        'models--nvidia--parakeet-tdt-0.6b-v3', 'snapshots');
+        `models--${MODEL_REPO.replace('/', '--')}`, 'snapshots');
     if (!fs.existsSync(base)) return null;
     for (const snap of fs.readdirSync(base)) {
         const dir = path.join(base, snap);
@@ -78,13 +84,20 @@ async function downloadModel() {
 }
 
 // Resolves once the model exists locally; downloads it (once) if missing.
+// A failed direct download is NOT fatal: NeMo's from_pretrained() on the Python
+// side can fetch the model from Hugging Face itself. We just lose the progress
+// bar, so we report it as a warning and let the daemon proceed.
 function ensureModel() {
     if (modelPresent()) return Promise.resolve(true);
     if (!downloadPromise) {
         downloadPromise = downloadModel().then(() => true).catch((e) => {
             downloadPromise = null;
-            forward('live-subtitle-status', { status: 'download-failed', error: e.message });
-            throw e;
+            console.warn('[main:live-subs] direct model download failed; falling back to NeMo/HF:', e.message);
+            forward('live-subtitle-status', {
+                status: 'warn',
+                message: 'Fetching the model via NeMo instead (first run may take a few minutes).',
+            });
+            return true;
         });
     }
     return downloadPromise;

@@ -11,12 +11,17 @@ finishes loading, and then drives it over stdin with JSON commands:
     {"cmd":"stop"}            -> stop the current session
     {"cmd":"quit"}           -> exit the daemon
 
-Engine: ``nvidia/parakeet-tdt-0.6b-v3`` (multilingual, word timestamps). We keep
-a growing buffer of audio since the last finalised utterance and re-transcribe it
-every ~0.6s, segmenting on the model's word-gap boundaries: settled segments are
-finalised (and trimmed from the buffer), the newest is emitted as a live
-"partial". With ``translateTo`` set, finalised text is translated (source auto)
-before display/SRT; partials stay in the source language for responsiveness.
+Engine: ``nvidia/nemotron-3.5-asr-streaming-0.6b`` (FastConformer-CacheAware-RNNT,
+multilingual). Audio is fed as fixed 1.12s chunks and the model carries its own
+encoder/decoder cache, so each step returns the transcription so far — no
+re-transcribing a growing buffer, and no racing ahead of the playhead.
+
+This model emits **no timestamps**, so cue times come from the stream position:
+we know exactly how much audio has been fed (chunks x chunk duration), which is
+both simpler and more reliable than the old word-timestamp segmentation. A cue is
+closed on a real pause (silence >= ``minSilence``) or at ``maxUtt`` seconds, and
+the model state is reset at that boundary to bound hypothesis growth. With
+``translateTo`` set, finalised text is translated (source auto) before display/SRT.
 
 Cues/status are emitted as tagged JSON lines on stdout, each carrying videoPath.
 """
@@ -56,6 +61,15 @@ def dbg(msg):
         print(f"[live-subs] {msg}", file=sys.stderr, flush=True)
     except Exception:
         pass
+
+
+def redact(value):
+    """
+    Strip the Comet base64 config segment from a URL before logging — it embeds
+    the AllDebrid / TorBox / Real-Debrid API keys.
+    """
+    import re
+    return re.sub(r"/eyJ[^/\s]+", "/<config>", str(value))
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +136,16 @@ def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost):
         f"volume={volume_boost:.3f}"
     )
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
+    # Remote sources: this is a SECOND connection to a link the player is already
+    # streaming, so a debrid provider can answer 429 (rate limit). Reconnect with
+    # backoff instead of dying, and identify as a normal client.
+    if str(video_path).lower().startswith(("http://", "https://")):
+        cmd += [
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "10",
+            "-user_agent", "Mozilla/5.0",
+        ]
     if start and start > 0.05:
         cmd += ["-ss", f"{start:.3f}"]
     cmd += [
@@ -173,9 +197,10 @@ class Translator:
 # ---------------------------------------------------------------------------
 def load_model():
     t0 = time.perf_counter()
-    from vault_explorer.parakeet_wrapper import ParakeetV3Wrapper
-    m = ParakeetV3Wrapper()
-    dbg(f"TDT model loaded in {time.perf_counter() - t0:.1f}s")
+    from vault_explorer.nemotron_wrapper import NemotronStreamingASR, DEFAULT_CHUNK_S
+    chunk_s = float(os.environ.get("VAULT_ASR_CHUNK_S") or DEFAULT_CHUNK_S)
+    m = NemotronStreamingASR(chunk_s=chunk_s)
+    dbg(f"Nemotron streaming model loaded in {time.perf_counter() - t0:.1f}s (chunk={m.chunk_s}s)")
     return m
 
 
@@ -200,18 +225,13 @@ def run_session(model, opts, stop_event):
     start = max(0.0, float(opts.get("start") or 0.0))
     translate_to = (opts.get("translateTo") or "").strip() or None
 
-    step_s = float(opts.get("step") or 0.6)
-    # Calmer pacing: merge words separated by <0.8s into one line, and drop
-    # sub-0.3s blips — fewer, longer, more readable cues.
+    # A quiet stretch this long closes the current cue. With 1.12s chunks a
+    # single silent chunk already qualifies, which is the natural line break.
     min_silence = max(0.2, float(opts.get("minSilence") or 0.8))
-    min_segment = max(0.1, float(opts.get("minSegment") or 0.3))
     max_utt_s = max(4.0, float(opts.get("maxUtt") or 12.0))
 
     sample_rate = 16000
-    step_samples = int(max(0.2, step_s) * sample_rate)
-    min_samples = int(0.3 * sample_rate)
     silence_rms = 0.006
-    keep_lookahead = int(0.3 * sample_rate)
 
     translator = Translator(translate_to) if translate_to else None
 
@@ -229,7 +249,7 @@ def run_session(model, opts, stop_event):
     elif write_srt and is_remote:
         dbg("writeSrt requested but source is a remote URL — skipping sidecar")
 
-    dbg(f"session: video={video_path!r} langs={langs} boost={volume_boost} start={start:.2f}s "
+    dbg(f"session: video={redact(video_path)!r} langs={langs} boost={volume_boost} start={start:.2f}s "
         f"translateTo={translate_to} writeSrt={write_srt and not is_remote} min_silence={min_silence}s max_utt={max_utt_s}s")
 
     emit("LIVE_STATUS", {"status": "started", "message": "Live subtitles running",
@@ -237,7 +257,7 @@ def run_session(model, opts, stop_event):
                          "translateTo": translate_to})
 
     ff_cmd = build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost)
-    dbg(f"ffmpeg: {' '.join(ff_cmd)}")
+    dbg(f"ffmpeg: {redact(' '.join(ff_cmd))}")
     try:
         proc = subprocess.Popen(ff_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except Exception as e:
@@ -249,22 +269,20 @@ def run_session(model, opts, stop_event):
 
     read_bytes = 16384
     buf = np.zeros(0, dtype=np.int16)
-    utt_start = start
-    stream_pos = start
-    last_tx_len = 0
+    stream_pos = start          # absolute time of all audio fed to the model
+    utt_start = start           # absolute start of the utterance being built
+    utt_text = ""               # accumulated text for the current utterance
+    silence_run = 0.0           # consecutive quiet seconds fed
     last_final_end = start
     final_count = [0]
     cue_index = [0]
 
-    def transcribe(buffer_i16):
-        audio_f32 = buffer_i16.astype(np.float32) / 32768.0
-        try:
-            return model.transcribe_audio_data(
-                audio_f32, min_silence_s=min_silence, min_segment_s=min_segment, language=primary_lang
-            ) or []
-        except Exception as e:
-            dbg(f"ASR error: {e}")
-            return []
+    # Cache-aware streaming: the model takes fixed chunks and carries its own
+    # state, so we feed exactly chunk_samples() at a time and derive cue times
+    # from how much audio has been fed (no timestamps from this model).
+    chunk_samples = model.chunk_samples()
+    chunk_dur = chunk_samples / sample_rate
+    model.reset()
 
     def emit_final(seg_start, seg_end, text):
         nonlocal last_final_end
@@ -283,14 +301,53 @@ def run_session(model, opts, stop_event):
         last_final_end = max(last_final_end, seg_end)
         dbg(f"  FINAL #{cue_index[0]} [{seg_start:.2f}-{seg_end:.2f}] {t!r}")
 
-    def reset_after(abs_time):
-        nonlocal buf, utt_start, last_tx_len
-        drop = max(0, int((abs_time - utt_start) * sample_rate))
-        buf = buf[drop:] if drop < buf.size else np.zeros(0, dtype=np.int16)
-        utt_start = abs_time
-        last_tx_len = buf.size
+    def feed_chunk(piece_i16, chunk_start):
+        """
+        Push one fixed chunk into the streaming model and update utterance state.
+        Returns True if a cue was finalised.
+        """
+        nonlocal utt_text, utt_start, silence_run
 
-    dbg("reading ffmpeg audio stream...")
+        audio_f32 = piece_i16.astype(np.float32) / 32768.0
+        rms = float(np.sqrt(np.mean(audio_f32 ** 2))) if audio_f32.size else 0.0
+        if rms < silence_rms:
+            silence_run += chunk_dur
+        else:
+            silence_run = 0.0
+
+        try:
+            text_now = (model.feed(audio_f32) or "").strip()
+        except Exception as e:
+            dbg(f"ASR error: {e}")
+            return False
+
+        if text_now and text_now != utt_text:
+            # First words of a new utterance: anchor it to this chunk's start so
+            # the cue doesn't stretch back across preceding silence.
+            if not utt_text:
+                utt_start = chunk_start
+            utt_text = text_now
+            silence_run = 0.0          # decoded speech is not a pause
+
+        # Finalise on a real pause, or when an utterance has run too long.
+        if utt_text and (silence_run >= min_silence or (stream_pos - utt_start) >= max_utt_s):
+            emit_final(utt_start, stream_pos, utt_text)
+            model.reset()              # bound hypothesis growth at a safe boundary
+            utt_text = ""
+            utt_start = stream_pos
+            silence_run = 0.0
+            return True
+
+        if not utt_text:
+            # Idle silence: keep the origin current so the next cue starts at the
+            # speech, and periodically clear state during long quiet stretches.
+            utt_start = stream_pos
+            if silence_run >= max(4.0, min_silence * 3):
+                model.reset()
+                silence_run = 0.0
+        return False
+
+    dbg(f"reading ffmpeg audio stream (chunk={chunk_dur:.2f}s / {chunk_samples} samples)...")
     total_bytes = 0
     stopped = False
     try:
@@ -306,51 +363,28 @@ def run_session(model, opts, stop_event):
             total_bytes += len(chunk)
             samples = np.frombuffer(chunk, dtype=np.int16)
             buf = np.concatenate([buf, samples]) if buf.size else samples.copy()
-            stream_pos = start + total_bytes / 2 / sample_rate
 
-            if (buf.size - last_tx_len) < step_samples:
-                continue
-            last_tx_len = buf.size
+            # Feed every complete chunk the buffer can supply.
+            while buf.size >= chunk_samples:
+                piece = buf[:chunk_samples]
+                buf = buf[chunk_samples:]
+                chunk_start = stream_pos
+                stream_pos += chunk_dur
+                feed_chunk(piece, chunk_start)
+                if stop_event.is_set():
+                    break
 
-            audio_f32 = buf.astype(np.float32) / 32768.0
-            rms = float(np.sqrt(np.mean(audio_f32 ** 2))) if audio_f32.size else 0.0
-
-            # Whole-buffer RMS: only quiet when nothing is mid-utterance, so it's
-            # safe to shed the leading silence without dropping speech.
-            if rms < silence_rms:
-                if buf.size > keep_lookahead:
-                    dropped = buf.size - keep_lookahead
-                    utt_start += dropped / sample_rate
-                    buf = buf[-keep_lookahead:]
-                    last_tx_len = buf.size
-                continue
-
-            if buf.size < min_samples:
-                continue
-
-            segs = transcribe(buf)
-            if not segs:
-                if (stream_pos - utt_start) > 2.0:
-                    reset_after(stream_pos - keep_lookahead / sample_rate)
-                continue
-
-            # Finals only: settled segments (a real pause follows) are emitted;
-            # the newest segment stays buffered until its own pause arrives.
-            segs_abs = [(utt_start + s.start, utt_start + s.end, s.text) for s in segs]
-            if len(segs_abs) >= 2:
-                for s0, s1, txt in segs_abs[:-1]:
-                    emit_final(s0, s1, txt)
-                reset_after(segs_abs[-2][1])
-            else:
-                s0, s1, txt = segs_abs[0]
-                if (stream_pos - s1) >= min_silence or (stream_pos - utt_start) >= max_utt_s:
-                    emit_final(s0, s1, txt)
-                    reset_after(s1)
-
-        # Natural end: flush trailing speech (skip on manual stop).
-        if not stopped and buf.size >= min_samples:
-            for s in transcribe(buf):
-                emit_final(utt_start + s.start, utt_start + s.end, s.text)
+        # Natural end: pad the tail to a full chunk, flush it, then emit whatever
+        # utterance is still open (skip on manual stop).
+        if not stopped:
+            if buf.size:
+                pad = np.zeros(chunk_samples, dtype=np.int16)
+                pad[:buf.size] = buf
+                chunk_start = stream_pos
+                stream_pos += buf.size / sample_rate
+                feed_chunk(pad, chunk_start)
+            if utt_text:
+                emit_final(utt_start, stream_pos, utt_text)
     finally:
         try:
             proc.terminate()
@@ -372,7 +406,7 @@ def run_session(model, opts, stop_event):
 # Daemon: load once, take start/stop/quit commands on stdin
 # ---------------------------------------------------------------------------
 def run_daemon():
-    emit("LIVE_STATUS", {"status": "loading", "message": "Loading Parakeet-TDT model..."})
+    emit("LIVE_STATUS", {"status": "loading", "message": "Loading Nemotron streaming ASR model..."})
     try:
         model = load_model()
     except Exception as e:
@@ -425,7 +459,7 @@ def run_daemon():
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Live streaming ASR subtitles (Parakeet-TDT)")
+    parser = argparse.ArgumentParser(description="Live streaming ASR subtitles (Nemotron cache-aware streaming)")
     parser.add_argument("--daemon", action="store_true", help="Run as a persistent stdin-driven daemon")
     # One-shot CLI mode (handy for testing): pass a video path directly.
     parser.add_argument("video_path", nargs="?", default=None)

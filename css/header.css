@@ -214,6 +214,15 @@
   position: relative;
 }
 
+/* The global `button:hover` rule lifts buttons with translateY(-1px), which made
+   the titlebar Settings button jump. Cancel the lift and use a darker fill. */
+#settings-trigger:hover {
+  background: rgba(0, 0, 0, 0.28) !important;
+  border-color: transparent !important;
+  transform: none !important;
+  border-radius: 4px;
+}
+
 /* ===== Sub-Navigation Bar ===== */
 .sub-nav-bar {
   display: flex;

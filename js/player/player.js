@@ -146,6 +146,11 @@ function updateAutoplayUI() {
     const knob = el('autoplay-knob-circle');
     if (!btn || !knob) return;
 
+    // Only episodic content has a "next" worth rolling into — hide the toggle
+    // entirely for movies.
+    const isSeries = !!(window.activeStreamingMedia && window.activeStreamingMedia.mediaType === 'tv');
+    btn.style.display = isSeries ? '' : 'none';
+
     if (window.autoplayMode === 'off') {
         btn.classList.remove('active');
         knob.setAttribute('cx', '8');            // knob left = off
@@ -824,6 +829,15 @@ function initPlayer() {
         if (!overlay) return;
 
         const countdownEl = el('ended-countdown');
+        // Autoplay is for episodic content only — a movie just ends rather than
+        // rolling into an unrelated title.
+        const isSeries = !!(window.activeStreamingMedia && window.activeStreamingMedia.mediaType === 'tv');
+        if (!isSeries) {
+            overlay.style.display = 'flex';
+            countdownEl.innerText = 'Finished.';
+            countdownEl.style.cursor = 'default';
+            return;
+        }
         if (nextIdx < window.displayedItems.length) {
             if (window.autoplayMode !== 'off') {
                 if (window.autoplayMode === 'instant') {
@@ -1535,6 +1549,8 @@ async function playStream(url, title) {
 
     // Refresh the quality picker — visible whenever currentTorrentList exists.
     if (typeof window.refreshQualityMenu === 'function') window.refreshQualityMenu();
+    // Re-evaluate the autoplay toggle: it's shown for series, hidden for movies.
+    updateAutoplayUI();
 
     el('video-modal').classList.remove('minimized');
     btnPlay.innerHTML = PAUSE_ICON_SVG;
