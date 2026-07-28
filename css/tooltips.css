@@ -3,7 +3,10 @@
   position: absolute;
   pointer-events: none;
   user-select: none;
-  z-index: 999999;
+  /* Tooltips must sit above every dialog, including the settings panel (which
+     sits just below this). They're transient and pointer-events:none, so this
+     can safely be the topmost layer in the app. */
+  z-index: 2147483647;
   padding: 6px 10px;
   font-family: Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 12px;

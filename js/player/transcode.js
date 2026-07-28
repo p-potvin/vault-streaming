@@ -71,14 +71,22 @@
 
     // Start transcoded playback. Returns true if the transcode pipeline took over,
     // false if it declined/failed (caller should have set vp.src directly).
-    window.startTranscodePlayback = async function (url, targetHeight, startTime) {
+    // `opts` may carry { audioIndex, videoInfo } to switch the audio track; in
+    // that case the main process copies the video instead of re-encoding it.
+    window.startTranscodePlayback = async function (url, targetHeight, startTime, opts = {}) {
         const vp = el('video-player');
         if (!vp) return false;
         await window.stopTranscode(); // clean any previous session
 
         let res;
         try {
-            res = await window.electronAPI.transcodeStreamStart({ url, startTime: startTime || 0, targetHeight });
+            res = await window.electronAPI.transcodeStreamStart({
+                url,
+                startTime: startTime || 0,
+                targetHeight,
+                audioIndex: (opts && opts.audioIndex !== undefined) ? opts.audioIndex : null,
+                videoInfo: (opts && opts.videoInfo) || null,
+            });
         } catch (e) {
             fallbackDirect(url, 'start threw: ' + e.message);
             return false;
@@ -130,7 +138,9 @@
         if (!b) {
             b = document.createElement('div');
             b.id = 'transcode-badge';
-            b.style.cssText = 'position:absolute; top:12px; left:12px; z-index:210; padding:3px 9px; border-radius:4px; font-size:10px; font-weight:800; letter-spacing:0.05em; color:#fff; background:rgba(176,124,255,0.85); cursor:pointer; font-family:var(--font-mono); box-shadow:0 2px 8px rgba(0,0,0,0.4);';
+            // Sits BELOW the player top bar — at top:12px it overlapped the
+            // title and clipped it.
+            b.style.cssText = 'position:absolute; top:52px; left:12px; z-index:210; padding:3px 9px; border-radius:4px; font-size:10px; font-weight:800; letter-spacing:0.05em; color:#fff; background:rgba(176,124,255,0.85); cursor:pointer; font-family:var(--font-mono); box-shadow:0 2px 8px rgba(0,0,0,0.4);';
             b.title = 'Transcoded for smooth playback — click for Original';
             b.addEventListener('click', () => {
                 // One-shot override to Original, then replay the current source.

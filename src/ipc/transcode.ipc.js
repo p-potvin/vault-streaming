@@ -13,6 +13,7 @@
 
 const child_process = require('child_process');
 const utils = require('../utils');
+const { mseCodecForCopy } = require('./audio-tracks.ipc');
 
 let transcodeProcess = null;
 let transcodeEvent = null;
@@ -37,7 +38,7 @@ function pickH264Encoder() {
     return _cachedEncoder;
 }
 
-function buildArgs({ url, startTime, targetHeight, encoder }) {
+function buildArgs({ url, startTime, targetHeight, encoder, audioIndex = null, copyVideo = false }) {
     const nv = encoder === 'h264_nvenc';
     const args = [];
     // Fast input-seek (RD supports range requests). Placed before -i.
@@ -45,21 +46,39 @@ function buildArgs({ url, startTime, targetHeight, encoder }) {
     // NVDEC hardware decode for the (expensive) 4K decode when using NVENC.
     // Frames land in system memory so a plain CPU `scale` works — this avoids a
     // hard dependency on the scale_cuda filter across ffmpeg builds.
-    if (nv) args.push('-hwaccel', 'cuda');
+    if (nv && !copyVideo) args.push('-hwaccel', 'cuda');
     // Reconnect on transient network hiccups while pulling the remote source.
     args.push(
         '-reconnect', '1',
         '-reconnect_streamed', '1',
         '-reconnect_delay_max', '5',
         '-i', url,
-        // Scale to the ceiling height, keep aspect (even width for H.264).
-        '-vf', `scale=-2:${targetHeight}`,
-        '-c:v', encoder,
-        '-preset', 'fast',
-        // Pin profile/level so the renderer's MediaSource codec string is stable.
-        '-profile:v', 'high',
-        '-level', '4.1',
-        '-pix_fmt', 'yuv420p',
+    );
+
+    // Explicit stream selection when switching audio track. Without -map, ffmpeg
+    // picks the highest-channel audio, which is exactly the foreign-dub trap.
+    if (audioIndex !== null && audioIndex !== undefined) {
+        args.push('-map', '0:v:0', '-map', `0:a:${audioIndex}`);
+    }
+
+    if (copyVideo) {
+        // Audio-only switch: the video is untouched, so this is a cheap remux
+        // rather than a transcode.
+        args.push('-c:v', 'copy');
+    } else {
+        args.push(
+            // Scale to the ceiling height, keep aspect (even width for H.264).
+            '-vf', `scale=-2:${targetHeight}`,
+            '-c:v', encoder,
+            '-preset', 'fast',
+            // Pin profile/level so the renderer's MediaSource codec string is stable.
+            '-profile:v', 'high',
+            '-level', '4.1',
+            '-pix_fmt', 'yuv420p',
+        );
+    }
+
+    args.push(
         // Re-encode audio to AAC-LC (source is often EAC3/DTS — not MSE-playable).
         '-c:a', 'aac', '-b:a', '160k', '-ac', '2',
         // Fragmented MP4 so it can be fed to MediaSource as it is produced.
@@ -74,10 +93,17 @@ function registerTranscodeIpc(ipcMain) {
     // The renderer feeds this codec string to MediaSource.addSourceBuffer.
     const MSE_CODEC = 'video/mp4; codecs="avc1.640029, mp4a.40.2"';
 
-    ipcMain.handle('transcode-stream-start', async (event, { url, startTime = 0, targetHeight = 1080 } = {}) => {
+    ipcMain.handle('transcode-stream-start', async (event, { url, startTime = 0, targetHeight = 1080, audioIndex = null, videoInfo = null } = {}) => {
         if (!url || typeof url !== 'string') {
             return { success: false, error: 'No stream URL provided' };
         }
+
+        // Switching audio track only? Then the video can be copied verbatim —
+        // provided we can express its codec for MediaSource. If we can't, fall
+        // back to the known-good H.264 re-encode below.
+        const copyCodec = (audioIndex !== null && audioIndex !== undefined)
+            ? mseCodecForCopy(videoInfo) : null;
+        const copyVideo = !!copyCodec;
 
         // Kill any existing transcode before starting a new one.
         if (transcodeProcess) {
@@ -87,8 +113,12 @@ function registerTranscodeIpc(ipcMain) {
         transcodeEvent = event;
 
         const encoder = pickH264Encoder();
-        const args = buildArgs({ url, startTime, targetHeight, encoder });
+        const args = buildArgs({ url, startTime, targetHeight, encoder, audioIndex, copyVideo });
         const ffmpegPath = utils.getFFmpegPath();
+        if (audioIndex !== null && audioIndex !== undefined) {
+            console.log(`[transcode] audio-track switch -> a:${audioIndex} ` +
+                `(video ${copyVideo ? 'copied' : 're-encoded: codec not MSE-expressible'})`);
+        }
         console.log(`[transcode] spawning: ${ffmpegPath} ${args.join(' ')}`);
 
         const sendStatus = (type, data = {}) => {
@@ -131,7 +161,14 @@ function registerTranscodeIpc(ipcMain) {
                 sendStatus('error', { error: err.message });
             });
 
-            return { success: true, encoder, codec: MSE_CODEC, targetHeight };
+            return {
+                success: true,
+                encoder: copyVideo ? 'copy' : encoder,
+                codec: copyCodec || MSE_CODEC,
+                targetHeight,
+                audioIndex,
+                copiedVideo: copyVideo,
+            };
         } catch (err) {
             console.error('[transcode] failed to start:', err);
             return { success: false, error: err.message };

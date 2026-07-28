@@ -127,7 +127,7 @@ class SrtWriter(threading.Thread):
         self.q.put(None)
 
 
-def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost):
+def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index=0):
     af = (
         "highpass=f=90,"
         "lowpass=f=7500,"
@@ -150,12 +150,12 @@ def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost):
         cmd += ["-ss", f"{start:.3f}"]
     cmd += [
         "-i", video_path,
-        # Force the FIRST audio track. Without -map, ffmpeg auto-selects the
+        # Pin the audio track explicitly. Without -map, ffmpeg auto-selects the
         # stream with the most channels, which on a multi-audio release is often a
-        # 5.1 foreign dub — so the model transcribed Czech/Polish while the <video>
-        # element (which plays the first/default track) played English. 0:a:0
-        # matches what the browser plays, keeping ASR and playback on the same audio.
-        "-map", "0:a:0",
+        # 5.1 foreign dub — so the model transcribed Czech/Polish while English
+        # played. The index comes from the player's audio-track picker, so ASR
+        # always listens to exactly what the user is hearing.
+        "-map", f"0:a:{max(0, int(audio_index))}",
         "-vn",
         "-af", af,
         "-f", "s16le", "-ac", "1", "-ar", str(sample_rate),
@@ -197,7 +197,7 @@ class Translator:
 # ---------------------------------------------------------------------------
 def load_model():
     t0 = time.perf_counter()
-    from vault_explorer.nemotron_wrapper import NemotronStreamingASR, DEFAULT_CHUNK_S
+    from vault_streaming.nemotron_wrapper import NemotronStreamingASR, DEFAULT_CHUNK_S
     chunk_s = float(os.environ.get("VAULT_ASR_CHUNK_S") or DEFAULT_CHUNK_S)
     m = NemotronStreamingASR(chunk_s=chunk_s)
     dbg(f"Nemotron streaming model loaded in {time.perf_counter() - t0:.1f}s (chunk={m.chunk_s}s)")
@@ -256,7 +256,8 @@ def run_session(model, opts, stop_event):
                          "videoPath": video_path, "srtPath": srt_path, "startTime": start,
                          "translateTo": translate_to})
 
-    ff_cmd = build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost)
+    audio_index = max(0, int(opts.get("audioIndex") or 0))
+    ff_cmd = build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index)
     dbg(f"ffmpeg: {redact(' '.join(ff_cmd))}")
     try:
         proc = subprocess.Popen(ff_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

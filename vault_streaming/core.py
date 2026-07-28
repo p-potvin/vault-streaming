@@ -20,16 +20,16 @@ class DummyTqdm:
     def set_description(self, *args, **kwargs): pass
     def set_postfix(self, *args, **kwargs): pass
 tqdm.tqdm = DummyTqdm
-from vault_enhancer import utils
-from vault_enhancer import translation
-from vault_enhancer import media
+from vault_streaming import utils
+from vault_streaming import translation
+from vault_streaming import media
 
 _PARAKEET_MODEL = None
 
 def get_parakeet_model():
     global _PARAKEET_MODEL
     if _PARAKEET_MODEL is None:
-        from vault_enhancer.parakeet_wrapper import ParakeetV3Wrapper
+        from vault_streaming.parakeet_wrapper import ParakeetV3Wrapper
         _PARAKEET_MODEL = ParakeetV3Wrapper()
     return _PARAKEET_MODEL
 

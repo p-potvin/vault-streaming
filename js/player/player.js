@@ -990,7 +990,7 @@ function initPlayer() {
         _idleTimer = setTimeout(() => {
             // Never hide while a player menu is open — otherwise the menu vanishes
             // (opacity 0) or becomes unclickable (pointer-events:none) mid-use.
-            const menuOpen = ['quality-menu', 'subtitles-menu', 'speed-menu'].some(id => {
+            const menuOpen = ['quality-menu', 'subtitles-menu', 'audio-menu', 'speed-menu'].some(id => {
                 const m = el(id);
                 return m && m.style.display && m.style.display !== 'none';
             });
@@ -1030,6 +1030,7 @@ function initPlayer() {
             e.stopPropagation();
             const sm = el('speed-menu'); if (sm) sm.style.display = 'none';
             const subm = el('subtitles-menu'); if (subm) subm.style.display = 'none';
+            const am = el('audio-menu'); if (am) am.style.display = 'none';
             window.refreshQualityMenu();
             qMenu.style.display = (qMenu.style.display === 'none' || !qMenu.style.display) ? 'block' : 'none';
         });
@@ -1106,6 +1107,109 @@ function initPlayer() {
             menu.appendChild(opt);
         });
     };
+
+    // ── Audio track picker ───────────────────────────────────────────────
+    // Populated from the ffprobe result (window._audioTracks). A release name
+    // can't tell us which track is a foreign dub, so this is the only reliable
+    // way to land on the right audio.
+    const AUDIO_LANG_NAMES = {
+        en: 'English', fr: 'French', es: 'Spanish', de: 'German', it: 'Italian',
+        pt: 'Portuguese', nl: 'Dutch', ru: 'Russian', pl: 'Polish', cs: 'Czech',
+        ja: 'Japanese', ko: 'Korean', zh: 'Chinese', hi: 'Hindi', ar: 'Arabic',
+        tr: 'Turkish', uk: 'Ukrainian', sv: 'Swedish', hu: 'Hungarian', und: 'Unknown',
+    };
+    const audioLabel = (t) => {
+        const name = AUDIO_LANG_NAMES[t.lang] || (t.lang || 'und').toUpperCase();
+        const bits = [];
+        if (t.channels) bits.push(t.channels + 'ch');
+        if (t.codec) bits.push(String(t.codec).toUpperCase());
+        return { name, detail: bits.join(' · '), title: t.title || '' };
+    };
+
+    window.refreshAudioMenu = function () {
+        const container = el('audio-dropdown-container');
+        const menu = el('audio-menu');
+        if (!container || !menu) return;
+
+        const info = window._audioTracks;
+        const tracks = (info && info.tracks) || [];
+        // Only worth showing when there's an actual choice to make.
+        if (tracks.length < 2) { container.style.display = 'none'; return; }
+        container.style.display = 'inline-block';
+
+        const currentIdx = (window._activeAudioIndex != null)
+            ? window._activeAudioIndex : info.defaultAudioIndex;
+
+        const btnTxt = el('audio-btn-text');
+        const cur = tracks.find((t) => t.audioIndex === currentIdx) || tracks[0];
+        if (btnTxt) btnTxt.innerText = (cur.lang || 'und').toUpperCase();
+
+        menu.innerHTML = '';
+        tracks.forEach((t) => {
+            const isActive = t.audioIndex === currentIdx;
+            const { name, detail, title } = audioLabel(t);
+            const opt = document.createElement('div');
+            const activeBg = 'rgba(245,185,41,0.18)';
+            opt.style.cssText = `padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-mono); font-size:11px; transition:background 0.2s; color:${isActive ? 'var(--vault-accent)' : 'var(--vault-text)'}; font-weight:${isActive ? '700' : '500'}; background:${isActive ? activeBg : 'transparent'}; border-left:3px solid ${isActive ? 'var(--vault-accent)' : 'transparent'};`;
+            opt.innerHTML = `${window.escapeHtml(name)}` +
+                (detail ? ` <span style="color:var(--vault-slate); font-weight:400; font-size:10px;">${window.escapeHtml(detail)}</span>` : '') +
+                (title ? `<div style="color:var(--vault-slate); font-size:9.5px; font-weight:400;">${window.escapeHtml(title)}</div>` : '') +
+                (isActive ? ` <span style="color:var(--vault-accent); font-weight:700; font-size:9px;">●</span>` : '');
+            opt.addEventListener('mouseenter', () => { opt.style.background = 'rgba(245,185,41,0.08)'; });
+            opt.addEventListener('mouseleave', () => { opt.style.background = isActive ? activeBg : 'transparent'; });
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.style.display = 'none';
+                if (isActive) return;
+                window.switchAudioTrack(t.audioIndex);
+            });
+            menu.appendChild(opt);
+        });
+    };
+
+    // Re-open the current stream with a different audio track. The video is
+    // copied (not re-encoded) when its codec can be expressed for MediaSource.
+    window.switchAudioTrack = async function (audioIndex) {
+        const info = window._audioTracks;
+        const url = window.activeStreamingMedia && window.activeStreamingMedia.streamUrl;
+        if (!info || !url) return;
+
+        const vpEl = el('video-player');
+        const at = vpEl ? vpEl.currentTime : 0;
+        const track = (info.tracks || []).find((t) => t.audioIndex === audioIndex);
+        const langName = track ? (AUDIO_LANG_NAMES[track.lang] || (track.lang || '').toUpperCase()) : '';
+        window.showToast(`Switching audio to ${langName}…`, 'info');
+
+        window._activeAudioIndex = audioIndex;
+        try { if (vpEl) vpEl.pause(); } catch (_) { }
+
+        const ok = await window.startTranscodePlayback(
+            url,
+            window.qualityToHeight ? (window.qualityToHeight(window._activeStreamLabel) || 1080) : 1080,
+            at,
+            { audioIndex, videoInfo: info.videoInfo },
+        );
+        if (ok && vpEl) {
+            // Keep live subtitles on the same track the user now hears.
+            if (window._liveSubActive && typeof window.restartLiveSubtitlesForAudio === 'function') {
+                window.restartLiveSubtitlesForAudio(audioIndex);
+            }
+            vpEl.play().catch(() => { });
+        }
+        window.refreshAudioMenu();
+    };
+
+    const aBtn = el('btn-audio');
+    const aMenu = el('audio-menu');
+    if (aBtn && aMenu) {
+        aBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const qm = el('quality-menu'); if (qm) qm.style.display = 'none';
+            const sm2 = el('subtitles-menu'); if (sm2) sm2.style.display = 'none';
+            window.refreshAudioMenu();
+            aMenu.style.display = (aMenu.style.display === 'none' || !aMenu.style.display) ? 'block' : 'none';
+        });
+    }
 
     // Subtitle setup and upscale setup
     if (typeof window.initSubtitleListeners === 'function') {
@@ -1425,17 +1529,71 @@ async function playStream(url, title) {
     // menu/badge override applies), play through the ffmpeg transcoder instead of
     // the raw URL. ffmpeg -ss handles the resume position, so the loadedmetadata
     // seeks further down are skipped for transcoded playback (see _transcodePlay).
+    // ── Audio-track probe (runs BEFORE playback) ────────────────────────────
+    // Deciding the track up front means the movie opens with the right language
+    // and a decodable codec, instead of starting silent/wrong and correcting
+    // itself a few seconds in. Capped so a slow probe can't stall playback.
+    window._audioTracks = null;
+    window._activeAudioIndex = null;
+    if (typeof window.refreshAudioMenu === 'function') window.refreshAudioMenu();
+
+    let audioProbe = null;
+    if (window.electronAPI && window.electronAPI.probeAudioTracks && url) {
+        const _proxy = (window.appSettings && window.appSettings.debridProxyEnable)
+            ? (window.appSettings.debridProxyAddress || '') : '';
+        try {
+            audioProbe = await Promise.race([
+                window.electronAPI.probeAudioTracks({
+                    url,
+                    proxy: _proxy,
+                    preferredLang: (window.appSettings && window.appSettings.streamLang) || 'en',
+                }),
+                new Promise((resolve) => setTimeout(() => resolve(null), 12000)),
+            ]);
+        } catch (_) { audioProbe = null; }
+
+        if (audioProbe && audioProbe.success) {
+            window._audioTracks = audioProbe;
+            if (typeof window.refreshAudioMenu === 'function') window.refreshAudioMenu();
+        } else {
+            audioProbe = null;
+            console.warn('[audio-tracks] probe unavailable — playing source directly');
+        }
+    }
+
     {
         const srcQ = window.activeStreamingMedia && window.activeStreamingMedia.quality;
         const tHeight = window.decideTranscodeHeight ? window.decideTranscodeHeight(srcQ) : null;
         window._qualityOverride = null; // one-shot; consumed after the decision
-        if (tHeight) {
+
+        // Take over playback when the audio needs fixing: wrong language, or a
+        // codec this build can't decode (DTS/TrueHD would play silently).
+        const needAudioFix = !!(audioProbe && audioProbe.needsRemux && audioProbe.chosenAudioIndex != null);
+        const audioIdx = needAudioFix ? audioProbe.chosenAudioIndex : null;
+        if (needAudioFix) {
+            window._activeAudioIndex = audioIdx;
+            if (audioProbe.remuxReason === 'language') {
+                window.showToast(
+                    `Audio: using ${String(audioProbe.chosenLang).toUpperCase()} track (default was ${String(audioProbe.defaultLang).toUpperCase()})`,
+                    'info');
+            } else {
+                window.showToast(`Preparing ${String(audioProbe.chosenCodec || '').toUpperCase()} audio…`, 'info');
+            }
+            console.warn('[audio-tracks] taking over playback before start —',
+                audioProbe.remuxReason, '-> a:' + audioIdx);
+        }
+
+        if (tHeight || needAudioFix) {
             const resumeAt = (typeof window._resumePosAfterSwitch === 'number' && window._resumePosAfterSwitch > 0)
                 ? window._resumePosAfterSwitch
                 : (prog && !prog.completed && prog.positionSec > 0 ? prog.positionSec : 0);
             window._resumePosAfterSwitch = null;   // handled by ffmpeg -ss, not a vp seek
             window._transcodePlay = true;
-            window.startTranscodePlayback(url, tHeight, resumeAt); // overrides vp.src with a MediaSource
+            // No quality ceiling but an audio fix? Then the video is copied, so
+            // the height is only a fallback for codecs we can't express for MSE.
+            const h = tHeight || (window.qualityToHeight ? (window.qualityToHeight(window._activeStreamLabel) || 1080) : 1080);
+            window.startTranscodePlayback(url, h, resumeAt,
+                needAudioFix ? { audioIndex: audioIdx, videoInfo: audioProbe.videoInfo } : {});
         } else {
             window._transcodePlay = false;
             if (window.stopTranscode) window.stopTranscode(); // tear down any prior session
@@ -1551,6 +1709,8 @@ async function playStream(url, title) {
     if (typeof window.refreshQualityMenu === 'function') window.refreshQualityMenu();
     // Re-evaluate the autoplay toggle: it's shown for series, hidden for movies.
     updateAutoplayUI();
+
+    // (The audio-track probe runs BEFORE playback — see the decision block above.)
 
     el('video-modal').classList.remove('minimized');
     btnPlay.innerHTML = PAUSE_ICON_SVG;

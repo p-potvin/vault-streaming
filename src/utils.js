@@ -298,18 +298,20 @@ function getRobustPythonExe() {
     let pythonExe = 'python';
     const searchBases = [];
 
-    // 1. vault-explorer venv first (has PyTorch + NeMo + Parakeet)
-    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\.venv');
-
-    // 2. Relative paths based on sibling structures
     let baseDir = __dirname;
-    searchBases.push(path.join(baseDir, '..', '..', 'vault-explorer', '.venv'));
 
-    // 3. Fallback to local venvs
-    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\.venv');
-    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\venv');
+    // 1. THIS project's own venv wins. It is the one built for the app (Python
+    //    3.12 + CUDA torch/torchvision + NeMo). Previously the external
+    //    vault-explorer repo was searched first, which meant the app could keep
+    //    using a stale interpreter even after a local venv was created.
     searchBases.push(path.join(baseDir, '..', '.venv'));
     searchBases.push(path.join(baseDir, '..', 'venv'));
+
+    // 2. Legacy vault-explorer venv — kept only as a fallback for machines that
+    //    still rely on it (this project's Python package was renamed out of it).
+    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\.venv');
+    searchBases.push(path.join(baseDir, '..', '..', 'vault-explorer', '.venv'));
+    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\venv');
     searchBases.push(path.join(baseDir, '..', '..', '.venv'));
 
     if (baseDir.includes('app.asar')) {

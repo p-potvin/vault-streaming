@@ -917,7 +917,8 @@
   -webkit-app-region: no-drag;
 }
 
-#btn-quality {
+#btn-quality,
+#btn-audio {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -929,7 +930,15 @@
   font-weight: 700;
 }
 
-#quality-menu {
+/* Keep the audio/quality buttons on one line — the label + caret was wrapping. */
+#btn-audio,
+#btn-quality {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#quality-menu,
+#audio-menu {
   display: none;
   position: absolute;
   bottom: 38px;

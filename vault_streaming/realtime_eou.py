@@ -20,7 +20,7 @@ import logging
 # Import the sibling wrapper purely for its NeMo/PyTorch/Lhotse log-silencing and
 # Windows import-order side effects (env vars, rmtree patch, backend selection).
 try:
-    from vault_explorer import parakeet_wrapper as _pw  # noqa: F401
+    from vault_streaming import parakeet_wrapper as _pw  # noqa: F401
 except Exception:
     pass
 
@@ -37,7 +37,7 @@ class RealtimeEOUTranscriber:
         import torch
         import nemo.collections.asr as nemo_asr
 
-        self.logger = logging.getLogger("vault_explorer.realtime_eou")
+        self.logger = logging.getLogger("vault_streaming.realtime_eou")
         t0 = time.perf_counter()
 
         # Prefer a locally-bundled .nemo (fully offline, robust on Windows) over

@@ -1,5 +1,31 @@
 // subtitles.js — manages subtitle track finding, downloading OpenSubtitles srt sidecars, and subtitle menu populating/track selection.
 
+// How high subtitles sit, as lines from the bottom of the frame. Negative values
+// count up from the bottom, so this clears the player's control bar. Applied to
+// both live (VTTCue) and file-loaded cues.
+window.SUBTITLE_CUE_LINE = -4;
+
+// File-loaded cues are parsed by the browser with line:auto, which puts them at
+// the very bottom — underneath the controls. Re-anchor them once they exist.
+function raiseTrackCues(track) {
+    if (!track) return;
+    const apply = () => {
+        const cues = track.cues;
+        if (!cues || !cues.length) return false;
+        for (let i = 0; i < cues.length; i++) {
+            try { cues[i].line = window.SUBTITLE_CUE_LINE; } catch (_) { /* ignore */ }
+        }
+        return true;
+    };
+    // Cues may not be parsed yet when the track is first enabled; retry briefly.
+    if (apply()) return;
+    let tries = 0;
+    const t = setInterval(() => {
+        if (apply() || ++tries > 20) clearInterval(t);
+    }, 150);
+}
+window.raiseTrackCues = raiseTrackCues;
+
 async function selectSubtitleTrack(trackIdx) {
     const vp = el('video-player');
     if (!vp) return;
@@ -67,6 +93,7 @@ async function selectSubtitleTrack(trackIdx) {
         }
 
         vp.textTracks[trackIdx].mode = 'showing';
+        raiseTrackCues(vp.textTracks[trackIdx]);
     }
 
     const btn = el('btn-subtitles');
@@ -572,6 +599,12 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
     const srtChk = el('chk-write-srt');
     const writeSrt = !!(srtChk && srtChk.checked);
 
+    // Feed ASR the SAME audio track the user is hearing. Without this the model
+    // can transcribe a foreign dub while English plays (multi-audio releases).
+    const audioIndex = (window._activeAudioIndex != null)
+        ? window._activeAudioIndex
+        : ((window._audioTracks && window._audioTracks.defaultAudioIndex) || 0);
+
     window.electronAPI.startLiveSubtitles({
         videoPath,
         langs,
@@ -579,6 +612,7 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
         startTime,
         translateTo,
         writeSrt,
+        audioIndex,
     }).then((res) => {
         if (!res || !res.success) {
             window.showToast('Live subtitles failed to start: ' + ((res && res.error) || 'unknown'), 'error');
@@ -594,6 +628,18 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
         window.stopLiveSubtitles(true);
     });
 }
+
+// Restart the live-subs session so ASR follows a newly-selected audio track.
+window.restartLiveSubtitlesForAudio = function (audioIndex) {
+    if (!window._liveSubActive || !window._liveSubVideoPath) return;
+    console.log('[live-subs] audio track changed -> restarting ASR on a:' + audioIndex);
+    startLiveSubtitleSession(
+        window._liveSubVideoPath,
+        window._liveSubItemName || 'Active Video',
+        window._liveSubLangs || ['en'],
+        window._liveSubBoost || 1.5
+    );
+};
 
 // Stops the Python process and (optionally) removes the in-memory live track.
 window.stopLiveSubtitles = function stopLiveSubtitles(clearTrack) {
@@ -668,6 +714,9 @@ function ensureLiveSubtitleListeners() {
                 window._lastLiveCue.endTime = Math.max(window._lastLiveCue.startTime + 0.1, s);
             }
             const vtt = new VTTCue(s, e, cue.text);
+            // Lift the cue clear of the control bar (negative = lines from the
+            // bottom). -4 keeps it above the controls without floating mid-frame.
+            try { vtt.line = window.SUBTITLE_CUE_LINE; } catch (_) { /* older engines */ }
             track.addCue(vtt);
             window._lastLiveCue = vtt;
 

@@ -50,12 +50,14 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     const streamingMode = 'torrent-only';
 
     if (titleTextEl) {
+        // Comet fans out to AllDebrid / TorBox / Real-Debrid, so naming a single
+        // provider here was both inaccurate and needlessly long.
         if (streamingMode === 'usenet-only') {
-            titleTextEl.textContent = 'Usenet Streaming Client';
+            titleTextEl.textContent = 'Usenet Streaming';
         } else if (streamingMode === 'hybrid') {
-            titleTextEl.textContent = 'Hybrid Streaming Client';
+            titleTextEl.textContent = 'Hybrid Streaming';
         } else {
-            titleTextEl.textContent = 'Real-Debrid Streaming Client';
+            titleTextEl.textContent = 'VaultWares Streaming';
         }
     }
 

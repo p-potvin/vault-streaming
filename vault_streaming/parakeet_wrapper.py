@@ -119,7 +119,7 @@ class ParakeetTranscriber:
         import_duration = t_import_end - t_import_start
         print(f"[ASR Telemetry] Library Import Latency: {import_duration:.4f} seconds")
 
-        self.logger = logging.getLogger("vault_explorer.parakeet")
+        self.logger = logging.getLogger("vault_streaming.parakeet")
         self.logger.info(f"Loading Parakeet model: {model_name}")
 
         t_load_start = time.perf_counter()
@@ -484,7 +484,7 @@ class ParakeetV3Wrapper:
     def __init__(self, model_name: str = "nvidia/parakeet-tdt-0.6b-v3", status_callback=None):
         # Load transcriber directly into the current thread
         self.transcriber = ParakeetTranscriber(model_name=model_name, status_callback=status_callback)
-        self.logger = logging.getLogger("vault_explorer.parakeet_wrapper")
+        self.logger = logging.getLogger("vault_streaming.parakeet_wrapper")
 
     def transcribe_file(self, audio_path: str, min_silence_s: float = ParakeetTranscriber.DEFAULT_MIN_SILENCE_S, min_segment_s: float = ParakeetTranscriber.DEFAULT_MIN_SEGMENT_S, language: str = "en") -> List[TranscriptSegment]:
         return self.transcriber.transcribe_file(audio_path, min_silence_s, min_segment_s, language)

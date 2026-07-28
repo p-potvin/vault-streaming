@@ -4,9 +4,36 @@
 
 > Note: user swapped to the **castlabs Electron build + Widevine** (main.js imports `components`) — AC3/E-AC3 audio + HEVC now decode natively; DTS/TrueHD still need transcode-remux to AAC.
 
+### Next up — audio-track selection (kills the "foreign dub" bug)
+
+**Problem.** A release name carries no reliable signal (`The.Death.of.Robin.Hood.2026.720p...HEVC-PSA.mkv` had a Russian default track; `.mkv` alone is not a usable hint). The foreign audio is a *track inside* a multi-audio file whose **default/first** track isn't English. Ranking regexes can never fix this — it has to be resolved at playback.
+
+**Constraint.** Chromium does not reliably expose `HTMLMediaElement.audioTracks`, so we cannot switch tracks client-side. The switch must happen in ffmpeg.
+
+**Plan (4 parts).**
+
+1. **Probe** — new IPC `probe-audio-tracks` (own module, mirrors `clip.ipc.js` style):
+   `ffprobe -v error -select_streams a -show_entries stream=index,codec_name,channels,disposition=default:stream_tags=language,title -of json <url>`
+   plus, for remote sources, the same hardening the ASR path now uses:
+   `-user_agent`, `-reconnect*`, and bounded `-probesize`/`-analyzeduration` so it reads only the header (MKV/MP4 headers are at the front — a few hundred KB, ~1-3s).
+   Proxy: ffmpeg honours the `http_proxy`/`https_proxy` **env vars** — pass them via the spawn `env` when `settings.debridProxyEnable` is on (the existing transcode path does NOT do this yet; worth aligning).
+
+2. **Decide** — compare track `language` tags against the existing `settings.streamLang` (`en` / `fr` / `multi`). If the default track already matches, do nothing (fast path, zero cost). Only act when a preferred-language track exists *and* isn't the default.
+
+3. **Act** — reuse the existing transcode stream pipeline (`src/ipc/transcode.ipc.js`, which already spawns ffmpeg and pumps chunks to the renderer over `transcode-chunk`). Add an audio-map variant: `-map 0:v:0 -map 0:a:<idx> -c:v copy` — **video is copied, not re-encoded**, so this is cheap; audio goes to AAC when the source codec isn't browser-safe (DTS/TrueHD — the DTS→AAC path already exists).
+
+4. **UI** — an audio-track picker in the player control bar next to CC/quality, populated from the probe, defaulting to the preferred-language track, with manual override that restarts the remux at the current position (same `_resumePosAfterSwitch` mechanism the quality picker uses).
+
+**Risks / mitigations.**
+- *Added latency before playback* → run the probe **in parallel** with the debrid resolve, not serially; skip entirely when only one audio track exists.
+- *Another connection to the debrid link (429)* → the probe is sequential (before playback), not concurrent, so it's low-risk; reuse the reconnect/user-agent flags.
+- *Fallback* → if the probe fails, plays exactly as today. Zero regression.
+
+**Bonus.** The probe result also tells live subs which track index to feed ASR, replacing the hardcoded `-map 0:a:0` with the *selected* track — so subtitles and audio stay aligned by construction.
+
 ### Roadmap — deferred
 
-- [~] **Upgrade live-subs ASR: Parakeet-TDT-0.6b-v3 → `nvidia/nemotron-3.5-asr-streaming-0.6b`** — MIGRATION WRITTEN Sun, 26 Jul 2026, awaiting first live run. New `vault_explorer/nemotron_wrapper.py` (cache-aware streaming, 1.12s chunks = right-context 13); `live_subtitles.py` session loop rewritten to feed fixed chunks and derive cue times from stream position (no timestamps); `src/live-subtitles.js` points at the new repo with a non-fatal direct-download fallback to NeMo/HF. **Offline batch transcription (`vault_explorer/core.py` + `parakeet_wrapper.py`) intentionally still uses Parakeet** — it needs word timestamps for SRT. Verify on first run: NeMo streaming API surface (`conformer_stream_step`, `setup_streaming_params`) and the .nemo asset name. Original notes: Same framework (NeMo `ASRModel.from_pretrained`, also HF transformers 5.13+), same 0.6B size (~2.5 GB), broader multilingual (40 locales), license OpenMDW-1.1. Current wrapper: `vault_explorer/parakeet_wrapper.py` (`ParakeetV3Wrapper.transcribe_audio_data`), driven by `python-scripts/live_subtitles.py`. TWO considerations before swapping: (1) **word timestamps** — the model card doesn't mention them; our cue start/end depend on Parakeet-TDT's word-level timestamps, so verify Nemotron emits them or rework cue timing. (2) It's **cache-aware STREAMING** (chunk sizes 80ms–1.12s, `att_context_size`) — adopting its real streaming API (vs our re-transcribe-growing-buffer hack) would lower latency AND fix the "ASR races ahead of the playhead" behavior, but it's a rewrite of the transcribe loop. Plan: spike first (does it load + emit timestamps?), then either quick model-name swap or full streaming-API migration.
+- [~] **Upgrade live-subs ASR: Parakeet-TDT-0.6b-v3 → `nvidia/nemotron-3.5-asr-streaming-0.6b`** — MIGRATION WRITTEN Sun, 26 Jul 2026, awaiting first live run. New `vault_streaming/nemotron_wrapper.py` (cache-aware streaming, 1.12s chunks = right-context 13); `live_subtitles.py` session loop rewritten to feed fixed chunks and derive cue times from stream position (no timestamps); `src/live-subtitles.js` points at the new repo with a non-fatal direct-download fallback to NeMo/HF. **Offline batch transcription (`vault_streaming/core.py` + `parakeet_wrapper.py`) intentionally still uses Parakeet** — it needs word timestamps for SRT. Verify on first run: NeMo streaming API surface (`conformer_stream_step`, `setup_streaming_params`) and the .nemo asset name. Original notes: Same framework (NeMo `ASRModel.from_pretrained`, also HF transformers 5.13+), same 0.6B size (~2.5 GB), broader multilingual (40 locales), license OpenMDW-1.1. Current wrapper: `vault_streaming/parakeet_wrapper.py` (`ParakeetV3Wrapper.transcribe_audio_data`), driven by `python-scripts/live_subtitles.py`. TWO considerations before swapping: (1) **word timestamps** — the model card doesn't mention them; our cue start/end depend on Parakeet-TDT's word-level timestamps, so verify Nemotron emits them or rework cue timing. (2) It's **cache-aware STREAMING** (chunk sizes 80ms–1.12s, `att_context_size`) — adopting its real streaming API (vs our re-transcribe-growing-buffer hack) would lower latency AND fix the "ASR races ahead of the playhead" behavior, but it's a rewrite of the transcribe loop. Plan: spike first (does it load + emit timestamps?), then either quick model-name swap or full streaming-API migration.
 
 - [ ] **Playback volume boost (>100%, up to 150%) on the player volume control** (deferred Sat, 25 Jul 2026 per user). The slider in the subtitles/ASR modal is *ASR input gain* (`asrVolumeBoost` → live_subtitles.py ffmpeg volume filter feeding the recognizer), NOT playback — leave it there. For real playback boost: it's **not** an ffmpeg flag or stream restart. `<video>.volume` caps at 1.0; exceed it with the **Web Audio API** — `AudioContext` + `MediaElementAudioSourceNode(video)` + `GainNode` (gain 1.0–1.5), created lazily on first >100%. Add a color gradient on the volume bar past the 100% mark. **CAVEAT:** MediaElementSource requires CORS-clean media (`crossOrigin="anonymous"` + host CORS headers) or the browser silences the audio — set `crossOrigin` at stream-load and fall back to ≤100% if the source taints; verify pixeldrain/Comet stream audio survives before shipping.
 

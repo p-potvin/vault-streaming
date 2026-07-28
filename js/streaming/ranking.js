@@ -27,6 +27,12 @@ const QUALITY_RANK = { '2160p': 4, '4k': 4, '1080p': 3, '720p': 2, '480p': 1, 's
 // and "camera/campaign" don't trigger the "cam" rule.
 const BAD_RELEASE_RE = /\b(camrip|hdcam|hdts|telesync|telecine|screener|workprint|r5|dvdscr)\b|\bcam\b|\bts(?:rip)?\b/;
 
+// Promo material masquerading as the feature (teasers, trailers, samples,
+// featurettes). These are penalised rather than removed: if a title legitimately
+// contains the word (e.g. "Trailer Park Boys") every result takes the same hit,
+// so their relative order — and the movie — stays watchable.
+const PROMO_RE = /\b(teaser|trailer|sample|featurette|promo|clip|behind[\s.\-]the[\s.\-]scenes|bts)\b/;
+
 // 3D / half-SBS / half-OU prints — the "duplicated screen" side-by-side or
 // over-under releases. Useless in a normal 2D player, so heavily penalized;
 // they stay manually selectable but never auto-win over a flat print.
@@ -97,6 +103,16 @@ function scoreTorrent(torrent, preferredLang) {
 
     // ── Reject 3D / half-SBS "duplicated screen" prints ─────────────────────
     if (THREE_D_RE.test(text)) score -= 5000;
+
+    // ── Reject promo material (teaser/trailer/sample/featurette) ────────────
+    if (PROMO_RE.test(text)) score -= 20000;
+
+    // A "movie" of a few hundred MB is a trailer or sample, whatever it's named.
+    // Episodes are legitimately small, so only apply this to non-episodic results.
+    const promoBytes = _parseSize(torrent.size);
+    if (promoBytes > 0 && promoBytes < 300 * 1024 ** 2 && !/\bs\d{1,2}e\d{1,2}\b/i.test(text)) {
+        score -= 20000;
+    }
 
     // ── Quality scoring ─────────────────────────────────────────────────────
     // The user's "Max Stream Quality" is now enforced at PLAYBACK by transcoding,

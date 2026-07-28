@@ -15,7 +15,7 @@ subtitle downloads. Boots straight into the Discover view.
 - **Removed local-vault features**: file explorer boot path, music/photos/misc
   modules, idle preview generation, AI live subtitles, RTX upscaling module +
   player button, ASR benchmark panel, encryption (crypto + crypto.ipc),
-  normalization, previews. Deleted `python-scripts/`, `vault_explorer/`,
+  normalization, previews. Deleted `python-scripts/`, `vault_streaming/`,
   `powershell/`, `tools/`, `scripts/pwsh/`.
 - **Boot**: Discover renders at the END of initApp — after `initTMDBListeners()`.
   (Firing it from initTabListeners rendered before TMDB state existed → empty

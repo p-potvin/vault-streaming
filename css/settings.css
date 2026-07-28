@@ -9,7 +9,8 @@
   border: 1px solid var(--vault-border);
   background: var(--vault-warm-bg, #1a1a24);
   color: var(--vault-text);
-  z-index: 2147483647;
+  /* One below the tooltip layer so hover tooltips render on top of the panel. */
+  z-index: 2147483000;
   box-shadow: 0 30px 100px rgba(0, 0, 0, 0.85);
   font-family: var(--font-sans);
   width: min(820px, 94vw);

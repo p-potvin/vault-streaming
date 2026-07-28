@@ -132,7 +132,7 @@ class NemotronStreamingASR:
         import torch
         import nemo.collections.asr as nemo_asr
 
-        self.logger = logging.getLogger("vault_explorer.nemotron")
+        self.logger = logging.getLogger("vault_streaming.nemotron")
         self.chunk_s = chunk_s if chunk_s in LATENCY_PRESETS else DEFAULT_CHUNK_S
         if chunk_s not in LATENCY_PRESETS:
             self.logger.warning("chunk_s=%s unsupported; falling back to %.2fs", chunk_s, self.chunk_s)

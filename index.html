@@ -736,6 +736,19 @@
               <div id="quality-menu"></div>
             </div>
 
+            <!-- Audio track picker (shown only when a source has >1 audio track) -->
+            <div id="audio-dropdown-container" class="quality-dropdown-container" style="display:none;">
+              <button id="btn-audio" class="ctrl-btn-sm" title="Audio track" aria-label="Audio track">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" style="width:14px; height:14px; display:block;">
+                  <path d="M3 10v4h4l5 4V6L7 10H3z" />
+                  <path d="M16 8a5 5 0 0 1 0 8" />
+                </svg>
+                <span id="audio-btn-text">AUDIO</span> ▾
+              </button>
+              <div id="audio-menu"></div>
+            </div>
+
             <div class="subtitle-dropdown-container">
               <button id="btn-subtitles" class="ctrl-btn-sm" title="Subtitles (CC)" aria-label="Subtitles">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"

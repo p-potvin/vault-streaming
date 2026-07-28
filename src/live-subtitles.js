@@ -229,7 +229,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
         return { success: true, ready: daemonReady, modelPresent: modelPresent() };
     });
 
-    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt } = {}) => {
+    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt, audioIndex } = {}) => {
         // Vault Streaming plays remote (Comet/RD) URLs, so http(s) sources are
         // allowed here (ffmpeg reads them). SRT is opt-in and only meaningful for
         // a local file — see the python daemon.
@@ -252,6 +252,9 @@ function registerLiveSubtitlesHandlers(ipcMain) {
             start: Math.max(0, Number.parseFloat(startTime) || 0),
             translateTo: translateTo || null,
             writeSrt: !!writeSrt,
+            // Which audio track ASR should listen to — matches what the player
+            // is actually playing (see the audio-track picker).
+            audioIndex: Number.isInteger(audioIndex) && audioIndex >= 0 ? audioIndex : 0,
         });
         return { success: ok, ready: daemonReady };
     });

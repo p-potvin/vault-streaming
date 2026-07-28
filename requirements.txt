@@ -1,0 +1,28 @@
+# Vault Streaming — Python runtime for live ASR subtitles.
+#
+# Install into the project venv (Python 3.12, created with `uv venv .venv --python 3.12`):
+#
+#   1) torch + torchvision MUST be installed together from the SAME CUDA index.
+#      Installing them separately (or from PyPI) yields a mismatched pair and
+#      NeMo then dies with "operator torchvision::nms does not exist".
+#
+#      uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+#
+#   2) then the rest:
+#
+#      uv pip install -r requirements.txt
+#
+# Note: the previously-active interpreter was Python 3.14 with torch 2.9.1+CPU
+# (a CPU build — ASR would never have used the RTX 3060) and a broken torchvision.
+
+# ── ASR engine ────────────────────────────────────────────────────────────────
+nemo_toolkit[asr]==2.5.0
+lhotse==1.33.0
+datasets==4.8.5
+
+# ── Audio I/O ─────────────────────────────────────────────────────────────────
+soundfile==0.13.1
+numpy
+
+# ── Subtitle translation ──────────────────────────────────────────────────────
+deep_translator==1.9.1

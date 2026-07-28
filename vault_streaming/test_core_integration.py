@@ -1,17 +1,17 @@
 import unittest
 import os
 from unittest.mock import patch, MagicMock
-from vault_enhancer import core
+from vault_streaming import core
 
 class TestCoreIntegration(unittest.TestCase):
-    @patch('vault_enhancer.media.get_audio_duration_seconds')
-    @patch('vault_enhancer.media.srt_files_exist')
+    @patch('vault_streaming.media.get_audio_duration_seconds')
+    @patch('vault_streaming.media.srt_files_exist')
     @patch('os.path.isfile')
-    @patch('vault_enhancer.core.get_parakeet_model')
-    @patch('vault_enhancer.translation.translate_segments')
-    @patch('vault_enhancer.utils.write_srt')
-    @patch('vault_enhancer.media.fix_audio_and_reencode')
-    @patch('vault_enhancer.media.extract_wav_for_asr')
+    @patch('vault_streaming.core.get_parakeet_model')
+    @patch('vault_streaming.translation.translate_segments')
+    @patch('vault_streaming.utils.write_srt')
+    @patch('vault_streaming.media.fix_audio_and_reencode')
+    @patch('vault_streaming.media.extract_wav_for_asr')
     @patch('os.remove')
     @patch('os.path.exists')
     @patch('time.sleep') # Mock sleep to avoid timeouts

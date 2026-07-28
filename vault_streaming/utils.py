@@ -18,7 +18,7 @@ def get_logger():
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] [%(correlation_id)s] %(message)s'))
         
-        _LOGGER = logging.getLogger("vault_explorer")
+        _LOGGER = logging.getLogger("vault_streaming")
         _LOGGER.setLevel(logging.INFO)
         _LOGGER.addHandler(handler)
         _LOGGER.addFilter(CorrelationFilter())
