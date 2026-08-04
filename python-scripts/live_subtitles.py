@@ -221,7 +221,7 @@ def run_session(model, opts, stop_event):
 
     langs = [l for l in (opts.get("langs") or ["en"]) if l] or ["en"]
     primary_lang = langs[0]
-    volume_boost = min(2.5, max(1.0, float(opts.get("volumeBoost") or 1.5)))
+    volume_boost = min(2.5, max(1.0, float(opts.get("volumeBoost") or 1.0)))
     start = max(0.0, float(opts.get("start") or 0.0))
     translate_to = (opts.get("translateTo") or "").strip() or None
 
@@ -465,7 +465,7 @@ def main():
     # One-shot CLI mode (handy for testing): pass a video path directly.
     parser.add_argument("video_path", nargs="?", default=None)
     parser.add_argument("--langs", default="en")
-    parser.add_argument("--volume-boost", type=float, default=1.5)
+    parser.add_argument("--volume-boost", type=float, default=1.0)
     parser.add_argument("--start", type=float, default=0.0)
     parser.add_argument("--translate-to", default=None)
     args = parser.parse_args()

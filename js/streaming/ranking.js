@@ -14,8 +14,17 @@ function getPreferredQuality() {
 /**
  * Read the user's preferred stream language from settings.
  * Returns one of: 'en', 'fr', 'multi'
+ *
+ * Reads the SAVED setting, not the live dropdown. player.js passes
+ * `window.appSettings.streamLang` to the ffprobe audio-track probe, and that only
+ * updates when the settings modal is saved. Reading the DOM here instead meant an
+ * unsaved dropdown change ranked sources by the new language while the audio
+ * track was still picked by the old one. Falls back to the dropdown only before
+ * appSettings has been populated.
  */
 function getPreferredLang() {
+    const saved = window.appSettings && window.appSettings.streamLang;
+    if (saved) return saved;
     const sel = el('settings-stream-lang');
     return sel ? sel.value : 'en';
 }

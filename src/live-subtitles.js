@@ -248,7 +248,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
             cmd: 'start',
             videoPath,
             langs: Array.isArray(langs) && langs.length ? langs : ['en'],
-            volumeBoost: Number.isFinite(parsedBoost) ? Math.min(2.5, Math.max(1, parsedBoost)) : 1.5,
+            volumeBoost: Number.isFinite(parsedBoost) ? Math.min(2.5, Math.max(1, parsedBoost)) : 1.0,
             start: Math.max(0, Number.parseFloat(startTime) || 0),
             translateTo: translateTo || null,
             writeSrt: !!writeSrt,

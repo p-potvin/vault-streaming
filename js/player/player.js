@@ -1555,6 +1555,21 @@ async function playStream(url, title) {
         if (audioProbe && audioProbe.success) {
             window._audioTracks = audioProbe;
             if (typeof window.refreshAudioMenu === 'function') window.refreshAudioMenu();
+
+            // The probe knows the real runtime, so a trailer/sample that slipped
+            // past the title-and-size heuristics in ranking.js gets caught here —
+            // the only place we ever see the actual file rather than its name.
+            // Episodes are legitimately short, so only movies are checked.
+            const isEpisode = !!(window.activeStreamingMedia
+                && (window.activeStreamingMedia.mediaType === 'tv'
+                    || window.activeStreamingMedia.season != null));
+            if (audioProbe.implausibleRuntime && !isEpisode) {
+                const mins = Math.round((audioProbe.durationSeconds || 0) / 60);
+                console.warn(`[audio-tracks] source runtime is ${mins} min — likely a trailer or sample, not the feature`);
+                window.showToast(
+                    `This source is only ${mins} min long — probably a trailer. Use "Choose Manually" to pick another.`,
+                    'error');
+            }
         } else {
             audioProbe = null;
             console.warn('[audio-tracks] probe unavailable — playing source directly');

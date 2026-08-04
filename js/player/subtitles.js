@@ -252,7 +252,7 @@ function showAsrContextMenu(anchorEl, defaultLangs) {
         const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
         const clampVolumeBoost = (value) => {
             const parsed = Number.parseFloat(value);
-            if (!Number.isFinite(parsed)) return 1.5;
+            if (!Number.isFinite(parsed)) return 1.0;
             return Math.min(2.5, Math.max(1, parsed));
         };
         let volumeBoost = clampVolumeBoost(window.appSettings && window.appSettings.asrVolumeBoost);
@@ -917,7 +917,7 @@ function initSubtitleListeners() {
             const asrAnchor = el('btn-subtitles') || optGen;
             const asrConfig = await showAsrContextMenu(asrAnchor, defaultLangs);
             const langs = Array.isArray(asrConfig) ? asrConfig : (asrConfig && asrConfig.langs);
-            const volumeBoost = Array.isArray(asrConfig) ? 1.5 : (asrConfig && asrConfig.volumeBoost) || 1.5;
+            const volumeBoost = Array.isArray(asrConfig) ? 1.0 : (asrConfig && asrConfig.volumeBoost) || 1.0;
             if (!langs || langs.length === 0) return;
 
             if (!window.appSettings) window.appSettings = {};

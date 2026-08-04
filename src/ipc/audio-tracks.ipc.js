@@ -45,6 +45,17 @@ function isBrowserSafeAudio(codec) {
     return BROWSER_SAFE_AUDIO.has(String(codec || '').toLowerCase());
 }
 
+// Must stay BELOW the renderer's own race timeout in player.js (12s). The
+// renderer abandons the probe when its race fires; if ffprobe outlived that it
+// would keep an extra connection open on the debrid link with nobody listening.
+// Shorter here means the child is always dead before the caller gives up.
+const PROBE_TIMEOUT_MS = 10000;
+
+// A movie shorter than this is a trailer, sample, or the wrong file inside the
+// release — no legitimate feature runs under 15 minutes. Episodes legitimately
+// do, so callers only apply this to movies.
+const MIN_FEATURE_DURATION_SECONDS = 15 * 60;
+
 function normLang(tag) {
     if (!tag) return 'und';
     const t = String(tag).toLowerCase().split(/[-_]/)[0];
@@ -95,7 +106,7 @@ function registerAudioTracksIpc(ipcMain) {
             // No -select_streams: one probe returns both the audio tracks AND the
             // video codec/profile/level, which step 2 needs to build the
             // MediaSource codec string for a `-c:v copy` remux.
-            '-show_entries', 'stream=index,codec_type,codec_name,profile,level,channels,disposition:stream_tags=language,title',
+            '-show_entries', 'stream=index,codec_type,codec_name,profile,level,channels,disposition:stream_tags=language,title:format=duration',
             '-of', 'json',
             url,
         );
@@ -108,7 +119,8 @@ function registerAudioTracksIpc(ipcMain) {
                 ffprobePath(), args,
                 {
                     windowsHide: true,
-                    timeout: 20000,
+                    timeout: PROBE_TIMEOUT_MS,
+                    killSignal: 'SIGKILL',
                     maxBuffer: 4 * 1024 * 1024,
                     env: { ...process.env, ...proxyEnv(proxy) },
                 },
@@ -131,6 +143,14 @@ function registerAudioTracksIpc(ipcMain) {
         } catch (e) {
             return { success: false, error: 'could not parse ffprobe output' };
         }
+
+        // Container runtime. Replaces guessing "this is a trailer" from file size:
+        // ffprobe is already open on the file, so the real duration is free here.
+        const rawDuration = parsed.format && parsed.format.duration;
+        const durationSeconds = Number.isFinite(parseFloat(rawDuration)) ? parseFloat(rawDuration) : null;
+        const implausibleRuntime = durationSeconds != null
+            && durationSeconds > 0
+            && durationSeconds < MIN_FEATURE_DURATION_SECONDS;
 
         const allStreams = parsed.streams || [];
         const videoStream = allStreams.find((s) => s.codec_type === 'video') || null;
@@ -181,6 +201,10 @@ function registerAudioTracksIpc(ipcMain) {
             success: true,
             tracks,
             videoInfo,
+            durationSeconds,
+            // Advisory only — the caller decides what to do, since episodes are
+            // legitimately shorter than the feature-length floor.
+            implausibleRuntime,
             count: tracks.length,
             defaultAudioIndex: defaultTrack.audioIndex,
             defaultLang: defaultTrack.lang,
