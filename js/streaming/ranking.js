@@ -33,8 +33,15 @@ function getPreferredLang() {
 const QUALITY_RANK = { '2160p': 4, '4k': 4, '1080p': 3, '720p': 2, '480p': 1, 'sd': 0 };
 
 // Bad release types — strict word boundaries so "DTS" audio is NOT matched as "ts" telesync,
-// and "camera/campaign" don't trigger the "cam" rule.
-const BAD_RELEASE_RE = /\b(camrip|hdcam|hdts|telesync|telecine|screener|workprint|r5|dvdscr)\b|\bcam\b|\bts(?:rip)?\b/;
+// and "camera/campaign/webcam" don't trigger the "cam" rule.
+//
+// A bare \bcam\b cannot match the glued spellings scene groups actually ship:
+// HQCAM, CAMHD and HDCAMRIP have no word boundary before "cam". The optional
+// prefix/suffix closes that without loosening the boundary discipline — "cam"
+// must still END on a boundary, so "camera" (cam + "era") stays unmatched and
+// "webcam" has no leading boundary to start from.
+// Kept in sync with vault-tv's `src/streaming/ranking.ts`.
+const BAD_RELEASE_RE = /\b(camrip|hdcam|hdts|hdtc|telesync|telecine|screener|workprint|r5|dvdscr|predvd)\b|\b(?:hd|hq|ts|uhd|new)?cam(?:rip|hd)?\b|\bts(?:rip)?\b/;
 
 // Promo material masquerading as the feature (teasers, trailers, samples,
 // featurettes). These are penalised rather than removed: if a title legitimately
