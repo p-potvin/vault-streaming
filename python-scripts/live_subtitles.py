@@ -34,6 +34,12 @@ import queue
 import threading
 import subprocess
 
+from vw_media import telemetry
+
+# Kept here rather than imported from nemotron_wrapper so this module still has
+# no import-time dependency on torch/NeMo, which load_model() defers on purpose.
+NEMOTRON_DEFAULT_MODEL = "nvidia/nemotron-3.5-asr-streaming-0.6b"
+
 # UTF-8 everywhere — subtitle text is multilingual. The spawn env also sets
 # PYTHONUTF8/PYTHONIOENCODING as a belt-and-suspenders guarantee.
 try:
@@ -351,6 +357,21 @@ def run_session(model, opts, stop_event):
     dbg(f"reading ffmpeg audio stream (chunk={chunk_dur:.2f}s / {chunk_samples} samples)...")
     total_bytes = 0
     stopped = False
+
+    # One run per SESSION, not per chunk. Chunks are ~1.1 s, so a two-hour
+    # stream would otherwise write some 7,000 rows describing a single piece of
+    # work -- and the number that matters here is the real-time factor over the
+    # whole session, which only exists at this grain.
+    session = telemetry.run(
+        model=getattr(model, "model_name", None) or NEMOTRON_DEFAULT_MODEL,
+        task="audio-asr",
+        runtime="nemo-streaming",
+        service="live-subtitles",
+        stream=True,
+        chunk_seconds=round(chunk_dur, 3),
+        source="remote" if is_remote else "local",
+    )
+    session.start()
     try:
         while True:
             if stop_event.is_set():
@@ -394,6 +415,19 @@ def run_session(model, opts, stop_event):
         if writer:
             writer.close()
             writer.join(timeout=3.0)
+
+        # Recorded in `finally` so a session that is stopped, or that dies on an
+        # ffmpeg fault, is still measured -- those are the ones worth seeing.
+        session.set(
+            audio_seconds=round(max(stream_pos - start, 0.0), 3),
+            segment_count=final_count[0],
+            output_bytes=total_bytes,
+        )
+        if stopped:
+            # Stopped by the user: a decision, not a fault. Counting it as an
+            # error would make every manual stop look like a model failure.
+            session.set(status="cancelled")
+        session.close()
 
     if stopped:
         emit("LIVE_STATUS", {"status": "stopped", "videoPath": video_path})
