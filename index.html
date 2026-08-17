@@ -86,9 +86,9 @@
   <div id="sub-nav-bar" class="sub-nav-bar">
     <!-- Streaming Tab Subcategories -->
     <div id="sub-nav-streaming" class="sub-nav-streaming">
-      <button id="subtab-streaming-discover" class="sub-nav-pill active sub-nav-pill-active">Discover</button>
-      <button id="subtab-streaming-library" class="sub-nav-pill sub-nav-pill-inactive">Library</button>
-      <button id="subtab-streaming-history" class="sub-nav-pill sub-nav-pill-inactive">Watch History</button>
+      <button id="subtab-streaming-discover" data-i18n="tabDiscover" class="sub-nav-pill active sub-nav-pill-active">Discover</button>
+      <button id="subtab-streaming-library" data-i18n="tabLibrary" class="sub-nav-pill sub-nav-pill-inactive">Library</button>
+      <button id="subtab-streaming-history" data-i18n="tabWatchHistory" class="sub-nav-pill sub-nav-pill-inactive">Watch History</button>
     </div>
   </div>
 
@@ -134,11 +134,11 @@
         <div class="streaming-toolbar-right">
           <div class="tmdb-search-wrapper">
             <span id="search-type-pill" class="search-type-pill" title="Click to toggle Movies/Series">Movies</span>
-            <input type="text" id="tmdb-search-input" placeholder="Search Movies & TV…" class="tmdb-search-input">
+            <input type="text" id="tmdb-search-input" data-i18n-placeholder="searchMoviesPlaceholder" placeholder="Search Movies & TV…" class="tmdb-search-input">
           </div>
-          <button id="tmdb-search-btn" class="tmdb-search-btn">Search</button>
+          <button id="tmdb-search-btn" data-i18n="searchAction" class="tmdb-search-btn">Search</button>
           <button id="tmdb-advanced-toggle" class="tmdb-advanced-toggle">
-            <span>Advanced</span>
+            <span data-i18n="advancedFilters">Advanced</span>
             <svg id="advanced-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2.5" class="advanced-chevron">
               <path d="M6 9l6 6 6-6" />
@@ -222,7 +222,7 @@
             <option value="KR">South Korea</option>
           </select>
         </div>
-        <button id="btn-clear-advanced-filters" class="btn-clear-filters">Reset</button>
+        <button id="btn-clear-advanced-filters" data-i18n="reset" class="btn-clear-filters">Reset</button>
       </div>
 
       <div id="tmdb-results-grid" class="file-grid tmdb-grid tmdb-results-grid">
@@ -231,7 +231,7 @@
       <!-- Load More Button Container -->
       <div id="tmdb-load-more-container" class="tmdb-load-more-container">
         <button id="tmdb-load-more-btn" class="tmdb-load-more-btn">
-          <span id="tmdb-load-more-text">Load More</span>
+          <span id="tmdb-load-more-text" data-i18n="loadMore">Load More</span>
         </button>
       </div>
     </div>
@@ -271,7 +271,7 @@
     <div id="confirm-message" class="confirm-dialog-message">Are you sure you want to proceed?</div>
     <div class="confirm-dialog-btns">
       <button id="btn-confirm-cancel" class="confirm-btn-cancel">Cancel</button>
-      <button id="btn-confirm-ok" class="confirm-btn-ok">Confirm</button>
+      <button id="btn-confirm-ok" data-i18n="confirm" class="confirm-btn-ok">Confirm</button>
     </div>
   </div>
 
@@ -291,7 +291,7 @@
       <div class="settings-col">
         <span class="settings-section-heading">General &amp; Subtitles</span>
         <div>
-          <label for="settings-default-lang" class="settings-label">App Language:</label>
+          <label for="settings-default-lang" data-i18n="settingAppLanguage" class="settings-label">App Language:</label>
           <select id="settings-default-lang" class="settings-select">
             <option value="en">English</option>
             <option value="fr">Québécois</option>
@@ -299,7 +299,7 @@
         </div>
 
         <div>
-          <label for="settings-default-sub-lang" class="settings-label">Default Subtitle:</label>
+          <label for="settings-default-sub-lang" data-i18n="settingDefaultSubtitle" class="settings-label">Default Subtitle:</label>
           <select id="settings-default-sub-lang" class="settings-select">
             <option value="original">Original Language (Default)</option>
             <option value="und">None / Off</option>
@@ -309,7 +309,7 @@
         </div>
 
         <div>
-          <label for="settings-sub-font-size" class="settings-label">Subtitle Font Size:</label>
+          <label for="settings-sub-font-size" data-i18n="settingSubtitleFontSize" class="settings-label">Subtitle Font Size:</label>
           <select id="settings-sub-font-size" class="settings-select">
             <option value="12px">12px (Small)</option>
             <option value="16px" selected>16px (Medium)</option>
@@ -319,34 +319,34 @@
         </div>
 
         <div class="settings-toggle-row">
-          <span class="settings-toggle-label">Remember Playback Pos:</span>
+          <span class="settings-toggle-label" data-i18n="settingRememberPlayback">Remember Playback Pos:</span>
           <input type="checkbox" id="settings-remember-position" class="settings-checkbox" />
         </div>
 
         <div class="settings-toggle-row" title="Start trailers muted (they play at 80% volume otherwise).">
-          <span class="settings-toggle-label">Mute Trailers by Default:</span>
+          <span class="settings-toggle-label" data-i18n="settingMuteTrailers">Mute Trailers by Default:</span>
           <input type="checkbox" id="settings-mute-trailers" class="settings-checkbox" />
         </div>
 
         <div class="settings-toggle-row"
           title="When a trailer is played, cache a durable copy via the proxy (pixeldrain/gofile/1fichier/TorBox) so future plays are instant. Requires the proxy tunnel to be enabled.">
-          <span class="settings-toggle-label">Auto-cache Trailers:</span>
+          <span class="settings-toggle-label" data-i18n="settingAutoCacheTrailers">Auto-cache Trailers:</span>
           <input type="checkbox" id="settings-auto-cache-trailers" class="settings-checkbox" />
         </div>
 
         <div class="settings-toggle-row">
-          <span class="settings-toggle-label">Minimize to System Tray:</span>
+          <span class="settings-toggle-label" data-i18n="settingMinimizeToTray">Minimize to System Tray:</span>
           <input type="checkbox" id="settings-minimize-to-tray" class="settings-checkbox" />
         </div>
 
         <div class="settings-toggle-row"
           title="Show all toasts and console logs. When off, only errors and essential notifications appear.">
-          <span class="settings-toggle-label">Dev Mode (verbose toasts/logs):</span>
+          <span class="settings-toggle-label" data-i18n="settingDevMode">Dev Mode (verbose toasts/logs):</span>
           <input type="checkbox" id="settings-dev-mode" class="settings-checkbox" />
         </div>
 
         <div>
-          <label for="settings-opensubtitles-key" class="settings-label">OpenSubtitles API Key:</label>
+          <label for="settings-opensubtitles-key" data-i18n="settingOpenSubtitlesKey" class="settings-label">OpenSubtitles API Key:</label>
           <input type="password" id="settings-opensubtitles-key" class="search-box settings-api-key-input"
             placeholder="Paste OpenSubtitles API Key here..." />
         </div>
@@ -358,7 +358,7 @@
           <span id="label-stream-heading" class="settings-sub-heading">Streaming Settings</span>
 
           <div>
-            <label for="settings-stream-quality" id="label-stream-quality" class="settings-label">Max Quality:</label>
+            <label for="settings-stream-quality" id="label-stream-quality" data-i18n="streamQuality" class="settings-label">Max Quality:</label>
             <select id="settings-stream-quality" class="settings-select">
               <option value="2160p">4K / 2160p</option>
               <option value="1080p" selected>1080p (FHD)</option>

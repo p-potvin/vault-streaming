@@ -91,5 +91,26 @@ window.translationsQc = {
   removeFromHistory: "Retirer de l'historique",
   confirmRemoveFromHistory: "Voulez-vous vraiment retirer \"{0}\" de votre historique ?",
   removedFromHistory: "Retiré de l'historique",
-  loadingHistory: "Chargement de l'historique..."
+  loadingHistory: "Chargement de l'historique...",
+
+  // Interface de diffusion. Résolue via les attributs data-i18n plutôt qu'élément
+  // par élément dans setLanguage — voir applyI18n dans app.js.
+  tabDiscover: "Découvrir",
+  tabWatchHistory: "Historique d'écoute",
+  searchMoviesPlaceholder: "Rechercher films et séries…",
+  searchAction: "Rechercher",
+  advancedFilters: "Avancé",
+  reset: "Réinitialiser",
+  loadMore: "Afficher plus",
+  confirm: "Confirmer",
+
+  settingAppLanguage: "Langue de l'application :",
+  settingDefaultSubtitle: "Sous-titres par défaut :",
+  settingSubtitleFontSize: "Taille des sous-titres :",
+  settingRememberPlayback: "Retenir la position de lecture :",
+  settingMuteTrailers: "Couper le son des bandes-annonces :",
+  settingAutoCacheTrailers: "Mise en cache des bandes-annonces :",
+  settingMinimizeToTray: "Réduire dans la barre d'état :",
+  settingDevMode: "Mode développeur (journaux détaillés) :",
+  settingOpenSubtitlesKey: "Clé API OpenSubtitles :"
 };
