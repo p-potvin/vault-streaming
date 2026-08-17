@@ -47,7 +47,34 @@ Write-Log "Tailnet up ($tailnetIp); starting web client on 0.0.0.0:8722 (repo: $
 $env:VW_WEB_HOST = '0.0.0.0'
 
 Set-Location $RepoRoot
-& node "web/server.js" *>> $LogFile
 
-Write-Log "Server exited with code $LASTEXITCODE"
-exit $LASTEXITCODE
+# Supervise rather than exit. The server has died mid-session at least once (an
+# unhandled rejection out of a trailer/yt-dlp path took the process with it), and
+# a scheduled task that simply ends leaves the site down until someone notices.
+# Restart with a short backoff; give up only if it is crash-looping, which means
+# something is genuinely broken rather than transient.
+$backoff = 2
+$recentFailures = 0
+$lastStart = Get-Date
+
+while ($true) {
+    # 2>&1 folds stderr into the same pipe so Out-File can write UTF-8; the old
+    # `*>> $LogFile` redirection produced a UTF-16 log that reads as spaced-out
+    # garbage in every normal tool.
+    & node "web/server.js" 2>&1 | Out-File -FilePath $LogFile -Encoding utf8 -Append
+    $code = $LASTEXITCODE
+    $ranFor = (Get-Date) - $lastStart
+
+    Write-Log "Server exited with code $code after $([int]$ranFor.TotalSeconds)s"
+
+    if ($ranFor.TotalSeconds -lt 60) { $recentFailures++ } else { $recentFailures = 0; $backoff = 2 }
+    if ($recentFailures -ge 5) {
+        Write-Log 'FATAL: five failures inside a minute each — crash loop, not restarting.'
+        exit 1
+    }
+
+    Start-Sleep -Seconds $backoff
+    $backoff = [Math]::Min($backoff * 2, 60)
+    $lastStart = Get-Date
+    Write-Log 'Restarting server...'
+}
