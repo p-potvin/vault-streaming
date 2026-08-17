@@ -357,6 +357,7 @@ const { registerTranscodeIpc } = require('./src/ipc/transcode.ipc');
 const { registerClipIpc } = require('./src/ipc/clip.ipc');
 const { registerTrailerCacheIpc } = require('./src/ipc/trailer-cache.ipc');
 const { registerAudioTracksIpc } = require('./src/ipc/audio-tracks.ipc');
+const { registerDebridStatsIpc } = require('./src/telemetry/debrid-stats');
 
 
 registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings);
@@ -366,6 +367,7 @@ registerTranscodeIpc(ipcMain);
 registerClipIpc(ipcMain);
 registerTrailerCacheIpc(ipcMain);
 registerAudioTracksIpc(ipcMain);
+registerDebridStatsIpc(ipcMain);
 
 // Register Modular Handlers
 tmdbHandlers.registerTmdbHandlers(ipcMain);

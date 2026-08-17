@@ -110,6 +110,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Audio-track probe (which audio streams a source carries, and their languages)
   probeAudioTracks: (data) => ipcRenderer.invoke('probe-audio-tracks', data),
 
+  // Per-debrid-service counters. `getDebridStatsReport()` returns a printable
+  // table — run it in the console to decide which service is worth keeping.
+  getDebridStats: () => ipcRenderer.invoke('debrid-stats-get'),
+  getDebridStatsReport: () => ipcRenderer.invoke('debrid-stats-report'),
+  resetDebridStats: () => ipcRenderer.invoke('debrid-stats-reset'),
+
   // Trailer cache (durable per-instance hosted copies of YouTube trailers)
   getCachedTrailer: (youtubeId) => ipcRenderer.invoke('trailer-cache:get', youtubeId),
   cacheTrailer: (data) => ipcRenderer.invoke('trailer-cache:put', data),

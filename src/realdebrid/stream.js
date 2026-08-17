@@ -11,6 +11,7 @@
 // location. Resolved urls are cached by hash so repeated plays don't re-hit
 // Comet's resolver for the same content.
 const { fetchWithTimeout } = require("./client");
+const { recordSelection, recordOutcome } = require("../telemetry/debrid-stats");
 
 const _inFlightMagnets = new Set();
 const _resolvedCache = new Map(); // hash/url -> { streamUrl, filename, ts }
@@ -58,7 +59,7 @@ async function probeStreamBytes(url) {
 }
 
 function registerStreamHandlers(ipcMain) {
-    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url } = {}) => {
+    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url, name } = {}) => {
         const dedupKey = (hash || url || magnet || '').toLowerCase().trim();
 
         // Only a Comet-resolved url is playable. No url = not cached/available;
@@ -94,6 +95,9 @@ function registerStreamHandlers(ipcMain) {
             const totalBytes = await probeStreamBytes(streamUrl);
             if (totalBytes !== null && totalBytes < MIN_REAL_BYTES) {
                 console.warn(`[Comet] Placeholder detected (${(totalBytes / 1048576).toFixed(1)} MB) — not actually cached.`);
+                // The single most useful signal for cutting a service: it
+                // claimed a cache hit and served a stub.
+                recordOutcome(name, 'placeholder');
                 return {
                     success: false,
                     notCached: true,
@@ -102,10 +106,13 @@ function registerStreamHandlers(ipcMain) {
                 };
             }
 
+            recordSelection(name);
+            recordOutcome(name, 'played');
             _resolvedCache.set(dedupKey, { streamUrl, filename, ts: Date.now() });
             return { success: true, streamUrl, filename };
         } catch (e) {
             console.error('[Comet] Resolve failed:', e.message);
+            recordOutcome(name, 'failed');
             return { success: false, error: e.message };
         } finally {
             _inFlightMagnets.delete(dedupKey);
