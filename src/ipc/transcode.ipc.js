@@ -187,4 +187,7 @@ function registerTranscodeIpc(ipcMain) {
     console.log('[transcode] IPC handlers registered (transcode-stream-start/stop).');
 }
 
-module.exports = { registerTranscodeIpc };
+// buildArgs/pickH264Encoder are also used by the web client (web/transcode-route.js),
+// which pipes the same fragmented MP4 straight down an HTTP response instead of
+// chunking it to a MediaSource. Same ffmpeg invocation, different transport.
+module.exports = { registerTranscodeIpc, buildArgs, pickH264Encoder };

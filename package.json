@@ -1,10 +1,11 @@
 {
   "name": "vault-streaming",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "VaultWares streaming client - Torrents + Real-Debrid via Comet, TMDB movie & series streaming.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "web": "node web/server.js",
     "dist": "electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
