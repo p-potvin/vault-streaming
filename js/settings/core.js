@@ -23,7 +23,13 @@ function initSettingsListeners() {
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
         const panel = el('settings-panel');
-        const isOpening = panel.style.display === 'none';
+        // Read the COMPUTED display, not the inline one. The panel starts hidden
+        // via the stylesheet, so panel.style.display is "" on the first click —
+        // which made this false, set display:none explicitly, and skip the
+        // hydration block below. The visible symptom was settings that looked
+        // unsaved: the panel opened (on the second click) showing markup
+        // defaults instead of the stored values.
+        const isOpening = getComputedStyle(panel).display === 'none';
         panel.style.display = isOpening ? 'flex' : 'none';
         const backdrop = el('settings-backdrop');
         if (backdrop) backdrop.style.display = isOpening ? 'block' : 'none';

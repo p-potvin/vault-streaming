@@ -1,6 +1,8 @@
-# ASR models — large binaries, kept local only (bundled .nemo + pre-extracted dir)
-tools/models/*.nemo
-tools/models/parakeet-tdt-0.6b-v3/
+# ASR models — large binaries, kept local only (bundled .nemo + pre-extracted dir).
+# Ignore the whole directory rather than naming each model: listing them
+# individually already let tools/models/nemotron-3.5-asr-streaming-0.6b/ through,
+# and `git add tools/` would have committed its 2.5 GB model.safetensors.
+tools/models/
 
 # Logs
 logs

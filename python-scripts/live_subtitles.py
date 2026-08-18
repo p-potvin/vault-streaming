@@ -36,9 +36,21 @@ import subprocess
 
 from vw_media import telemetry
 
-# Kept here rather than imported from nemotron_wrapper so this module still has
-# no import-time dependency on torch/NeMo, which load_model() defers on purpose.
+# Kept here rather than imported from the wrappers so this module still has no
+# import-time dependency on torch/NeMo, which load_model() defers on purpose.
 NEMOTRON_DEFAULT_MODEL = "nvidia/nemotron-3.5-asr-streaming-0.6b"
+EOU_DEFAULT_MODEL = "nvidia/parakeet_realtime_eou_120m-v1"
+EOU_DEFAULT_CHUNK_S = 1.0
+# Shortest utterance an <EOU> is allowed to close. See EOUStreamingAdapter.feed.
+EOU_MIN_UTTERANCE_S = 2.5
+
+# ASR over film audio hallucinates short interjections during score and room
+# tone — on a Dune sample roughly half the cues were a bare "yeah" with no one
+# speaking. A cue consisting solely of one of these is dropped (see emit_final).
+HALLUCINATED_FILLERS = {
+    "yeah", "yep", "yup", "uh", "uhh", "um", "umm", "mm", "mmm", "hmm", "hm",
+    "ah", "ahh", "oh", "ooh", "huh", "eh", "mhm", "uh-huh",
+}
 
 # UTF-8 everywhere — subtitle text is multilingual. The spawn env also sets
 # PYTHONUTF8/PYTHONIOENCODING as a belt-and-suspenders guarantee.
@@ -133,14 +145,23 @@ class SrtWriter(threading.Thread):
         self.q.put(None)
 
 
-def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index=0):
-    af = (
-        "highpass=f=90,"
-        "lowpass=f=7500,"
-        "afftdn=nf=-25,"
-        "dynaudnorm=f=200:g=15,"
-        f"volume={volume_boost:.3f}"
-    )
+def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index=0, denoise=True):
+    if denoise:
+        af = (
+            "highpass=f=90,"
+            "lowpass=f=7500,"
+            "afftdn=nf=-25,"
+            "dynaudnorm=f=200:g=15,"
+            f"volume={volume_boost:.3f}"
+        )
+    else:
+        # Conditioning tuned for the cache-aware model actively hurts the EOU one:
+        # dynaudnorm pumps the quiet gaps between words up to full scale, and the
+        # model reads those as end-of-utterance. Measured on one 10.6s clip, the
+        # chain fired EOU 8x vs 4x clean, splitting "the quick brown fox jumps
+        # over the lazy dog" into three fragments and inventing words that were
+        # never spoken. So apply only the gain the caller actually asked for.
+        af = f"volume={volume_boost:.3f}"
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
     # Remote sources: this is a SECOND connection to a link the player is already
     # streaming, so a debrid provider can answer 429 (rate limit). Reconnect with
@@ -151,6 +172,13 @@ def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index=0
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "10",
             "-user_agent", "Mozilla/5.0",
+            # Pace the pull. Unthrottled, ffmpeg reads as fast as the link allows
+            # — measured ~9x realtime, i.e. a live-subs session on a 70 GB remux
+            # tries to drag the whole file down at once, on an account that is
+            # rate-sensitive and already serving the player. A few times realtime
+            # keeps ASR comfortably ahead of playback (cues must land before the
+            # position they are stamped for) without the burst.
+            "-readrate", os.environ.get("VAULT_ASR_READRATE", "4.0"),
         ]
     if start and start > 0.05:
         cmd += ["-ss", f"{start:.3f}"]
@@ -201,12 +229,85 @@ class Translator:
 # ---------------------------------------------------------------------------
 # Model
 # ---------------------------------------------------------------------------
+class EOUStreamingAdapter:
+    """
+    Presents the realtime-EOU model through the same feed/reset interface the
+    session loop already uses for the cache-aware streaming model.
+
+    Unlike a cache-aware model, the EOU model carries no streaming state: each
+    call transcribes exactly the array it is handed. So we hold the audio of the
+    utterance currently being built and re-transcribe it as it grows, which is
+    what makes the returned text cumulative the way feed() callers expect.
+
+    The ``<EOU>`` token the model emits when a phrase completes is exposed as
+    ``.eou``. Acting on it both segments the subtitle and clears the buffer, so
+    re-transcription cost stays bounded by one utterance rather than growing
+    with the length of the session.
+    """
+
+    def __init__(self, chunk_s=EOU_DEFAULT_CHUNK_S, min_utt_s=EOU_MIN_UTTERANCE_S):
+        import numpy as np
+        from vault_streaming.realtime_eou import RealtimeEOUTranscriber, EOU_TOKEN
+
+        self._np = np
+        self._eou_token = EOU_TOKEN
+        self._impl = RealtimeEOUTranscriber()
+        self._sample_rate = 16000
+        self._buf = np.zeros(0, dtype=np.float32)
+
+        self.chunk_s = chunk_s
+        self.min_utt_s = min_utt_s
+        self.eou = False
+        self.provides_eou = True
+        self.model_name = EOU_DEFAULT_MODEL
+        self.runtime_tag = "parakeet-eou"
+
+    def chunk_samples(self) -> int:
+        return int(self.chunk_s * self._sample_rate)
+
+    def reset(self):
+        self._buf = self._np.zeros(0, dtype=self._np.float32)
+        self.eou = False
+
+    def feed(self, audio_f32) -> str:
+        self._buf = self._np.concatenate([self._buf, audio_f32])
+        raw = self._impl.transcribe(self._buf) or ""
+        fired = self._eou_token in raw
+        text = raw.replace(self._eou_token, "").strip()
+
+        # An EOU over a very short buffer is not trustworthy on film audio: score
+        # and room tone trigger it constantly, and acting on it resets the
+        # context so the model only ever sees ~1s fragments. Measured on 30s of
+        # English dialogue, one window transcribes as "so it's done it's done"
+        # while chopping at every EOU degrades it to "yeah / yeah / so / done /
+        # yeah". Requiring a minimum of buffered audio keeps the context intact
+        # through spurious boundaries without delaying real ones much.
+        buffered_s = len(self._buf) / self._sample_rate
+        self.eou = fired and buffered_s >= self.min_utt_s
+
+        if fired and not text:
+            # A boundary with nothing decoded: drop the audio so a silent stretch
+            # can't grow the buffer for the rest of the session.
+            self._buf = self._np.zeros(0, dtype=self._np.float32)
+        return text
+
+
 def load_model():
+    # Default engine is the realtime-EOU Parakeet model. The Nemotron streaming
+    # path is kept selectable via VAULT_ASR_ENGINE=nemotron.
+    engine = (os.environ.get("VAULT_ASR_ENGINE") or "eou").strip().lower()
     t0 = time.perf_counter()
-    from vault_streaming.nemotron_wrapper import NemotronStreamingASR, DEFAULT_CHUNK_S
-    chunk_s = float(os.environ.get("VAULT_ASR_CHUNK_S") or DEFAULT_CHUNK_S)
-    m = NemotronStreamingASR(chunk_s=chunk_s)
-    dbg(f"Nemotron streaming model loaded in {time.perf_counter() - t0:.1f}s (chunk={m.chunk_s}s)")
+
+    if engine == "nemotron":
+        from vault_streaming.nemotron_wrapper import NemotronStreamingASR, DEFAULT_CHUNK_S
+        chunk_s = float(os.environ.get("VAULT_ASR_CHUNK_S") or DEFAULT_CHUNK_S)
+        m = NemotronStreamingASR(chunk_s=chunk_s)
+        dbg(f"Nemotron streaming model loaded in {time.perf_counter() - t0:.1f}s (chunk={m.chunk_s}s)")
+        return m
+
+    chunk_s = float(os.environ.get("VAULT_ASR_CHUNK_S") or EOU_DEFAULT_CHUNK_S)
+    m = EOUStreamingAdapter(chunk_s=chunk_s)
+    dbg(f"Parakeet realtime-EOU model loaded in {time.perf_counter() - t0:.1f}s (chunk={m.chunk_s}s)")
     return m
 
 
@@ -230,6 +331,14 @@ def run_session(model, opts, stop_event):
     volume_boost = min(2.5, max(1.0, float(opts.get("volumeBoost") or 1.0)))
     start = max(0.0, float(opts.get("start") or 0.0))
     translate_to = (opts.get("translateTo") or "").strip() or None
+
+    # The renderer always sends translateTo (it treats the picked language as the
+    # desired OUTPUT language), so a plain English session arrives as en -> en.
+    # Honouring that literally would round-trip every cue through an external
+    # translation API for no change in text — latency and a network dependency
+    # on the live path. Same language means transcription only.
+    if translate_to and translate_to.lower() == primary_lang.lower():
+        translate_to = None
 
     # A quiet stretch this long closes the current cue. With 1.12s chunks a
     # single silent chunk already qualifies, which is the natural line break.
@@ -263,7 +372,9 @@ def run_session(model, opts, stop_event):
                          "translateTo": translate_to})
 
     audio_index = max(0, int(opts.get("audioIndex") or 0))
-    ff_cmd = build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index)
+    provides_eou = bool(getattr(model, "provides_eou", False))
+    ff_cmd = build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index,
+                              denoise=not provides_eou)
     dbg(f"ffmpeg: {redact(' '.join(ff_cmd))}")
     try:
         proc = subprocess.Popen(ff_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -283,6 +394,7 @@ def run_session(model, opts, stop_event):
     last_final_end = start
     final_count = [0]
     cue_index = [0]
+    last_emitted = [""]         # normalised text of the last cue actually sent
 
     # Cache-aware streaming: the model takes fixed chunks and carries its own
     # state, so we feed exactly chunk_samples() at a time and derive cue times
@@ -296,6 +408,19 @@ def run_session(model, opts, stop_event):
         t = (text or "").strip()
         if not t or seg_start < last_final_end - 0.05:
             return
+
+        # Two guards against non-speech hallucination, both safe for subtitles:
+        # a cue that is nothing but a filler token is noise, and a cue identical
+        # to the one before it is an artifact far more often than it is dialogue.
+        norm = t.lower().strip(" .,!?-…")
+        if norm in HALLUCINATED_FILLERS:
+            dbg(f"  drop filler {t!r} [{seg_start:.2f}-{seg_end:.2f}]")
+            return
+        if norm == last_emitted[0]:
+            dbg(f"  drop repeat {t!r} [{seg_start:.2f}-{seg_end:.2f}]")
+            return
+        last_emitted[0] = norm
+
         if translator:
             t = translator.translate(t)
         cue_index[0] += 1
@@ -336,8 +461,17 @@ def run_session(model, opts, stop_event):
             utt_text = text_now
             silence_run = 0.0          # decoded speech is not a pause
 
-        # Finalise on a real pause, or when an utterance has run too long.
-        if utt_text and (silence_run >= min_silence or (stream_pos - utt_start) >= max_utt_s):
+        # The EOU model reports the end of a phrase itself. When it does, the RMS
+        # heuristic must NOT also apply: a natural pause between words dips below
+        # the threshold for a whole chunk and chops the phrase mid-sentence, which
+        # then leaves the model decoding 1s fragments in isolation (observed:
+        # "the quick brown" / "jumps over the lake" / "lazy dog", plus outright
+        # hallucinations). Length remains a backstop for both engines.
+        eou_fired = bool(getattr(model, "eou", False))
+        pause_ended_utt = (not provides_eou) and silence_run >= min_silence
+
+        # Finalise on an end-of-utterance, a real pause, or an over-long cue.
+        if utt_text and (eou_fired or pause_ended_utt or (stream_pos - utt_start) >= max_utt_s):
             emit_final(utt_start, stream_pos, utt_text)
             model.reset()              # bound hypothesis growth at a safe boundary
             utt_text = ""
@@ -365,7 +499,7 @@ def run_session(model, opts, stop_event):
     session = telemetry.run(
         model=getattr(model, "model_name", None) or NEMOTRON_DEFAULT_MODEL,
         task="audio-asr",
-        runtime="nemo-streaming",
+        runtime=getattr(model, "runtime_tag", "nemo-streaming"),
         service="live-subtitles",
         stream=True,
         chunk_seconds=round(chunk_dur, 3),
@@ -441,7 +575,7 @@ def run_session(model, opts, stop_event):
 # Daemon: load once, take start/stop/quit commands on stdin
 # ---------------------------------------------------------------------------
 def run_daemon():
-    emit("LIVE_STATUS", {"status": "loading", "message": "Loading Nemotron streaming ASR model..."})
+    emit("LIVE_STATUS", {"status": "loading", "message": "Loading streaming ASR model..."})
     try:
         model = load_model()
     except Exception as e:

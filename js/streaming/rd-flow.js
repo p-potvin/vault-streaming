@@ -590,7 +590,8 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             response = await window.electronAPI.streamRDTorrent({
                 magnet: currentTorrent.magnet,
                 hash: currentTorrent.hash,
-                url: currentTorrent.url
+                url: currentTorrent.url,
+                name: currentTorrent.name
             });
 
             if (window.activeRDFlowId !== currentFlowId) {
@@ -679,7 +680,8 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
                         const finalRes = await window.electronAPI.streamRDTorrent({
                             magnet: currentTorrent.magnet,
                             hash: currentTorrent.hash,
-                            url: currentTorrent.url
+                            url: currentTorrent.url,
+                            name: currentTorrent.name
                         });
                         if (window.activeRDFlowId !== currentFlowId) return;
                         if (finalRes && finalRes.success) {

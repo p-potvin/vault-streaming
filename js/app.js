@@ -3,39 +3,78 @@
 window.appSettings = { folders: [] };
 window.currentLang = 'en';
 
+// Declarative translation. Wiring every string by id (the block further down)
+// stopped scaling once the streaming UI arrived: it carries well over a hundred
+// strings and most of its markup has no id at all, so anything not listed here
+// silently stayed English. Elements now carry data-i18n / data-i18n-placeholder
+// / data-i18n-title and are resolved generically — adding a string is a markup
+// attribute plus a dictionary entry, with no code change here.
+function applyI18n(dict, root) {
+    root = root || document;
+    if (!dict) return;
+
+    root.querySelectorAll('[data-i18n]').forEach((node) => {
+        const value = dict[node.dataset.i18n];
+        if (value == null) return;   // no entry: keep whatever the markup authored
+        // Replace only text, so embedded markup survives — the nav tabs render an
+        // inline SVG icon as a sibling of their label.
+        const textNode = Array.prototype.find.call(
+            node.childNodes, (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim()
+        );
+        if (textNode) textNode.textContent = value;
+        else node.textContent = value;
+    });
+
+    root.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+        const value = dict[node.dataset.i18nPlaceholder];
+        if (value != null) node.placeholder = value;
+    });
+
+    root.querySelectorAll('[data-i18n-title]').forEach((node) => {
+        const value = dict[node.dataset.i18nTitle];
+        if (value != null) node.title = value;
+    });
+}
+window.applyI18n = applyI18n;
+
 function setLanguage(lang) {
     window.currentLang = lang;
 
-    if (el('search-box')) el('search-box').placeholder = window.translations[lang].searchPlaceholder;
+    // An unknown language must not throw: every lookup below would dereference
+    // undefined and take the whole boot sequence with it.
+    const dict = (window.translations && window.translations[lang]) || (window.translations && window.translations.en) || {};
+    applyI18n(dict);
 
-    if (el('loading-text')) el('loading-text').innerText = window.translations[lang].scanning;
+    if (el('search-box')) el('search-box').placeholder = dict.searchPlaceholder;
 
-    if (el('settings-btn-text')) el('settings-btn-text').innerText = window.translations[lang].settings;
+    if (el('loading-text')) el('loading-text').innerText = dict.scanning;
+
+    if (el('settings-btn-text')) el('settings-btn-text').innerText = dict.settings;
     const sHeader = document.querySelector('.settings-panel-header');
-    if (sHeader) sHeader.innerText = window.translations[lang].settings;
-    if (el('glob-exclusions-label')) el('glob-exclusions-label').innerText = window.translations[lang].globExclusionsLabel;
-    if (el('settings-btn-save')) el('settings-btn-save').innerText = window.translations[lang].save;
-    if (el('label-mute-previews')) el('label-mute-previews').innerText = window.translations[lang].mutePreviews;
+    if (sHeader) sHeader.innerText = dict.settings;
+    if (el('glob-exclusions-label')) el('glob-exclusions-label').innerText = dict.globExclusionsLabel;
+    if (el('settings-btn-save')) el('settings-btn-save').innerText = dict.save;
+    if (el('label-mute-previews')) el('label-mute-previews').innerText = dict.mutePreviews;
 
     // Translate top-level application navigation tabs
     const iconStyle = "width:13px; height:13px; flex-shrink:0;";
-    if (el('tab-library')) el('tab-library').innerHTML = `${window.icons ? window.icons.library('tab-icon', iconStyle) : ''}${window.translations[lang].tabLibrary}`;
-    if (el('tab-tmdb')) el('tab-tmdb').innerHTML = `${window.icons ? window.icons.filmRoll('tab-icon', iconStyle) : ''}${window.translations[lang].tabMoviesSeries}`;
+    if (el('tab-library')) el('tab-library').innerHTML = `${window.icons ? window.icons.library('tab-icon', iconStyle) : ''}${dict.tabLibrary}`;
+    if (el('tab-tmdb')) el('tab-tmdb').innerHTML = `${window.icons ? window.icons.filmRoll('tab-icon', iconStyle) : ''}${dict.tabMoviesSeries}`;
 
     // Translate TMDB subtabs
-    if (el('subtab-movies')) el('subtab-movies').innerText = window.translations[lang].tabMovies;
-    if (el('subtab-series')) el('subtab-series').innerText = window.translations[lang].tabSeries;
+    if (el('subtab-movies')) el('subtab-movies').innerText = dict.tabMovies;
+    if (el('subtab-series')) el('subtab-series').innerText = dict.tabSeries;
 
     if (!window.currentRealPath && el('path-display')) {
-        el('path-display').innerText = window.translations[lang].noFolderSelected;
+        el('path-display').innerText = dict.noFolderSelected;
     }
 
     const emptyStateH3 = document.querySelector('#file-grid .empty-state h3');
     const emptyStateP = document.querySelector('#file-grid .empty-state p');
     const emptyStateBtn = document.querySelector('#file-grid .empty-state button');
-    if (emptyStateH3) emptyStateH3.innerText = window.translations[lang].vaultEmpty;
-    if (emptyStateP) emptyStateP.innerText = window.translations[lang].clickBrowse;
-    if (emptyStateBtn) emptyStateBtn.innerText = window.translations[lang].browseVault;
+    if (emptyStateH3) emptyStateH3.innerText = dict.vaultEmpty;
+    if (emptyStateP) emptyStateP.innerText = dict.clickBrowse;
+    if (emptyStateBtn) emptyStateBtn.innerText = dict.browseVault;
 
     if (typeof window.updateStatusBar === 'function') window.updateStatusBar();
 }
@@ -45,12 +84,13 @@ function updateSortOrderButtonUI() {
     if (!btn) return; // sort controls removed with the local vault UI
     const order = btn.dataset.order || 'desc';
     const lang = window.currentLang || 'en';
+    const dict = (window.translations && window.translations[lang]) || {};
     if (order === 'asc') {
         btn.innerHTML = window.icons ? window.icons.arrowUp('', 'width:14px; height:14px;') : '';
-        btn.title = window.translations[lang].ascending;
+        btn.title = dict.ascending;
     } else {
         btn.innerHTML = window.icons ? window.icons.arrowDown('', 'width:14px; height:14px;') : '';
-        btn.title = window.translations[lang].descending;
+        btn.title = dict.descending;
     }
 }
 

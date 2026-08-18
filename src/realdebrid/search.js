@@ -1,5 +1,6 @@
 // src/realdebrid/search.js - torrent source discovery (Comet primary, Torrentio/EZTV/YTS fallbacks)
 const { fetchWithTimeout, checkRealDebridCache, TMDB_BEARER_TOKEN, COMET_STREAM_BASE } = require("./client");
+const { recordResolve, detectDebridProvider } = require("../telemetry/debrid-stats");
 
 async function fetchCometStreams(streamType, idParam, cleanTitle) {
     if (!COMET_STREAM_BASE) return null;
@@ -35,20 +36,24 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
     }
     if (!streams) return null;
 
-    // Provider breakdown — makes it obvious in the console whether TorBox /
-    // AllDebrid are actually returning results (vs everything falling to RD).
+    // Provider breakdown. This used to be a console line that vanished on
+    // restart; it is now persisted, because "which service can we drop?" needs
+    // history rather than a snapshot of the last search.
+    //
+    // Detection moved into debrid-stats: the bare `\bAD\b` / `RD\+?` substrings
+    // used here matched ordinary release titles (NORDiC, ADDiCT, HDR) and filed
+    // those results under the wrong service.
     try {
-        const counts = { TorBox: 0, AllDebrid: 0, RealDebrid: 0, other: 0, cached: 0 };
+        recordResolve(streams.map((s) => ({ name: s.name, cached: !!s.url })));
+        const counts = {};
         for (const s of streams) {
-            const n = s.name || '';
-            if (/\bTB\b|torbox/i.test(n)) counts.TorBox++;
-            else if (/\bAD\b|alldebrid/i.test(n)) counts.AllDebrid++;
-            else if (/RD\+?|real-?debrid/i.test(n)) counts.RealDebrid++;
-            else counts.other++;
-            if (s.url) counts.cached++;
+            const provider = detectDebridProvider(s.name);
+            counts[provider] = (counts[provider] || 0) + 1;
         }
-        console.log('[Comet] provider breakdown:', counts);
-    } catch (_) { /* diagnostics only */ }
+        console.log('[Comet] provider breakdown:', counts, `cached: ${streams.filter((s) => s.url).length}`);
+    } catch (e) {
+        console.warn('[Comet] provider breakdown failed:', e.message);
+    }
     return streams.map(s => {
             const nameStr = s.name || '';
             const descStr = s.description || s.title || '';
@@ -68,6 +73,10 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
             const hasRdUrl = !!s.url;
             return {
                 quality,
+                // Raw Comet name, kept unprefixed so the debrid marker stays at
+                // the start where detection anchors. `type` below decorates it
+                // for display and is not safe to attribute from.
+                name: nameStr,
                 // Comet's own name already carries the provider marker (e.g. [TB⚡],
                 // [AD], [RD+]) now that we fan out to AllDebrid/TorBox/RD, so just
                 // flag cached generically here rather than hardcoding [RD+].

@@ -89,5 +89,26 @@ window.translationsEn = {
   removeFromHistory: "Remove from History",
   confirmRemoveFromHistory: "Are you sure you want to remove \"{0}\" from your watch history?",
   removedFromHistory: "Removed from History",
-  loadingHistory: "Loading watch history..."
+  loadingHistory: "Loading watch history...",
+
+  // Streaming UI chrome. Resolved through data-i18n attributes rather than being
+  // wired element-by-element in setLanguage — see applyI18n in app.js.
+  tabDiscover: "Discover",
+  tabWatchHistory: "Watch History",
+  searchMoviesPlaceholder: "Search Movies & TV…",
+  searchAction: "Search",
+  advancedFilters: "Advanced",
+  reset: "Reset",
+  loadMore: "Load More",
+  confirm: "Confirm",
+
+  settingAppLanguage: "App Language:",
+  settingDefaultSubtitle: "Default Subtitle:",
+  settingSubtitleFontSize: "Subtitle Font Size:",
+  settingRememberPlayback: "Remember Playback Pos:",
+  settingMuteTrailers: "Mute Trailers by Default:",
+  settingAutoCacheTrailers: "Auto-cache Trailers:",
+  settingMinimizeToTray: "Minimize to System Tray:",
+  settingDevMode: "Dev Mode (verbose toasts/logs):",
+  settingOpenSubtitlesKey: "OpenSubtitles API Key:"
 };
