@@ -144,7 +144,7 @@ window.renderTMDB = async function (query = '', append = false) {
 
     try {
         let response;
-        const langCode = window.currentLang === 'fr' ? 'fr-FR' : 'en-US';
+        const langCode = window.tmdbLanguage();
         if (window.tmdbCurrentQuery) {
             response = await window.electronAPI.searchTMDB(window.tmdbCurrentQuery, window.tmdbCurrentPage, langCode);
         } else {
@@ -174,12 +174,16 @@ window.renderTMDB = async function (query = '', append = false) {
 
         if (!response || !response.success) {
             const errMsg = response ? response.error : 'Unknown error';
+            // The raw upstream text (TMDB status_message, HTTP codes) is for the
+            // console, not the grid: it was rendered verbatim and untranslated.
+            console.error('[TMDB] discover/search failed:', errMsg);
+            const t = (window.translations && window.translations[window.currentLang]) || {};
             if (!append) {
                 grid.innerHTML = `
                     <div class="empty-state" style="grid-column: 1 / -1; padding: 40px 0;">
                        ${window.icons ? window.icons.error('', 'width: 48px; height: 48px; margin-bottom: 12px; stroke-width: 1.5; stroke: var(--vault-signal-alert, #FF6B7A);') : ''}
-                       <h3>TMDB Request Failed</h3>
-                       <p>${window.escapeHtml(errMsg)}</p>
+                       <h3>${t.tmdbFailedTitle || 'Could not load titles'}</h3>
+                       <p>${t.tmdbFailedBody || 'TMDB did not answer. Check your connection and try again.'}</p>
                     </div>
                 `;
             } else {
@@ -335,7 +339,17 @@ function updateGenreOptions() {
 
     // Remember currently selected genre if valid in target format
     const oldVal = genreSelect.value;
-    genreSelect.innerHTML = genres.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+    // This rebuild replaces the markup's <option>s, which is why the data-i18n
+    // attributes authored in index.html never survived. Derive a stable key from
+    // the English name and translate here, so the list is localised both on
+    // first render and on a later language switch (applyI18n re-resolves it).
+    const dict = (window.translations && window.translations[window.currentLang]) || {};
+    const genreKey = (name) => 'tmdbGenre' + String(name).replace(/[^A-Za-z]/g, '');
+    genreSelect.innerHTML = genres.map(g => {
+        const key = genreKey(g.name);
+        const label = dict[key] || g.name;
+        return `<option value="${g.id}" data-i18n="${key}">${label}</option>`;
+    }).join('');
     if (genres.some(g => String(g.id) === oldVal)) {
         genreSelect.value = oldVal;
         window.tmdbCurrentGenre = oldVal;

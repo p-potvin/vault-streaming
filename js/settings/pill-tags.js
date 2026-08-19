@@ -17,7 +17,11 @@ function pillTagAdd(val) {
     pill.querySelector('.pill-tag-remove').addEventListener('click', (e) => {
         e.stopPropagation(); pill.remove();
     });
+    // The glob-exclusion input belongs to the removed local-vault UI. Without
+    // this guard, loading any saved exclusion threw on input.parentNode and took
+    // the whole settings-panel open handler with it.
     const input = document.getElementById('pill-tag-input-glob');
+    if (!input || !input.parentNode) return;
     input.parentNode.insertBefore(pill, input);
 }
 

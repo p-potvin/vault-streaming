@@ -33,7 +33,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                     fn: async () => {
                         if (window.electronAPI && window.electronAPI.getKinoCheckTrailer) {
                             console.log(`[streaming] Attempting KinoCheck Premium for TMDB ID: ${tmdbId}`);
-                            const kcResult = await window.electronAPI.getKinoCheckTrailer({ tmdbId, mediaType });
+                            const kcResult = await window.electronAPI.getKinoCheckTrailer({ tmdbId, mediaType, language: window.tmdbLanguage() });
                             if (kcResult && kcResult.success && kcResult.key) {
                                 console.log(`[streaming] KinoCheck successfully resolved trailer key:`, kcResult.key);
                                 return kcResult.key;

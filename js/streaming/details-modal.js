@@ -155,7 +155,7 @@ async function _setupMovieModal(movie) {
     }
 
     try {
-        const movieRes = await window.electronAPI.getTMDBMovie({ id: movie.id, language: window.currentLang === 'fr' ? 'fr-FR' : 'en-US' });
+        const movieRes = await window.electronAPI.getTMDBMovie({ id: movie.id, language: window.tmdbLanguage() });
         if (movieRes && movieRes.success && movieRes.data) {
             window._currentModalImdbId = movieRes.data.imdb_id;
             _populateExternalBadges(movie.title, movie.id, 'movie', window._currentTrailerKey);
@@ -225,7 +225,7 @@ async function _setupTVModal(movie) {
     episodesList.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--vault-slate); padding:20px;">Loading...</td></tr>';
 
     try {
-        const tvRes = await window.electronAPI.getTMDBTV({ id: movie.id, language: window.currentLang === 'fr' ? 'fr-FR' : 'en-US' });
+        const tvRes = await window.electronAPI.getTMDBTV({ id: movie.id, language: window.tmdbLanguage() });
         if (!tvRes || !tvRes.success || !tvRes.data) {
             seasonSelect.innerHTML = '<option value="">No seasons found</option>';
             return;
@@ -297,7 +297,7 @@ async function _loadSeasonEpisodes(tvId, seasonNumber) {
     if (!episodesList) return;
 
     try {
-        const seasonRes = await window.electronAPI.getTMDBTVSeason({ id: tvId, seasonNumber, language: window.currentLang === 'fr' ? 'fr-FR' : 'en-US' });
+        const seasonRes = await window.electronAPI.getTMDBTVSeason({ id: tvId, seasonNumber, language: window.tmdbLanguage() });
         if (!seasonRes || !seasonRes.success || !seasonRes.data) {
             episodesList.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--vault-slate);padding:16px;">No episodes found.</td></tr>';
             return;

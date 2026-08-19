@@ -430,3 +430,13 @@ function applyWatchStatusCues(card, movie) {
 
 window.refreshWatchStatusMap = refreshWatchStatusMap;
 window.applyWatchStatusCues = applyWatchStatusCues;
+
+// Locale for external metadata (TMDB, KinoCheck). Kept in one place: the
+// `currentLang === 'fr' ? 'fr-FR' : 'en-US'` ternary was copy-pasted at six call
+// sites, so localising a new endpoint meant finding all of them.
+// fr-FR rather than fr-CA deliberately — TMDB's fr-CA catalogue is sparse and
+// returns null overviews for many titles, where fr-FR is well populated.
+function tmdbLanguage() {
+  return (window.currentLang === 'fr') ? 'fr-FR' : 'en-US';
+}
+window.tmdbLanguage = tmdbLanguage;

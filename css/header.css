@@ -19,8 +19,20 @@
 }
 
 /* Vault Streaming: Advanced Filters and Layout Customizations */
+
+/* Five across is kept — changing the column count makes card width jump by 60-100px
+   depending on viewport, which is far more than intended. Instead each card is
+   trimmed by a fixed amount and centred in its track, so cards are exactly
+   --card-trim narrower at every screen size. One number to tune. */
 .tmdb-grid {
+  --card-trim: 40px;
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+
+.tmdb-grid .file-card {
+  max-width: calc(100% - var(--card-trim));
+  justify-self: center;
+  width: 100%;
 }
 
 .tmdb-movie-card .thumbnail-container {

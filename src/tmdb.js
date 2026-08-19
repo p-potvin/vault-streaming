@@ -360,14 +360,17 @@ function registerTmdbHandlers(ipcMain) {
     });
 
     // ── KinoCheck Premium API Handler ────────────────────────────────────────
-    ipcMain.handle('get-kinocheck-trailer', async (event, { tmdbId, mediaType }) => {
+    ipcMain.handle('get-kinocheck-trailer', async (event, { tmdbId, mediaType, language }) => {
         try {
             if (!KINOCHECK_API_KEY) {
                 console.warn('[KinoCheck] No API key loaded.');
                 return { success: false, error: 'No API key loaded.' };
             }
             const type = mediaType === 'tv' ? 'shows' : 'movies';
-            const url = `https://api.kinocheck.com/${type}?tmdb_id=${tmdbId}&language=en`;
+            // KinoCheck takes a bare language code. Was pinned to English, so a
+            // French UI still got English trailers.
+            const kcLang = String(language || 'en').slice(0, 2).toLowerCase() === 'fr' ? 'fr' : 'en';
+            const url = `https://api.kinocheck.com/${type}?tmdb_id=${tmdbId}&language=${kcLang}`;
             console.log(`[KinoCheck] Fetching premium trailer: ${url}`);
             
             const response = await fetchWithTimeout(url, {
@@ -451,7 +454,7 @@ function registerTmdbHandlers(ipcMain) {
                     mockList = disneyMock;
                 } else if (providerId === '350') {
                     mockList = appleMock;
-                } else if (providerId === '9') {
+                } else if (providerId === '119' || providerId === '9') {
                     mockList = primeMock;
                 } else {
                     mockList = [...netflixMock, ...disneyMock, ...appleMock, ...primeMock];
@@ -459,7 +462,13 @@ function registerTmdbHandlers(ipcMain) {
                 return { success: true, results: mockList };
             }
 
-            const sortByParam = sort || 'popularity.desc';
+            // discover/tv understands first_air_date.*, not primary_release_date.*,
+            // but the filter UI only ever sends the latter — so "Release Date"
+            // sorting was silently ignored for series.
+            const dateField = type === 'tv' ? 'first_air_date' : 'primary_release_date';
+            let sortByParam = sort || 'popularity.desc';
+            if (type === 'tv') sortByParam = sortByParam.replace(/^primary_release_date\./, 'first_air_date.');
+
             let url = `https://api.themoviedb.org/3/discover/${type}?sort_by=${sortByParam}&language=${language}&page=${page}`;
             
             if (providerId && providerId !== 'all') {
@@ -471,14 +480,30 @@ function registerTmdbHandlers(ipcMain) {
             if (region && region !== 'all') {
                 url += `&with_origin_country=${region}`;
             }
+            // One date window, built once. The decade filter and the
+            // not-yet-released cap both constrain the upper bound, and emitting
+            // two `.lte` params would leave which one wins up to TMDB.
+            let dateGte = null;
+            let dateLte = null;
             if (decade && decade !== 'all') {
                 const startYear = parseInt(decade);
                 if (startYear === 1920) {
-                    url += `&primary_release_date.lte=1929-12-31`;
+                    dateLte = '1929-12-31';
                 } else {
-                    url += `&primary_release_date.gte=${startYear}-01-01&primary_release_date.lte=${startYear + 9}-12-31`;
+                    dateGte = `${startYear}-01-01`;
+                    dateLte = `${startYear + 9}-12-31`;
                 }
             }
+            // Sorting by release date otherwise puts unreleased titles at the top,
+            // filling the grid with things nobody can play. Cap at today in UTC
+            // rather than local time: a local-midnight cap would include or hide a
+            // same-day worldwide release depending on the viewer's timezone.
+            if (sortByParam.startsWith(dateField)) {
+                const todayUtc = new Date().toISOString().slice(0, 10);
+                if (!dateLte || dateLte > todayUtc) dateLte = todayUtc;
+            }
+            if (dateGte) url += `&${dateField}.gte=${dateGte}`;
+            if (dateLte) url += `&${dateField}.lte=${dateLte}`;
             
             url += `&with_original_language=en|fr|ja|ko`;
             

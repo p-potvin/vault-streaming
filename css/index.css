@@ -241,7 +241,14 @@ select {
 
 button:hover,
 select:hover {
-  background: var(--vt-surface);
+  /* Lighten in place instead of swapping the background. The old rule set
+     `background: var(--vt-surface)` but never touched `color`, so any button
+     carrying its own light background lost all contrast on hover — the purple
+     Search/Save buttons went from 6.78:1 to 1.06:1 (near-black text on a
+     near-black surface, i.e. invisible). An inset shadow paints above the
+     background but below the text, so it tints every button the same amount
+     whatever its own palette, and can never invert the text contrast. */
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.10);
   border-color: var(--vault-accent);
   transform: translateY(-1px);
 }

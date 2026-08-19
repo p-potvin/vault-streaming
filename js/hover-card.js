@@ -398,13 +398,13 @@ async function loadHoverTrailer(popup, movie, title, year) {
     } else if (movie.id) {
         try {
             if (window.electronAPI && window.electronAPI.getKinoCheckTrailer) {
-                const kc = await window.electronAPI.getKinoCheckTrailer({ tmdbId: movie.id, mediaType: movie.media_type });
+                const kc = await window.electronAPI.getKinoCheckTrailer({ tmdbId: movie.id, mediaType: movie.media_type, language: window.tmdbLanguage() });
                 if (kc && kc.success && kc.key) trailerKey = kc.key;
             }
             if (!trailerKey && window.electronAPI) {
                 const res = movie.media_type === 'tv'
-                    ? await window.electronAPI.getTMDBTV({ id: movie.id, language: window.currentLang === 'fr' ? 'fr-FR' : 'en-US' })
-                    : await window.electronAPI.getTMDBMovie({ id: movie.id, language: window.currentLang === 'fr' ? 'fr-FR' : 'en-US' });
+                    ? await window.electronAPI.getTMDBTV({ id: movie.id, language: window.tmdbLanguage() })
+                    : await window.electronAPI.getTMDBMovie({ id: movie.id, language: window.tmdbLanguage() });
                 if (res && res.success && res.data) {
                     const videos = res.data.videos ? res.data.videos.results : [];
                     const trailer = (Array.isArray(videos) ? videos : []).find(v => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser' || v.type === 'Clip'));

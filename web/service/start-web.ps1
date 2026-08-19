@@ -48,6 +48,21 @@ $env:VW_WEB_HOST = '0.0.0.0'
 
 Set-Location $RepoRoot
 
+# Reclaim the port before starting. Stop-ScheduledTask kills this wrapper but not
+# the node child it spawned, so a "restart" would leave the old server holding
+# 8722 while the new one died on EADDRINUSE — the service looked restarted while
+# still running the previous configuration (observed: relaxed source limits in
+# .env silently had no effect for 40 minutes).
+$portOwners = (netstat -ano | Select-String ':8722\s.*LISTENING') |
+    ForEach-Object { ($_ -split '\s+')[-1] } | Select-Object -Unique
+foreach ($owner in $portOwners) {
+    try {
+        Write-Log "Killing stale listener on 8722 (pid $owner)"
+        Stop-Process -Id $owner -Force -ErrorAction Stop
+    } catch { Write-Log "Could not kill pid ${owner}: $_" }
+}
+if ($portOwners) { Start-Sleep -Seconds 2 }
+
 # Supervise rather than exit. The server has died mid-session at least once (an
 # unhandled rejection out of a trailer/yt-dlp path took the process with it), and
 # a scheduled task that simply ends leaves the site down until someone notices.

@@ -69,10 +69,15 @@ function initSettingsListeners() {
             if (el('settings-vsr-scale')) el('settings-vsr-scale').value = window.appSettings.vsrScale || '2';
             if (el('settings-vsr-bitrate')) el('settings-vsr-bitrate').value = window.appSettings.vsrBitrate || '12M';
             if (el('settings-vsr-chroma')) el('settings-vsr-chroma').value = window.appSettings.vsrChroma || 'yuv420p';
-            el('debrid-proxy-enable').checked = window.appSettings.debridProxyEnable === true;
-            el('debrid-proxy-address-input').value = window.appSettings.debridProxyAddress || '';
+            // Same removed-control guard as the Save handler: these inputs are no
+            // longer in the markup, and reading .checked off null threw here —
+            // aborting hydration part-way, so anything below this line (streaming
+            // mode, focus) never ran when the panel opened.
+            if (el('debrid-proxy-enable')) el('debrid-proxy-enable').checked = window.appSettings.debridProxyEnable === true;
+            if (el('debrid-proxy-address-input')) el('debrid-proxy-address-input').value = window.appSettings.debridProxyAddress || '';
             if (el('settings-streaming-mode')) el('settings-streaming-mode').value = window.appSettings.streamingMode || 'torrent-only';
-            document.getElementById('pill-tag-input-glob').focus();
+            const globInput = document.getElementById('pill-tag-input-glob');
+            if (globInput) globInput.focus();
         }
     });
 
@@ -177,8 +182,13 @@ function initSettingsListeners() {
         if (el('settings-vsr-scale')) window.appSettings.vsrScale = el('settings-vsr-scale').value;
         if (el('settings-vsr-bitrate')) window.appSettings.vsrBitrate = el('settings-vsr-bitrate').value;
         if (el('settings-vsr-chroma')) window.appSettings.vsrChroma = el('settings-vsr-chroma').value;
-        window.appSettings.debridProxyEnable = el('debrid-proxy-enable').checked;
-        window.appSettings.debridProxyAddress = el('debrid-proxy-address-input').value.trim();
+        // Guarded like every other optional control here. These two inputs were
+        // removed from the settings markup but the reads were left unguarded, so
+        // every Save threw "Cannot read properties of null (reading 'checked')"
+        // before reaching saveSettings() — the button appeared to do nothing at
+        // all: no save, no toast, panel stayed open.
+        if (el('debrid-proxy-enable')) window.appSettings.debridProxyEnable = el('debrid-proxy-enable').checked;
+        if (el('debrid-proxy-address-input')) window.appSettings.debridProxyAddress = el('debrid-proxy-address-input').value.trim();
         if (el('settings-auto-cache-trailers')) window.appSettings.autoCacheTrailers = el('settings-auto-cache-trailers').checked;
         await window.electronAPI.saveSettings(window.appSettings);
         showToast(window.currentLang === 'fr' ? 'Paramètres enregistrés' : 'Settings saved', 'success');
