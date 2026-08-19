@@ -156,7 +156,8 @@ window.renderTMDB = async function (query = '', append = false) {
                 window.tmdbCurrentGenre,
                 window.tmdbCurrentDecade,
                 window.tmdbCurrentRegion,
-                window.tmdbCurrentSort
+                window.tmdbCurrentSort,
+                (window.appSettings && window.appSettings.watchRegion) || 'US'
             );
         }
 
@@ -187,7 +188,7 @@ window.renderTMDB = async function (query = '', append = false) {
                     </div>
                 `;
             } else {
-                window.showToast('Failed to load more items: ' + errMsg, 'error');
+                window.showToast(tr('toastFailedLoadMore', 'Failed to load more items: ') + errMsg, 'error');
             }
             if (loadMoreContainer) loadMoreContainer.style.display = 'none';
             return;
@@ -204,7 +205,7 @@ window.renderTMDB = async function (query = '', append = false) {
                     </div>
                 `;
             } else {
-                window.showToast('No more items found', 'info');
+                window.showToast(tr('toastNoMoreItems', 'No more items found'), 'info');
             }
             if (loadMoreContainer) loadMoreContainer.style.display = 'none';
             return;
@@ -243,12 +244,15 @@ window.renderTMDB = async function (query = '', append = false) {
 
             card.innerHTML = `
                 <div class="thumbnail-container" style="position:relative; background:#111; height: 180px; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
-                   <button onclick="event.stopPropagation(); window.showMediaDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})" style="position: absolute; top: 8px; left: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-gold); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-gold); transition: all 0.2s;" title="${isTV ? 'Browse Seasons' : 'Stream Movie'}">
+                   <!-- Informational only. These were <button>s, but hovering a card
+                        sets visibility:hidden on it and swaps in the hover popup, so
+                        neither could ever be clicked. The popup already carries play,
+                        library and details, so the actions live there and these convey
+                        state: what kind of title it is, and whether it is saved. -->
+                   <div class="card-type-badge" title="${isTV ? 'Series' : 'Movie'}" style="position: absolute; top: 8px; left: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-accent); width:24px; height:24px; border-radius:4px; display:flex; align-items:center; justify-content:center; z-index:10; padding:0; pointer-events:none;">
                       ${isTV ? tvSvg : movieSvg}
-                   </button>
-                   <button class="card-add-lib" onclick="event.stopPropagation(); window.handleCardLibToggle(this, ${JSON.stringify(movie).replace(/"/g, '&quot;')})" style="position:absolute; top:8px; right:8px; border:1px solid var(--vault-gold); background:${isCurrentlySaved ? 'var(--vault-gold)' : 'rgba(0,0,0,0.8)'}; color:${isCurrentlySaved ? 'var(--vt-primary)' : 'var(--vault-gold)'}; width:24px; height:24px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; padding:0; transition:all 0.2s;" title="Add to Library">
-                      ${window.icons ? window.icons.plus('', 'width:12px;height:12px;') : '+'}
-                   </button>
+                   </div>
+                   ${isCurrentlySaved ? `<div class="card-lib-badge" title="${(window.translations[window.currentLang]||{}).addedToLibrary || 'In your library'}" style="position:absolute; top:8px; right:8px; border:1px solid var(--vault-gold); background:var(--vault-gold); color:var(--vt-primary); width:24px; height:24px; border-radius:4px; display:flex; align-items:center; justify-content:center; z-index:10; padding:0; pointer-events:none;">${window.icons ? window.icons.checkmark('', 'width:12px;height:12px;') : ''}</div>` : ''}
                    <img class="thumbnail" src="${movie.poster}" alt="${window.escapeHtml(movie.title)}" style="object-fit: cover; width:100%; height:100%; transition: opacity 0.25s ease;" onerror="this.src='public/poster_placeholder.svg'">
                    <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; width: 28px; height: 28px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8.5px; line-height: 1.1; padding: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
                       <span>${window.icons.star('', 'width:10px;height:10px;', 'currentColor', 'currentColor')}</span>
@@ -279,7 +283,7 @@ window.renderTMDB = async function (query = '', append = false) {
         if (!append) {
             grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--vault-slate); padding: 40px 0;">Error loading TMDB results.</div>';
         } else {
-            window.showToast('Error loading more items', 'error');
+            window.showToast(tr('toastErrorLoadingMore', 'Error loading more items'), 'error');
         }
         if (loadMoreContainer) loadMoreContainer.style.display = 'none';
     } finally {

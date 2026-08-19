@@ -268,9 +268,25 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
             }
             const showFallback = (reason) => {
                 console.error('[streaming] YouTube embed unplayable:', reason);
-                iframeWrapper.style.display = 'none';
                 if (loadingEl) loadingEl.style.display = 'none';
-                window.showToast('Trailer blocked from embedding. Use "Watch Trailer on YouTube" to open in your browser.', 'warning');
+                // Show the trailer's own YouTube thumbnail with an explicit cue
+                // rather than collapsing to an empty box — a blank panel reads as
+                // a broken app, when in fact the video simply refuses embedding.
+                const t = (window.translations && window.translations[window.currentLang]) || {};
+                iframeWrapper.style.display = 'block';
+                iframeWrapper.innerHTML = `
+                    <div class="trailer-unavailable" style="position:relative; width:100%; height:100%; background:#000; border-radius:6px; overflow:hidden;">
+                      <img src="https://img.youtube.com/vi/${trailerKey}/hqdefault.jpg" alt=""
+                           style="width:100%; height:100%; object-fit:cover; opacity:0.35; filter:grayscale(0.4);">
+                      <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; padding:16px;">
+                        <div style="font-family:var(--font-mono); font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--vault-accent);">
+                          ${window.escapeHtml(t.trailerUnavailable || 'Trailer cannot play here')}
+                        </div>
+                        <div style="font-size:11.5px; color:#bbb; max-width:320px; line-height:1.45;">
+                          ${window.escapeHtml(t.trailerUnavailableHint || 'The channel blocks embedded playback. Use "Watch Trailer on YouTube" to open it in your browser.')}
+                        </div>
+                      </div>
+                    </div>`;
             };
             window._ytTrailerListener = (ev) => {
                 if (!ev.origin || !/youtube(-nocookie)?\.com$/i.test(new URL(ev.origin).hostname)) return;

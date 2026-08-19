@@ -56,7 +56,7 @@ async function startUpscaleMode() {
     const vp = el('video-player');
     if (!vp) return;
     if (!vp.src || !vp.src.startsWith('file://')) {
-        window.showToast('Upscaling requires a local video file', 'error'); return;
+        window.showToast(tr('toastUpscaleNeedsLocal', 'Upscaling requires a local video file'), 'error'); return;
     }
     upscaleOrigSrc  = vp.src;
     upscaleOrigTime = vp.currentTime;
@@ -159,7 +159,7 @@ async function startUpscaleMode() {
         chroma: vsrChroma,
     });
     if (!result.success) {
-        window.showToast('Upscale failed: ' + result.error, 'error');
+        window.showToast(tr('toastUpscaleFailed', 'Upscale failed: ') + result.error, 'error');
         stopUpscaleMode();
     }
 }
@@ -196,10 +196,10 @@ function initUpscaleListeners() {
         upscaleActive = !upscaleActive;
         el('btn-upscale').classList.toggle('active', upscaleActive);
         if (upscaleActive) {
-            window.showToast('Starting real-time upscaling…', 'success');
+            window.showToast(tr('toastUpscaleStarting', 'Starting real-time upscaling…'), 'success');
             await startUpscaleMode();
         } else {
-            window.showToast('Upscaling stopped', 'success');
+            window.showToast(tr('toastUpscaleStopped', 'Upscaling stopped'), 'success');
             stopUpscaleMode();
         }
     });

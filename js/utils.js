@@ -294,7 +294,7 @@ function createFolderChooserEmptyState(message, onChoose) {
 
 function browseTabFolder(tabName) {
   if (!window.electronAPI || !window.electronAPI.openDirectory) {
-    window.showToast('Folder picker not available', 'error');
+    window.showToast(tr('toastNoFolderPicker', 'Folder picker not available'), 'error');
     return;
   }
   window.electronAPI.openDirectory().then(folderPath => {
@@ -440,3 +440,14 @@ function tmdbLanguage() {
   return (window.currentLang === 'fr') ? 'fr-FR' : 'en-US';
 }
 window.tmdbLanguage = tmdbLanguage;
+
+// Runtime string lookup for JS-generated text (toasts, dynamic labels), the
+// counterpart to the data-i18n attributes used in markup. Resolved at call time
+// so a language change applies to everything shown afterwards, and always falls
+// back to the authored English if a key is missing.
+function tr(key, fallback) {
+  const dict = (window.translations && window.translations[window.currentLang]) || {};
+  const value = dict[key];
+  return (value == null || value === '') ? fallback : value;
+}
+window.tr = tr;

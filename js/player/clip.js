@@ -338,7 +338,7 @@ function startClipMode() {
     
     const vp = getVideoPlayer();
     if (!vp || vp.readyState < HTMLMediaElement.HAVE_METADATA) {
-        window.showToast('Wait for video to load', 'warning');
+        window.showToast(tr('toastWaitForVideo', 'Wait for video to load'), 'warning');
         console.warn('[Clip] Video not ready');
         return;
     }
@@ -439,7 +439,7 @@ function cancelClipMode() {
             btnPlayEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; display:block;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
         }
     }
-    window.showToast('Clip mode cancelled', 'warning');
+    window.showToast(tr('toastClipModeCancelled', 'Clip mode cancelled'), 'warning');
 }
 
 // ============================================================================
@@ -719,7 +719,7 @@ function getClipData() {
 function exportClip() {
     const clipData = getClipData();
     if (clipData.duration <= 0) {
-        window.showToast('Clip duration must be greater than 0', 'error');
+        window.showToast(tr('toastClipDurationZero', 'Clip duration must be greater than 0'), 'error');
         return;
     }
     
@@ -1211,7 +1211,7 @@ function showClipExportDialog(clipData) {
 function exportClipToDesktop(clipData, format, quality) {
     const vp = getVideoPlayer();
     if (!vp || !vp.src) {
-        window.showToast('No video source available', 'error');
+        window.showToast(tr('toastNoVideoSource', 'No video source available'), 'error');
         return Promise.reject(new Error('No video source available'));
     }
     
@@ -1254,7 +1254,7 @@ function exportClipToDesktop(clipData, format, quality) {
                 window.showToast(`Clip saved (${sizeMB} MB): ${result.outputPath}`, 'success');
                 return result;
             } else if (result.cancelled) {
-                window.showToast('Clip export cancelled', 'warning');
+                window.showToast(tr('toastClipExportCancelled', 'Clip export cancelled'), 'warning');
                 throw new Error('cancelled');
             } else {
                 window.showToast(`Export failed: ${result.error}`, 'error');
@@ -1268,7 +1268,7 @@ function exportClipToDesktop(clipData, format, quality) {
         });
     } else {
         // Fallback: warn user that backend doesn't support clipping
-        window.showToast('Clip export requires backend ffmpeg support. Feature not available.', 'error');
+        window.showToast(tr('toastClipNoFfmpeg', 'Clip export requires backend ffmpeg support. Feature not available.'), 'error');
         return Promise.reject(new Error('Backend ffmpeg support required'));
     }
 }
@@ -1285,7 +1285,7 @@ function showShareDialog(clipData, format, quality) {
     }
     
     // First, export the clip
-    window.showToast('Exporting clip for sharing...', 'info');
+    window.showToast(tr('toastExportingShare', 'Exporting clip for sharing...'), 'info');
     
     // For now, we'll export to temp and then share
     // In a real implementation, we'd export directly to the platform
@@ -1524,7 +1524,7 @@ function showPublishDialog(clipData, format, quality) {
     }
     
     // First, export the clip
-    window.showToast('Exporting clip for publishing...', 'info');
+    window.showToast(tr('toastExportingPublish', 'Exporting clip for publishing...'), 'info');
     
     exportClipToDesktop(clipData, format, quality).then(() => {
         showPublishDialogUI(clipData, format, quality);

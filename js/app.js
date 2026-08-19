@@ -253,7 +253,7 @@ async function initApp() {
                             imgEl.src = window.sanitizePath(data.thumbnail);
                         }
                     }
-                    window.showToast('Preview generated and loaded!', 'success');
+                    window.showToast(tr('toastPreviewGeneratedLoaded', 'Preview generated and loaded!'), 'success');
                 }
             }
 

@@ -71,7 +71,7 @@ window.renderWatchHistoryTab = async function() {
                             };
                             const _onErr = () => {
                                 _clear();
-                                window.showToast('Cached stream expired — finding a fresh source…', 'warning');
+                                window.showToast(tr('toastCachedExpired', 'Cached stream expired — finding a fresh source…'), 'warning');
                                 if (typeof window.triggerRDStream === 'function') {
                                     window.triggerRDStream(item.title, item.tmdbId, item.mediaType || 'movie',
                                         item.season || null, item.episode || null,

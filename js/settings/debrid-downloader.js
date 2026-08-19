@@ -255,7 +255,7 @@ function initDebridDownloader() {
         } catch (err) {
             console.error('[Debrid Downloader] Download invocation failed:', err);
             el('debrid-dl-progress-status').innerText = 'Failed';
-            showToast('Download failed: ' + err.message, 'error');
+            showToast(tr('toastDownloadFailed', 'Download failed: ') + err.message, 'error');
             window.electronAPI.offDownloadProgress();
         }
     });

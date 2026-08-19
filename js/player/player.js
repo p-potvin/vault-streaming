@@ -36,10 +36,10 @@ async function handlePlayerContextMenu(action, menuItem) {
         if (!document.fullscreenElement) vp.parentElement.requestFullscreen();
         else document.exitFullscreen();
     } else if (action === 'generate-webm') {
-        if (!itemPath) { window.showToast('No video path available', 'error'); return; }
+        if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
         window.electronAPI.generateWebm(itemPath, window.currentRealPath).then(async res => {
             if (!res.success) {
-                window.showToast('Preview failed: ' + res.error, 'error');
+                window.showToast(tr('toastPreviewFailed', 'Preview failed: ') + res.error, 'error');
             } else {
                 if (typeof window.updateSingleVideoCard === 'function') {
                     await window.updateSingleVideoCard(itemPath);
@@ -51,12 +51,12 @@ async function handlePlayerContextMenu(action, menuItem) {
                         if (idx !== -1) window.displayedItems[idx] = newItems[0];
                     }
                 }
-                window.showToast('Preview generated', 'success');
+                window.showToast(tr('toastPreviewGenerated', 'Preview generated'), 'success');
             }
         });
     } else if (action === 'normalize-audio') {
-        if (!itemPath) { window.showToast('No video path available', 'error'); return; }
-        window.showToast('Enhancing audio in background...', 'success');
+        if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
+        window.showToast(tr('toastEnhancingAudio', 'Enhancing audio in background...'), 'success');
         window.electronAPI.normalizeAudio(itemPath, window.currentRealPath, false).then(res => {
             if (res.success || res.status === 'SUCCESS' || res.status === 'EXISTS') {
                 window.showToast(`${menuItem.name || 'Video'}: Audio enhanced`, 'success');
@@ -65,7 +65,7 @@ async function handlePlayerContextMenu(action, menuItem) {
             }
         });
     } else if (action === 'generate-subtitles-prompt') {
-        if (!itemPath) { window.showToast('No video path available', 'error'); return; }
+        if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
         const defaultLangs = (window.appSettings && window.appSettings.preferredASRLangs) || ['en'];
         const langs = await window.showLanguageModal('Generate Subtitles', true, defaultLangs);
         if (langs && langs.length > 0) {
@@ -83,7 +83,7 @@ async function handlePlayerContextMenu(action, menuItem) {
             });
         }
     } else if (action === 'translate-video-prompt') {
-        if (!itemPath) { window.showToast('No video path available', 'error'); return; }
+        if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
         const defaultTransLangs = (window.appSettings && window.appSettings.preferredTransLang) ? [window.appSettings.preferredTransLang] : [];
         const lang = await window.showLanguageModal('Translate Video Track', false, defaultTransLangs);
         if (lang && lang.length > 0) {
@@ -101,7 +101,7 @@ async function handlePlayerContextMenu(action, menuItem) {
             });
         }
     } else if (action === 'enhance-video-prompt') {
-        if (!itemPath) { window.showToast('No video path available', 'error'); return; }
+        if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
         const dialogItem = window.currentPlayingItem || { path: itemPath, name: menuItem.name, type: 'video' };
         const config = await window.showVideoEnhancementDialog(dialogItem);
         if (config && config.execute) {
@@ -118,7 +118,7 @@ async function handlePlayerContextMenu(action, menuItem) {
             });
         }
     } else if (action === 'properties') {
-        if (!itemPath) { window.showToast('No video path available', 'error'); return; }
+        if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
         window.showPropertiesDialog({ path: itemPath, name: menuItem.name, type: 'video' });
     }
 }

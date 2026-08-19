@@ -66,7 +66,7 @@
         window.stopTranscode();
         const vp = el('video-player');
         if (vp) { vp.src = url; vp.play().catch(() => {}); }
-        if (window.showToast) window.showToast('Transcoding unavailable — playing original', 'warning');
+        if (window.showToast) window.showToast(tr('toastTranscodeUnavailable', 'Transcoding unavailable — playing original'), 'warning');
     }
 
     // Start transcoded playback. Returns true if the transcode pipeline took over,

@@ -495,7 +495,7 @@ window.startUsenetStreamFlow = async function(usenetItem, movieTitle, index = 0)
             window.activeStreamingMedia.folderName = successfulStream.folderName;
         }
         window.playStream(successfulStream.streamUrl, movieTitle);
-        window.showToast('Usenet stream loaded successfully via WebDAV bridge!', 'success');
+        window.showToast(tr('toastUsenetLoaded', 'Usenet stream loaded successfully via WebDAV bridge!'), 'success');
 
     } catch (e) {
         console.error('Usenet streaming workflow failed:', e);
@@ -758,7 +758,7 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             window.activeStreamingMedia.quality = (successfulTorrent || {}).quality || '';
         }
         window.playStream(response.streamUrl, movieTitle);
-        window.showToast('Direct high-speed RD stream loaded successfully!', 'success');
+        window.showToast(tr('toastRdStreamLoaded', 'Direct high-speed RD stream loaded successfully!'), 'success');
     } catch (e) {
         console.error('Real-Debrid streaming workflow failed:', e);
         loadingStatus.querySelector('.spinner').style.display = 'none';

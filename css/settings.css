@@ -11,7 +11,13 @@
   color: var(--vault-text);
   /* One below the tooltip layer so hover tooltips render on top of the panel. */
   z-index: 2147483000;
-  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.85);
+  /* The first shadow is the modal's own lift; the second is a full-page scrim.
+     A huge spread on an inset-free shadow dims everything behind the panel
+     without needing a backdrop element — #settings-backdrop is referenced by
+     the JS but does not exist in the markup, so there was nothing separating
+     the modal from the grid behind it. */
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.85),
+              0 0 0 100vmax rgba(0, 0, 0, 0.62);
   font-family: var(--font-sans);
   width: min(820px, 94vw);
   border-radius: 8px;

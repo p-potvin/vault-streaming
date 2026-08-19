@@ -81,6 +81,47 @@ const GENRE_MAP = {
     10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics"
 };
 
+// ── TMDB configuration, fetched once and cached ──────────────────────────────
+// Both of these were hardcoded lists that drifted from what TMDB actually
+// supports. Fetch them instead, and fall back to the old constants if TMDB is
+// unreachable so Discover still works offline.
+const CONFIG_TTL_MS = 24 * 60 * 60 * 1000;
+const _configCache = new Map(); // url -> { value, ts }
+
+async function fetchTmdbConfig(pathname, fallback) {
+    const cached = _configCache.get(pathname);
+    if (cached && (Date.now() - cached.ts) < CONFIG_TTL_MS) return cached.value;
+    try {
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3${pathname}`, {
+            headers: { accept: 'application/json', Authorization: `Bearer ${TMDB_BEARER_TOKEN}` },
+        }, 10000);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const value = await res.json();
+        _configCache.set(pathname, { value, ts: Date.now() });
+        return value;
+    } catch (e) {
+        console.warn(`[TMDB] config ${pathname} failed (${e.message}); using fallback`);
+        return fallback;
+    }
+}
+
+// Every language TMDB has a primary translation for, as ISO-639-1 codes.
+// Replaces a hardcoded `en|fr|ja|ko`, which silently hid everything else.
+const ORIGINAL_LANGUAGE_FALLBACK = 'en|fr|ja|ko';
+async function originalLanguageFilter() {
+    const list = await fetchTmdbConfig('/configuration/primary_translations', null);
+    if (!Array.isArray(list) || !list.length) return ORIGINAL_LANGUAGE_FALLBACK;
+    const bases = [...new Set(list.map((l) => String(l).split('-')[0]).filter(Boolean))];
+    return bases.join('|');
+}
+
+// TMDB ignores with_watch_providers unless watch_region is also set — verified:
+// provider 8 with no region returns 1,170,829 results (the whole catalogue),
+// versus 4,708 with watch_region=CA. So a region is required, not optional.
+// TODO: derive the default from IP geolocation instead of a fixed 'US', and
+// fall back to this setting when lookup fails or the user has opted out.
+const DEFAULT_WATCH_REGION = 'US';
+
 function registerTmdbHandlers(ipcMain) {
     ipcMain.handle('search-tmdb', async (event, arg) => {
         try {
@@ -359,6 +400,20 @@ function registerTmdbHandlers(ipcMain) {
         }
     });
 
+    // Regions TMDB can answer watch-provider queries for; drives the settings
+    // dropdown so the list can't drift from what the API supports.
+    ipcMain.handle('get-watch-regions', async () => {
+        const data = await fetchTmdbConfig('/watch/providers/regions?language=en-US', null);
+        const results = (data && data.results) || [];
+        if (!results.length) {
+            return { success: true, regions: [{ code: DEFAULT_WATCH_REGION, name: 'United States' }], fallback: true };
+        }
+        return {
+            success: true,
+            regions: results.map((r) => ({ code: r.iso_3166_1, name: r.native_name || r.english_name })),
+        };
+    });
+
     // ── KinoCheck Premium API Handler ────────────────────────────────────────
     ipcMain.handle('get-kinocheck-trailer', async (event, { tmdbId, mediaType, language }) => {
         try {
@@ -424,7 +479,7 @@ function registerTmdbHandlers(ipcMain) {
         }
     });
 
-    ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort }) => {
+    ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort, watchRegion }) => {
         try {
             const type = mediaType === 'tv' ? 'tv' : 'movie';
             
@@ -472,7 +527,10 @@ function registerTmdbHandlers(ipcMain) {
             let url = `https://api.themoviedb.org/3/discover/${type}?sort_by=${sortByParam}&language=${language}&page=${page}`;
             
             if (providerId && providerId !== 'all') {
-                url += `&with_watch_providers=${providerId}&watch_region=CA&with_watch_monetization_types=flatrate`;
+                // watch_region is mandatory here: without it TMDB ignores the
+                // provider filter entirely and returns the whole catalogue.
+                const wr = (watchRegion || DEFAULT_WATCH_REGION).toUpperCase();
+                url += `&with_watch_providers=${providerId}&watch_region=${wr}&with_watch_monetization_types=flatrate`;
             }
             if (withGenres && withGenres !== 'all') {
                 url += `&with_genres=${withGenres}`;
@@ -505,7 +563,7 @@ function registerTmdbHandlers(ipcMain) {
             if (dateGte) url += `&${dateField}.gte=${dateGte}`;
             if (dateLte) url += `&${dateField}.lte=${dateLte}`;
             
-            url += `&with_original_language=en|fr|ja|ko`;
+            url += `&with_original_language=${await originalLanguageFilter()}`;
             
             console.log(`[TMDB] Discovering streaming items: ${url}`);
             

@@ -14,7 +14,7 @@ window.initKeybindingsAndFolderListeners = function () {
             if (window.currentRealPath) {
                 console.log('[F5] Refreshing directory:', window.currentRealPath);
                 window.loadDirectory(window.currentNavPath, window.currentRealPath, false);
-                window.showToast('Views refreshed successfully', 'success');
+                window.showToast(tr('toastViewsRefreshed', 'Views refreshed successfully'), 'success');
             }
         }
     });

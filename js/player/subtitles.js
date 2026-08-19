@@ -554,7 +554,7 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
     vp.querySelectorAll('track').forEach(t => t.remove());
     for (let i = 0; i < vp.textTracks.length; i++) vp.textTracks[i].mode = 'disabled';
     if (window.refreshSubtitlesList) window.refreshSubtitlesList();
-    if (hadLoaded) window.showToast('Replaced the loaded subtitles with AI subtitles.', 'info');
+    if (hadLoaded) window.showToast(tr('toastReplacedSubs', 'Replaced the loaded subtitles with AI subtitles.'), 'info');
 
     ensureLiveSubtitleListeners();
 
@@ -615,7 +615,7 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
         audioIndex,
     }).then((res) => {
         if (!res || !res.success) {
-            window.showToast('Live subtitles failed to start: ' + ((res && res.error) || 'unknown'), 'error');
+            window.showToast(tr('toastLiveSubsFailed', 'Live subtitles failed to start: ') + ((res && res.error) || 'unknown'), 'error');
             window.stopLiveSubtitles(true);
         } else if (window.appSettings && !window.appSettings.asrModelReady) {
             // Session started successfully → model is present; suppress the
@@ -624,7 +624,7 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
             try { window.electronAPI.saveSettings(window.appSettings); } catch (_) { }
         }
     }).catch((err) => {
-        window.showToast('Live subtitles failed to start: ' + err.message, 'error');
+        window.showToast(tr('toastLiveSubsFailed', 'Live subtitles failed to start: ') + err.message, 'error');
         window.stopLiveSubtitles(true);
     });
 }
@@ -740,12 +740,12 @@ function ensureLiveSubtitleListeners() {
             return;
         }
         if (s.status === 'downloaded') {
-            window.showToast('Model downloaded — starting…', 'success');
+            window.showToast(tr('toastModelDownloaded', 'Model downloaded — starting…'), 'success');
             if (window.appSettings) { window.appSettings.asrModelReady = true; try { window.electronAPI.saveSettings(window.appSettings); } catch (_) { } }
             return;
         }
         if (s.status === 'download-failed') {
-            window.showToast('Model download failed: ' + (s.error || 'unknown'), 'error');
+            window.showToast(tr('toastModelDownloadFailed', 'Model download failed: ') + (s.error || 'unknown'), 'error');
             window.stopLiveSubtitles(true);
             return;
         }
@@ -762,7 +762,7 @@ function ensureLiveSubtitleListeners() {
             if (s.status === 'SUCCESS') {
                 window.showToast(`Live subtitles finished — ${s.cues || 0} cues written to sidecar.`, 'success');
             } else if (s.status === 'FAILED') {
-                window.showToast('Live subtitles error: ' + (s.error || 'unknown'), 'error');
+                window.showToast(tr('toastLiveSubsError', 'Live subtitles error: ') + (s.error || 'unknown'), 'error');
             }
             window._liveSubActive = false;
             updateLiveSubButton(false);
@@ -884,7 +884,7 @@ function initSubtitleListeners() {
             // Toggle: a second click while a session is running stops it.
             if (window._liveSubActive) {
                 window.stopLiveSubtitles(true);
-                window.showToast('Live subtitles stopped.', 'info');
+                window.showToast(tr('toastLiveSubsStopped', 'Live subtitles stopped.'), 'info');
                 return;
             }
 
@@ -907,7 +907,7 @@ function initSubtitleListeners() {
             }
 
             if (!videoPath) {
-                window.showToast('No playback source for live subtitles.', 'error');
+                window.showToast(tr('toastNoLiveSubSource', 'No playback source for live subtitles.'), 'error');
                 return;
             }
 
@@ -976,7 +976,7 @@ async function searchAndLoadSubtitlesByLang(lang) {
         queryTitle = window.activeStreamingMedia.title;
     }
     if (!queryTitle) {
-        window.showToast('No active title to search subtitles for', 'error');
+        window.showToast(tr('toastNoActiveTitle', 'No active title to search subtitles for'), 'error');
         return;
     }
 
@@ -992,7 +992,7 @@ async function searchAndLoadSubtitlesByLang(lang) {
         results = await window.electronAPI.findSubtitles(videoPath, queryTitle, false, langsParam) || [];
     } catch (err) {
         console.error('[subtitles] quick-lang search failed:', err);
-        window.showToast('Subtitle search failed', 'error');
+        window.showToast(tr('toastSubtitleSearchFailed', 'Subtitle search failed'), 'error');
         return;
     }
     // Keep only OpenSubtitles hits (we already cover local sidecars elsewhere).

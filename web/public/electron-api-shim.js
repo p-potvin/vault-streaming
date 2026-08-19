@@ -153,8 +153,9 @@
 
     // TMDB / KinoCheck
     searchTMDB: (query, page = 1, language = 'en-US') => invoke('search-tmdb', { query, page, language }),
-    discoverTMDB: (providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort) =>
-      invoke('discover-tmdb', { providerId, mediaType, page, language, withGenres, decade, region, sort }),
+    discoverTMDB: (providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort, watchRegion) =>
+      invoke('discover-tmdb', { providerId, mediaType, page, language, withGenres, decade, region, sort, watchRegion }),
+    getWatchRegions: inv('get-watch-regions'),
     getTMDBMovie: inv('get-tmdb-movie'),
     getTMDBTV: inv('get-tmdb-tv'),
     getTMDBTVSeason: inv('get-tmdb-tv-season'),

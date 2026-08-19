@@ -65,6 +65,9 @@ function initSettingsListeners() {
             }
             el('settings-stream-quality').value = window.appSettings.streamQuality || '1080p';
             el('settings-stream-lang').value = window.appSettings.streamLang || 'en';
+            // Region list comes from TMDB so it can't drift from what the API
+            // will actually answer watch-provider queries for.
+            populateWatchRegions(window.appSettings.watchRegion || 'US');
             if (el('settings-vsr-quality')) el('settings-vsr-quality').value = window.appSettings.vsrQuality || 'HIGH';
             if (el('settings-vsr-scale')) el('settings-vsr-scale').value = window.appSettings.vsrScale || '2';
             if (el('settings-vsr-bitrate')) el('settings-vsr-bitrate').value = window.appSettings.vsrBitrate || '12M';
@@ -175,6 +178,7 @@ function initSettingsListeners() {
         }
         window.appSettings.streamQuality = el('settings-stream-quality').value;
         window.appSettings.streamLang = el('settings-stream-lang').value;
+        if (el('settings-watch-region')) window.appSettings.watchRegion = el('settings-watch-region').value;
         if (el('settings-streaming-mode')) {
             window.appSettings.streamingMode = el('settings-streaming-mode').value;
         }
@@ -225,3 +229,27 @@ function initSettingsListeners() {
 }
 
 window.initSettingsListeners = initSettingsListeners;
+
+// Fill the streaming-region dropdown from TMDB's supported list. Cached by the
+// main process, so reopening the panel costs nothing.
+// TODO: default this from IP geolocation rather than 'US', falling back to the
+// stored setting when lookup fails or the user has opted out.
+let _watchRegionsLoaded = false;
+async function populateWatchRegions(selected) {
+    const sel = el('settings-watch-region');
+    if (!sel) return;
+    if (!_watchRegionsLoaded && window.electronAPI && window.electronAPI.getWatchRegions) {
+        try {
+            const res = await window.electronAPI.getWatchRegions();
+            if (res && res.success && res.regions && res.regions.length) {
+                sel.innerHTML = res.regions
+                    .map((r) => `<option value="${r.code}">${window.escapeHtml(r.name)} (${r.code})</option>`)
+                    .join('');
+                _watchRegionsLoaded = true;
+            }
+        } catch (e) {
+            console.warn('[settings] Could not load watch regions:', e.message);
+        }
+    }
+    if ([...sel.options].some((o) => o.value === selected)) sel.value = selected;
+}
