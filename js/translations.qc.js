@@ -162,7 +162,7 @@ window.translationsQc = {
   streamLangMulti: "Multilingue / double",
   vsrHeading: "Paramètres RTX VSR",
   vsrQualityLabel: "Préréglage de qualité :",
-  vsrScaleLabel: "Facteur d'échelle :",
+  vsrScaleLabel: "Facteur de rehaussement :",
   vsrBitrateLabel: "Débit du flux :",
   vsrChromaLabel: "Format de chroma :",
   chroma420: "4:2:0 (fichiers plus légers)",
@@ -239,11 +239,14 @@ window.translationsQc = {
   toastReplacedSubs: "Sous-titres remplacés par les sous-titres IA.",
   toastSubtitleSearchFailed: "Échec de la recherche de sous-titres",
   toastTranscodeUnavailable: "Transcodage non disponible — lecture de l'original",
-  toastUpscaleFailed: "Échec de la mise à l'échelle : ",
-  toastUpscaleNeedsLocal: "La mise à l'échelle nécessite un fichier vidéo local",
-  toastUpscaleStarting: "Démarrage de la mise à l'échelle en temps réel…",
-  toastUpscaleStopped: "Mise à l'échelle arrêtée",
+  toastUpscaleFailed: "Échec du rehaussement : ",
+  toastUpscaleNeedsLocal: "Le rehaussement nécessite un fichier vidéo local",
+  toastUpscaleStarting: "Démarrage du rehaussement en temps réel…",
+  toastUpscaleStopped: "Rehaussement arrêté",
   toastUsenetLoaded: "Flux Usenet chargé via la passerelle WebDAV !",
   toastViewsRefreshed: "Vues actualisées avec succès",
-  toastWaitForVideo: "Attendez le chargement de la vidéo"
+  toastWaitForVideo: "Attendez le chargement de la vidéo",
+  toastPlaybackError: "Erreur de lecture",
+  toastSearchingSubs: "Recherche sur OpenSubtitles pour",
+  providerAll: "Tous"
 };

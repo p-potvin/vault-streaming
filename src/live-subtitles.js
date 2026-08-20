@@ -108,6 +108,29 @@ function ensureModel() {
 // warm-live-subtitles — then drive it with start/stop JSON commands over stdin.
 let daemon = null;
 let daemonReady = false;
+
+// The daemon holds the ASR model resident (~0.9 GB RSS plus VRAM). It used to be
+// spawned at app start and only ever reaped on quit, so an idle app — and worse,
+// the desktop app and the web server together — sat on two copies of it with
+// nothing playing. Release it after a spell with no session; the next start pays
+// the model load again, which is the right trade for an idle machine.
+const IDLE_SHUTDOWN_MS = Number(process.env.VAULT_ASR_IDLE_MS) || 10 * 60 * 1000;
+let idleTimer = null;
+
+function cancelIdleShutdown() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+}
+
+function armIdleShutdown() {
+    cancelIdleShutdown();
+    idleTimer = setTimeout(() => {
+        idleTimer = null;
+        if (!daemon) return;
+        console.log(`[main:live-subs] idle for ${Math.round(IDLE_SHUTDOWN_MS / 60000)} min — releasing the ASR model`);
+        shutdownLiveSubtitles();
+    }, IDLE_SHUTDOWN_MS);
+    if (idleTimer.unref) idleTimer.unref();
+}
 let lastSender = null;      // renderer to route cues/status to
 let cueCount = 0;
 
@@ -225,7 +248,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
     // user actually invokes live subtitles (see start).
     ipcMain.handle('warm-live-subtitles', async (event) => {
         lastSender = event.sender;
-        if (modelPresent()) ensureDaemon();
+        if (modelPresent()) { ensureDaemon(); armIdleShutdown(); }
         return { success: true, ready: daemonReady, modelPresent: modelPresent() };
     });
 
@@ -243,6 +266,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
             return { success: false, error: 'Model download failed: ' + e.message };
         }
         cueCount = 0;
+        cancelIdleShutdown();
         const parsedBoost = Number.parseFloat(volumeBoost);
         const ok = sendCmd({
             cmd: 'start',
@@ -261,12 +285,14 @@ function registerLiveSubtitlesHandlers(ipcMain) {
 
     ipcMain.handle('stop-live-subtitles', async () => {
         const ok = sendCmd({ cmd: 'stop' });
+        armIdleShutdown();
         return { success: ok };
     });
 }
 
 // Cleanly shut the daemon down on app quit.
 function shutdownLiveSubtitles() {
+    cancelIdleShutdown();
     if (daemon) {
         try { daemon.stdin.write(JSON.stringify({ cmd: 'quit' }) + '\n'); } catch (e) { /* noop */ }
         try { daemon.kill(); } catch (e) { /* noop */ }

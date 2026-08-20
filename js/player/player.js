@@ -770,7 +770,21 @@ function initPlayer() {
             }
         }
         console.error('[Video Player Error]', err || e);
-        window.showToast(`Playback Error: ${errMsg}`, 'error');
+        window.showToast(`${window.tr('toastPlaybackError', 'Playback Error')}: ${errMsg}`, 'error');
+
+        // Tear the element down. Without this the <video> keeps painting the last
+        // decoded frame of the PREVIOUS title, so a failed source looked like the
+        // old movie had reloaded at 00:00 — and with duration still NaN, the seek
+        // bar threw on every click.
+        try {
+            vp.pause();
+            vp.removeAttribute('src');
+            vp.load();
+        } catch (_) { /* element already torn down */ }
+        const totalEl = el('time-total');
+        const curEl = el('time-current');
+        if (totalEl) totalEl.innerText = '0:00';
+        if (curEl) curEl.innerText = '0:00';
     });
 
     vp.addEventListener('loadedmetadata', () => {
@@ -1271,7 +1285,13 @@ function initPlayer() {
 
     seekArea.addEventListener('click', (e) => {
         const rect = seekArea.getBoundingClientRect();
-        vp.currentTime = ((e.clientX - rect.left) / rect.width) * vp.duration;
+        // duration is NaN until metadata loads, and stays NaN when the source
+        // failed — clicking the bar then threw "The provided double value is
+        // non-finite" and left the player wedged on the previous title's frame.
+        if (!rect.width || !Number.isFinite(vp.duration) || vp.duration <= 0) return;
+        const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+        const target = ratio * vp.duration;
+        if (Number.isFinite(target)) vp.currentTime = target;
     });
 
     seekArea.addEventListener('mousemove', async (e) => {

@@ -243,5 +243,8 @@ window.translationsEn = {
   toastUpscaleStopped: "Upscaling stopped",
   toastUsenetLoaded: "Usenet stream loaded successfully via WebDAV bridge!",
   toastViewsRefreshed: "Views refreshed successfully",
-  toastWaitForVideo: "Wait for video to load"
+  toastWaitForVideo: "Wait for video to load",
+  toastPlaybackError: "Playback Error",
+  toastSearchingSubs: "Searching OpenSubtitles for",
+  providerAll: "All"
 };

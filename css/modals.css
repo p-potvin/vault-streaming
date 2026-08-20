@@ -911,11 +911,18 @@
 }
 
 /* Quality dropdown */
-#quality-dropdown-container {
+#quality-dropdown-container,
+#audio-dropdown-container {
   position: relative;
   display: none;
   -webkit-app-region: no-drag;
 }
+
+/* The audio container carries `class="quality-dropdown-container"` but the rule
+   above was written as an ID selector, so it matched only the quality one. The
+   audio dropdown was therefore left `position: static` and its absolutely
+   positioned menu anchored to a distant ancestor instead of its own button —
+   which is why the popup sat offset from the control that opened it. */
 
 #btn-quality,
 #btn-audio {

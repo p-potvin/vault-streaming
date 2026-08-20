@@ -118,9 +118,45 @@ async function originalLanguageFilter() {
 // TMDB ignores with_watch_providers unless watch_region is also set — verified:
 // provider 8 with no region returns 1,170,829 results (the whole catalogue),
 // versus 4,708 with watch_region=CA. So a region is required, not optional.
-// TODO: derive the default from IP geolocation instead of a fixed 'US', and
-// fall back to this setting when lookup fails or the user has opted out.
 const DEFAULT_WATCH_REGION = 'US';
+
+// Detected once per process from the public IP, and only used when the user has
+// not chosen a region in settings — an explicit choice always wins. Failure is
+// silent and falls back to DEFAULT_WATCH_REGION; this must never delay Discover,
+// hence the short timeout and the cached negative result.
+let _geoRegion;            // undefined = not tried, null = tried and failed
+
+// Several providers, because the first choice rate-limits aggressively: ipapi.co
+// answered {"error":true,"reason":"RateLimited"} in testing, and a failed lookup
+// silently became "US" — the wrong answer presented as a detection. Each entry
+// pulls a 2-letter country code out of its own response shape.
+const GEO_PROVIDERS = [
+    { url: 'https://ipwho.is/?fields=success,country_code', pick: (d) => d.country_code },
+    { url: 'https://api.country.is/', pick: (d) => d.country },
+    { url: 'https://ipapi.co/json/', pick: (d) => d.country_code || d.country },
+];
+
+async function geoWatchRegion() {
+    if (_geoRegion !== undefined) return _geoRegion;
+    for (const provider of GEO_PROVIDERS) {
+        try {
+            const res = await fetchWithTimeout(provider.url, { headers: { accept: 'application/json' } }, 4000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const code = String(provider.pick(data) || '').toUpperCase();
+            if (/^[A-Z]{2}$/.test(code)) {
+                _geoRegion = code;
+                console.log(`[TMDB] watch region from geo IP: ${code} (${new URL(provider.url).host})`);
+                return _geoRegion;
+            }
+        } catch (e) {
+            console.warn(`[TMDB] geo lookup via ${new URL(provider.url).host} failed: ${e.message}`);
+        }
+    }
+    _geoRegion = null;
+    console.warn('[TMDB] no geo provider answered; falling back to', DEFAULT_WATCH_REGION);
+    return _geoRegion;
+}
 
 function registerTmdbHandlers(ipcMain) {
     ipcMain.handle('search-tmdb', async (event, arg) => {
@@ -410,6 +446,8 @@ function registerTmdbHandlers(ipcMain) {
         }
         return {
             success: true,
+            detected: await geoWatchRegion(),          // null when no provider answered
+            fallbackRegion: DEFAULT_WATCH_REGION,
             regions: results.map((r) => ({ code: r.iso_3166_1, name: r.native_name || r.english_name })),
         };
     });
@@ -529,7 +567,7 @@ function registerTmdbHandlers(ipcMain) {
             if (providerId && providerId !== 'all') {
                 // watch_region is mandatory here: without it TMDB ignores the
                 // provider filter entirely and returns the whole catalogue.
-                const wr = (watchRegion || DEFAULT_WATCH_REGION).toUpperCase();
+                const wr = (watchRegion || await geoWatchRegion() || DEFAULT_WATCH_REGION).toUpperCase();
                 url += `&with_watch_providers=${providerId}&watch_region=${wr}&with_watch_monetization_types=flatrate`;
             }
             if (withGenres && withGenres !== 'all') {

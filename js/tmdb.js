@@ -37,42 +37,54 @@ const MOCK_TMDB_DATA = [
     }
 ];
 
+// One brand palette drives both states, so an active pill fills with the
+// provider's own colour instead of the generic accent — which made every
+// selected provider look identical.
+const PROVIDER_BRAND = {
+    'all':  { color: 'var(--vault-accent)', fill: 'var(--vault-accent)', on: 'var(--vt-primary)' },
+    '8':    { color: '#E50914', fill: '#E50914', on: '#fff' },   // Netflix
+    '337':  { color: '#0063e5', fill: '#0063e5', on: '#fff' },   // Disney+
+    '350':  { color: '#fff',    fill: '#fff',    on: '#000' },   // Apple TV+
+    '119':  { color: '#00A8E1', fill: '#00A8E1', on: '#00131a' },// Prime Video (CA id)
+    '9':    { color: '#00A8E1', fill: '#00A8E1', on: '#00131a' },// Prime Video (US id)
+};
+
+function rgbaFrom(hex, alpha) {
+    if (!hex.startsWith('#')) return `rgba(255,255,255,${alpha})`;
+    const h = hex.length === 4
+        ? hex.slice(1).split('').map((c) => c + c).join('')
+        : hex.slice(1);
+    const n = parseInt(h, 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 function updateProviderButtonsUI() {
     document.querySelectorAll('.provider-btn').forEach(btn => {
         const prov = btn.dataset.provider;
+        const brand = PROVIDER_BRAND[prov] || {
+            color: 'var(--vault-text)', fill: 'var(--vault-accent)', on: 'var(--vt-primary)',
+        };
         if (prov === window.tmdbCurrentProvider) {
             btn.classList.add('active');
-            btn.style.background = 'var(--vault-accent)';
-            btn.style.color = 'var(--vt-primary)';
-            btn.style.border = 'none';
+            btn.style.background = brand.fill;
+            btn.style.color = brand.on;
+            btn.style.border = '1px solid ' + brand.fill;
         } else {
             btn.classList.remove('active');
             btn.style.background = 'transparent';
-            if (prov === 'all') {
-                btn.style.color = 'var(--vault-text)';
-                btn.style.border = '1px solid var(--vault-border)';
-            } else if (prov === '8') {
-                btn.style.color = '#E50914';
-                btn.style.border = '1px solid rgba(229,9,20,0.4)';
-            } else if (prov === '337') {
-                btn.style.color = '#0063e5';
-                btn.style.border = '1px solid rgba(0,99,229,0.4)';
-            } else if (prov === '350') {
-                btn.style.color = '#fff';
-                btn.style.border = '1px solid rgba(255,255,255,0.3)';
-            } else if (prov === '9') {
-                btn.style.color = '#00A8E1';
-                btn.style.border = '1px solid rgba(0,168,225,0.4)';
-            }
+            btn.style.color = brand.color;
+            btn.style.border = '1px solid ' + (
+                prov === 'all' ? 'var(--vault-border)' : rgbaFrom(brand.color, 0.4)
+            );
         }
     });
 }
 
 function updateFiltersUI() {
-    const pill = el('search-type-pill');
-    if (pill) {
-        pill.innerText = window.tmdbCurrentMediaType === 'movie' ? 'Movies' : 'Series';
-    }
+    // Segmented Movies/Series control: both options always visible, active filled.
+    document.querySelectorAll('.media-type-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.media === window.tmdbCurrentMediaType);
+    });
 
     const btnMovies = el('filter-format-movies');
     const btnSeries = el('filter-format-series');
@@ -410,17 +422,19 @@ window.initTMDBListeners = function () {
     }
 
     // Toggle search type pill (Movie/Series) on the search bar
-    const searchTypePill = el('search-type-pill');
-    if (searchTypePill) {
-        searchTypePill.addEventListener('click', () => {
-            window.tmdbCurrentMediaType = window.tmdbCurrentMediaType === 'movie' ? 'tv' : 'movie';
+    document.querySelectorAll('.media-type-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const next = btn.dataset.media;
+            if (next === window.tmdbCurrentMediaType) return;
+            window.tmdbCurrentMediaType = next;
             if (tmdbSearchInput) tmdbSearchInput.value = '';
             window.tmdbCurrentQuery = '';
             window.tmdbCurrentPage = 1;
             updateGenreOptions();
+            updateFiltersUI();
             window.renderTMDB();
         });
-    }
+    });
 
     // Advanced Drawer Toggle
     const advancedToggle = el('tmdb-advanced-toggle');

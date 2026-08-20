@@ -38,6 +38,19 @@ function loadEnv() {
 }
 loadEnv();
 
+// Windows identity. Without these the app reports itself as "Electron":
+// notifications, taskbar grouping and jump lists all key off the AppUserModelID,
+// and app.getName() feeds the About panel and crash reports.
+// NOTE: the Task Manager *image name* comes from the executable, so in dev it
+// stays electron.exe no matter what — only a packaged build (electron-builder
+// productName "Vault Streaming") renames the process itself.
+app.setName('Vault Streaming');
+if (process.platform === 'win32') app.setAppUserModelId('com.vaultwares.vaultstreaming');
+// Keep reading/writing the settings folder the app has always used; setName()
+// would otherwise move userData to %APPDATA%\Vault Streaming and orphan
+// vault-settings.json and the watch history.
+app.setPath('userData', path.join(app.getPath('appData'), 'vault-streaming'));
+
 // Import modular files
 const utils = require('./src/utils');
 

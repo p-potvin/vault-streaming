@@ -793,3 +793,40 @@
     box-shadow: 0 0 4px var(--vault-accent, #B07CFF), 0 0 6px var(--vault-accent, #B07CFF);
   }
 }
+
+/* Movies / Series segmented control. Replaces a single pill inside the search
+   box that showed only the CURRENT mode — with nothing to compare it against,
+   there was no way to tell it was a toggle or which mode you were in. Both
+   options are now always visible, and the active one is filled. */
+.media-type-switch {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--vault-border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.media-type-btn {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--vault-slate, #a394cc);
+  padding: 7px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.media-type-btn:hover { transform: none; }
+
+.media-type-btn.active {
+  background: var(--vault-accent);
+  color: var(--vt-primary);
+}
+

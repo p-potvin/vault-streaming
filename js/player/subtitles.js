@@ -975,6 +975,22 @@ async function searchAndLoadSubtitlesByLang(lang) {
         videoPath = (el('video-player') && el('video-player').src) || '';
         queryTitle = window.activeStreamingMedia.title;
     }
+
+    // Those two globals are only set on some entry paths, so opening the picker
+    // after a failed or restored stream reported "no active title" instantly,
+    // without ever querying OpenSubtitles. Fall back to whatever the UI is
+    // actually showing before giving up.
+    if (!queryTitle) {
+        const detailsTitle = el('streaming-details-title');
+        const rdTitle = el('rd-stream-title-text');
+        queryTitle = (window._liveSubItemName)
+            || (detailsTitle && detailsTitle.textContent.trim())
+            || (rdTitle && rdTitle.textContent.trim())
+            || (window.currentPlayingItem && window.currentPlayingItem.name)
+            || null;
+        if (queryTitle) console.log('[subtitles] recovered query title from the UI:', queryTitle);
+    }
+
     if (!queryTitle) {
         window.showToast(tr('toastNoActiveTitle', 'No active title to search subtitles for'), 'error');
         return;
@@ -986,7 +1002,7 @@ async function searchAndLoadSubtitlesByLang(lang) {
         : lang === 'fr' ? 'fr,fr-CA'
             : 'en';
 
-    window.showToast(`Searching OpenSubtitles for ${lang.toUpperCase()}…`, 'info');
+    window.showToast(`${tr('toastSearchingSubs', 'Searching OpenSubtitles for')} ${lang.toUpperCase()}…`, 'info');
     let results = [];
     try {
         results = await window.electronAPI.findSubtitles(videoPath, queryTitle, false, langsParam) || [];

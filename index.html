@@ -124,8 +124,12 @@
     <div id="tmdb-container" class="tmdb-container">
       <!-- Single-row compact toolbar: providers · search + toggle pill · advanced -->
       <div id="streaming-toolbar" class="streaming-toolbar">
+        <div id="media-type-switch" class="media-type-switch" role="group" aria-label="Movies or Series">
+          <button id="media-type-movie" class="media-type-btn active" data-media="movie" data-i18n="tabMovies">Movies</button>
+          <button id="media-type-tv" class="media-type-btn" data-media="tv" data-i18n="tabSeries">Series</button>
+        </div>
         <div id="streaming-providers" class="streaming-providers">
-          <button class="provider-btn active" data-provider="all">All</button>
+          <button class="provider-btn active" data-provider="all" data-i18n="providerAll">All</button>
           <button class="provider-btn provider-btn-netflix" data-provider="8">Netflix</button>
           <button class="provider-btn provider-btn-disney" data-provider="337">Disney+</button>
           <button class="provider-btn provider-btn-apple" data-provider="350">Apple TV+</button>
@@ -133,7 +137,6 @@
         </div>
         <div class="streaming-toolbar-right">
           <div class="tmdb-search-wrapper">
-            <span id="search-type-pill" class="search-type-pill" title="Click to toggle Movies/Series">Movies</span>
             <input type="text" id="tmdb-search-input" data-i18n-placeholder="searchMoviesPlaceholder" placeholder="Search Movies & TV…" class="tmdb-search-input">
           </div>
           <button id="tmdb-search-btn" data-i18n="searchAction" class="tmdb-search-btn">Search</button>

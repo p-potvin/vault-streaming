@@ -324,11 +324,15 @@ async function initApp() {
         }
     }, 5 * 60 * 1000);
 
-    // Warm the live-subtitle daemon behind the splash so the model is loaded
-    // by the time the user opens the player. Only preloads if the model is
-    // already on disk — no surprise 2.5 GB download on launch.
-    if (window.electronAPI && typeof window.electronAPI.warmLiveSubtitles === 'function') {
-        window.electronAPI.warmLiveSubtitles().catch(() => { /* daemon warm-up is best-effort */ });
+    // Warm the live-subtitle daemon behind the splash so the model is loaded by
+    // the time the user opens the player. Off by default: warming spawns a
+    // Python process that keeps the ASR model resident (~0.9 GB RSS plus VRAM)
+    // for a feature most sessions never use, and running the desktop app and the
+    // web client together produced two of them sitting idle. Opt in per install;
+    // the daemon also releases itself after an idle spell (see live-subtitles.js).
+    if (window.appSettings && window.appSettings.warmLiveSubtitlesOnStart
+        && window.electronAPI && typeof window.electronAPI.warmLiveSubtitles === 'function') {
+        window.electronAPI.warmLiveSubtitles().catch(() => { /* best-effort */ });
     }
 
     // Boot straight into Discover — must run AFTER initTMDBListeners so the

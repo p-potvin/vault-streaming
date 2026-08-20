@@ -241,6 +241,12 @@ async function populateWatchRegions(selected) {
     if (!_watchRegionsLoaded && window.electronAPI && window.electronAPI.getWatchRegions) {
         try {
             const res = await window.electronAPI.getWatchRegions();
+            // With no stored choice, preselect whatever geo IP detected rather
+            // than defaulting everyone to the US.
+            if (!(window.appSettings && window.appSettings.watchRegion)) {
+                selected = res && (res.detected || res.fallbackRegion) || 'US';
+                if (res && !res.detected) console.warn('[settings] geo lookup failed; defaulting region to', selected);
+            }
             if (res && res.success && res.regions && res.regions.length) {
                 sel.innerHTML = res.regions
                     .map((r) => `<option value="${r.code}">${window.escapeHtml(r.name)} (${r.code})</option>`)

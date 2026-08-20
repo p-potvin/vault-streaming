@@ -57,14 +57,18 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "vault-streaming-setup-${version}.${ext}"
+      "artifactName": "vault-streaming-setup-${version}.${ext}",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "shortcutName": "Vault Streaming"
     },
-	"electronDownload": {
+    "electronDownload": {
       "mirror": "https://github.com/castlabs/electron-releases/releases/download/v"
     },
     "productName": "Vault Streaming"
@@ -83,5 +87,6 @@
   "allowScripts": {
     "electron@41.2.1": true,
     "electron-winstaller@5.4.0": true
-  }
+  },
+  "productName": "Vault Streaming"
 }
