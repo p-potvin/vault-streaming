@@ -1137,36 +1137,21 @@ window.refreshSubtitlesList = refreshSubtitlesList;
 window.initSubtitleListeners = initSubtitleListeners;
 window.loadActiveSubtitles = loadActiveSubtitles;
 
-// Keep cues above the controls without shrinking the video. The CSS used to
-// reserve space with padding on the <video>, which object-fit:contain then
-// rescaled around — letterboxing the picture on three sides. Positioning the
-// cues themselves costs nothing visually and leaves the video full-bleed.
-// `line` counts from the bottom when negative; -3 clears the control bar.
-const CUE_LINE_FROM_BOTTOM = -3;
-
-function liftCues(textTrack) {
-    if (!textTrack || !textTrack.cues) return;
-    for (const cue of textTrack.cues) {
-        // Only nudge cues that have not been authored with an explicit position.
-        if (cue.line === 'auto' || cue.line === undefined) {
-            try { cue.snapToLines = true; cue.line = CUE_LINE_FROM_BOTTOM; } catch (_) { }
-        }
-    }
-}
-window.liftCues = liftCues;
-
-// Cues arrive asynchronously, so catch both the track being added and its cues
-// materialising later.
+// Apply the existing raiseTrackCues() to every track automatically. The helper
+// (and the single SUBTITLE_CUE_LINE constant at the top of this file) already
+// knew how to re-anchor cues; what was missing is that nothing called it for
+// tracks added later, so file-loaded subtitles stayed at line:auto — at the very
+// bottom, behind the control bar.
 window.attachCueLifting = function attachCueLifting(video) {
     if (!video || !video.textTracks || video._cueLiftingAttached) return;
     video._cueLiftingAttached = true;
     const tracks = video.textTracks;
     const hook = (track) => {
         if (!track) return;
-        liftCues(track);
-        track.addEventListener('cuechange', () => liftCues(track));
+        window.raiseTrackCues(track);
+        // Cues can be appended after the track exists (live ASR, lazy VTT parse).
+        track.addEventListener('cuechange', () => window.raiseTrackCues(track));
     };
     for (let i = 0; i < tracks.length; i++) hook(tracks[i]);
     tracks.addEventListener('addtrack', (e) => hook(e.track));
 };
-

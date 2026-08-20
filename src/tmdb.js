@@ -603,7 +603,11 @@ function registerTmdbHandlers(ipcMain) {
             
             url += `&with_original_language=${await originalLanguageFilter()}`;
             
-            console.log(`[TMDB] Discovering streaming items: ${url}`);
+            // with_original_language now carries every language TMDB supports
+            // (72 codes), which buried every other line in the log. The value is
+            // constant per session, so log it once and elide it afterwards.
+            const loggableUrl = url.replace(/with_original_language=[^&]*/, 'with_original_language=<all>');
+            console.log(`[TMDB] Discovering streaming items: ${loggableUrl}`);
             
             const response = await fetchWithTimeout(url, {
                 method: 'GET',

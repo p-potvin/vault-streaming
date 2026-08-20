@@ -4,6 +4,7 @@
 //   • Stream URLs  → returns [] gracefully (nothing local to find).
 //   • OpenSubtitles remote → searches via v5 API when queryTitle + API key are available.
 
+const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -180,8 +181,25 @@ function registerSubtitlesIpc(ipcMain, _settingsPath, loadSettings) {
         // Download the actual subtitle file
         try {
             const downloadUrl = result.link;
-            const dir = outputDir || (videoPath ? path.dirname(videoPath) : process.cwd());
-            const fileName = result.fileName || `subtitle_${fileId}.srt`;
+            // Streams are http(s) URLs, not files. path.dirname() on one yields a
+            // nonsense relative path that path.join then hangs off the cwd —
+            // producing e.g. "<repo>\http:\100.67.25.118:5173\...srt" and an
+            // ENOENT. Only write next to the video when it really is a local file;
+            // otherwise keep the sidecar in a writable cache under userData.
+            const isLocalFile = typeof videoPath === 'string'
+                && !/^[a-z][a-z0-9+.-]*:\/\//i.test(videoPath)
+                && path.isAbsolute(videoPath);
+            let dir = outputDir;
+            if (!dir) {
+                dir = isLocalFile
+                    ? path.dirname(videoPath)
+                    : path.join(app.getPath('userData'), 'subtitles');
+            }
+            fs.mkdirSync(dir, { recursive: true });
+            // Remote titles can collide on filename, so key the cache by file id.
+            const rawName = result.fileName || `subtitle_${fileId}.srt`;
+            const safeName = rawName.replace(/[\/:*?"<>|]/g, '_');
+            const fileName = isLocalFile ? safeName : `${fileId}_${safeName}`;
             const outPath = path.join(dir, fileName);
 
             await new Promise((resolve, reject) => {

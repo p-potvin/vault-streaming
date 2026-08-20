@@ -1542,6 +1542,28 @@ async function playStream(url, title) {
     trickFrames = [];
     vp.dataset.trickplay = '';
     vp.src = url;
+
+    // Arm the overlay teardown HERE, immediately after the source is assigned.
+    // Attaching it at the end of this function raced against the media element:
+    // playStream still has async work to do (subtitle lookup, audio probe), so
+    // loadeddata — or an early error — had usually already fired by then and
+    // only the 15s timeout cleared the spinner, leaving it over playing video.
+    const clearOverlay = () => {
+        endPlayerHandoff();
+        vp.removeEventListener('loadeddata', clearOverlay);
+        vp.removeEventListener('playing', clearOverlay);
+        vp.removeEventListener('error', clearOverlay);
+        clearTimeout(window._handoffTimeout);
+    };
+    clearTimeout(window._handoffTimeout);
+    window._handoffTimeout = setTimeout(clearOverlay, 15000);
+    if (vp.readyState >= 2 || vp.error) {
+        clearOverlay();
+    } else {
+        vp.addEventListener('loadeddata', clearOverlay);
+        vp.addEventListener('playing', clearOverlay);
+        vp.addEventListener('error', clearOverlay);
+    }
     vp.muted = false;
     if (lastScrubSrc !== url) {
         scrubVideo.src = url;
@@ -1784,19 +1806,6 @@ async function playStream(url, title) {
     btnPlay.innerHTML = PAUSE_ICON_SVG;
     el('video-modal').style.display = 'flex';
     el('video-modal').focus();
-
-    // Hold the overlay until there are frames to show. loadeddata is the first
-    // point the element can actually paint; the timeout keeps a stalled source
-    // from leaving the spinner up forever, and an error tears it down too.
-    const clearOverlay = () => {
-        endPlayerHandoff();
-        vp.removeEventListener('loadeddata', clearOverlay);
-        vp.removeEventListener('error', clearOverlay);
-        clearTimeout(handoffTimeout);
-    };
-    const handoffTimeout = setTimeout(clearOverlay, 15000);
-    vp.addEventListener('loadeddata', clearOverlay);
-    vp.addEventListener('error', clearOverlay);
 
     vp.play().catch(e => console.log("Stream playback start prevented or failed:", e));
 }

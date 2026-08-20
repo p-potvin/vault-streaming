@@ -10,7 +10,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "author": {
+    "name": "VaultWares"
+  },
   "license": "ISC",
   "devDependencies": {
     "electron": "github:castlabs/electron-releases#v43.0.0+wvcus",
@@ -58,7 +60,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "publisherName": "VaultWares"
     },
     "nsis": {
       "oneClick": false,
