@@ -629,6 +629,13 @@
     <button id="pip-close-btn" aria-label="Close" title="Close"><span data-icon="close"></span></button>
     <div class="video-wrapper">
       <video id="video-player" autoplay></video>
+      <!-- Shown while the player shell is up but the stream is still being
+           prepared, so the search dialog can hand over directly instead of
+           flashing the grid in between. -->
+      <div id="player-preparing" aria-live="polite">
+        <div class="player-preparing-spinner"></div>
+        <div id="player-preparing-text" data-i18n="preparingStream">Preparing stream…</div>
+      </div>
       <!-- PiP Controls Hover Overlay -->
       <div id="pip-controls-overlay">
         <button id="pip-btn-prev" class="pip-ctrl-btn" title="Previous"><span data-icon="skipBack"
@@ -785,7 +792,7 @@
                       class="subtitle-quick-lang-code">EN</span>
                   </div>
                   <div class="subtitle-quick-lang" data-lang="fr-CA">
-                    <span><span class="fi fi-ca" style="border-radius:2px;"></span> French (Canadian)</span><span
+                    <span><span class="fi fi-qc" style="border-radius:2px;"></span> French (Canadian)</span><span
                       class="subtitle-quick-lang-code">FR-CA</span>
                   </div>
                   <div class="subtitle-quick-lang" data-lang="fr">

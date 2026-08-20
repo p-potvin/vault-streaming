@@ -169,7 +169,11 @@ window.renderTMDB = async function (query = '', append = false) {
                 window.tmdbCurrentDecade,
                 window.tmdbCurrentRegion,
                 window.tmdbCurrentSort,
-                (window.appSettings && window.appSettings.watchRegion) || 'US'
+                // Undefined on purpose when the user has not picked one — the
+                // handler then resolves it from geo IP. Passing 'US' here meant
+                // geo detection could never take effect (Prime returned nothing
+                // outside the US because watch_region was pinned to it).
+                (window.appSettings && window.appSettings.watchRegion) || undefined
             );
         }
 

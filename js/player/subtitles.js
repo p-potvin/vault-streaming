@@ -69,8 +69,13 @@ async function selectSubtitleTrack(trackIdx) {
                 const lang = trackEl.dataset.lang;
                 const videoPath = trackEl.dataset.videoPath;
 
-                const localPath = await window.electronAPI.downloadSubtitleTrack({ fileId, lang, videoPath });
-                if (localPath) {
+                // The handler resolves { success, path } — passing the object
+                // straight to sanitizePath threw "p.replace is not a function"
+                // and surfaced as "OpenSubtitles download failed".
+                const dl = await window.electronAPI.downloadSubtitleTrack({ fileId, lang, videoPath });
+                const localPath = (dl && typeof dl === 'object') ? dl.path : dl;
+                if (dl && dl.success === false) throw new Error(dl.error || 'Download refused');
+                if (localPath && typeof localPath === 'string') {
                     trackEl.src = window.sanitizePath(localPath);
                     trackEl.dataset.downloaded = "true";
                     window.showToast(t.subtitlesReady || 'Subtitles ready', 'success');
@@ -1082,9 +1087,16 @@ async function loadActiveSubtitles(videoPath) {
                 }
             }
 
-            // If no exact match, fall back to first subtitle
+            // No match for an explicitly chosen language: fall back only when the
+            // user asked for "original". Picking subs[0] regardless meant setting
+            // French and getting English auto-loaded — a wrong language on screen
+            // is worse than none, and the picker is one click away.
             if (!bestSub && subs.length > 0) {
-                bestSub = subs[0];
+                if (prefLang === 'original') {
+                    bestSub = subs[0];
+                } else if (prefLang !== 'und') {
+                    console.log(`[subtitles] no "${prefLang}" track among ${subs.length} local subtitle(s); leaving subtitles off`);
+                }
             }
 
             // Only load the best matching subtitle
@@ -1124,3 +1136,37 @@ window.selectSubtitleByIndex = selectSubtitleByIndex;
 window.refreshSubtitlesList = refreshSubtitlesList;
 window.initSubtitleListeners = initSubtitleListeners;
 window.loadActiveSubtitles = loadActiveSubtitles;
+
+// Keep cues above the controls without shrinking the video. The CSS used to
+// reserve space with padding on the <video>, which object-fit:contain then
+// rescaled around — letterboxing the picture on three sides. Positioning the
+// cues themselves costs nothing visually and leaves the video full-bleed.
+// `line` counts from the bottom when negative; -3 clears the control bar.
+const CUE_LINE_FROM_BOTTOM = -3;
+
+function liftCues(textTrack) {
+    if (!textTrack || !textTrack.cues) return;
+    for (const cue of textTrack.cues) {
+        // Only nudge cues that have not been authored with an explicit position.
+        if (cue.line === 'auto' || cue.line === undefined) {
+            try { cue.snapToLines = true; cue.line = CUE_LINE_FROM_BOTTOM; } catch (_) { }
+        }
+    }
+}
+window.liftCues = liftCues;
+
+// Cues arrive asynchronously, so catch both the track being added and its cues
+// materialising later.
+window.attachCueLifting = function attachCueLifting(video) {
+    if (!video || !video.textTracks || video._cueLiftingAttached) return;
+    video._cueLiftingAttached = true;
+    const tracks = video.textTracks;
+    const hook = (track) => {
+        if (!track) return;
+        liftCues(track);
+        track.addEventListener('cuechange', () => liftCues(track));
+    };
+    for (let i = 0; i < tracks.length; i++) hook(tracks[i]);
+    tracks.addEventListener('addtrack', (e) => hook(e.track));
+};
+

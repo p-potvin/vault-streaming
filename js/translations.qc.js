@@ -248,5 +248,6 @@ window.translationsQc = {
   toastWaitForVideo: "Attendez le chargement de la vidéo",
   toastPlaybackError: "Erreur de lecture",
   toastSearchingSubs: "Recherche sur OpenSubtitles pour",
-  providerAll: "Tous"
+  providerAll: "Tous",
+  preparingStream: "Préparation du flux…"
 };

@@ -830,3 +830,14 @@
   color: var(--vt-primary);
 }
 
+/* Québec flag. flag-icons ships country flags only — no subdivisions — so the
+   Fleurdelisé is supplied locally and registered under the same naming scheme,
+   usable exactly like the library's own: <span class="fi fi-qc"></span>. */
+.fi-qc {
+  background-image: url("../public/flags/qc.svg");
+}
+
+.fi-qc.fi-squared {
+  background-image: url("../public/flags/qc.svg");
+}
+

@@ -484,10 +484,8 @@ window.startUsenetStreamFlow = async function(usenetItem, movieTitle, index = 0)
             return;
         }
 
-        // SUCCESS!
-        el('rd-stream-dialog').style.display = 'none';
-        const bd = el('rd-stream-backdrop');
-        if (bd) bd.style.display = 'none';
+        // SUCCESS! The dialog is dismissed by beginPlayerHandoff() once the
+        // player shell is up, so the two never both disappear at once.
         if (window.activeStreamingMedia) {
             window.activeStreamingMedia.quality = usenetItem.quality || '';
             window.activeStreamingMedia.isUsenet = true;
@@ -749,10 +747,8 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             return;
         }
 
-        // SUCCESS!
-        el('rd-stream-dialog').style.display = 'none';
-        const bd = el('rd-stream-backdrop');
-        if (bd) bd.style.display = 'none';
+        // SUCCESS! The dialog is dismissed by beginPlayerHandoff() once the
+        // player shell is up, so the two never both disappear at once.
         if (window.activeStreamingMedia) {
             const successfulTorrent = torrentsToTry.find(t => t.magnet === response.magnet || t.hash === response.hash);
             window.activeStreamingMedia.quality = (successfulTorrent || {}).quality || '';

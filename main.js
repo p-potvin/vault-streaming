@@ -45,7 +45,14 @@ loadEnv();
 // stays electron.exe no matter what — only a packaged build (electron-builder
 // productName "Vault Streaming") renames the process itself.
 app.setName('Vault Streaming');
-if (process.platform === 'win32') app.setAppUserModelId('com.vaultwares.vaultstreaming');
+if (process.platform === 'win32') {
+    app.setAppUserModelId('com.vaultwares.vaultstreaming');
+    // The taskbar jump list otherwise inherits the Electron binary's own tasks
+    // and shows "Electron" as its heading in a dev run. An empty user-task list
+    // removes that section; the heading itself comes from the exe's version info,
+    // so a packaged build is what fully rebrands it.
+    try { app.setUserTasks([]); } catch (e) { /* not fatal */ }
+}
 // Keep reading/writing the settings folder the app has always used; setName()
 // would otherwise move userData to %APPDATA%\Vault Streaming and orphan
 // vault-settings.json and the watch history.

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480">
+  <title>Québec (Fleurdelisé)</title>
+  <rect width="640" height="480" fill="#003DA5"/>
+  <!-- White cross, bands centred on each axis -->
+  <rect x="284" y="0" width="72" height="480" fill="#fff"/>
+  <rect x="0" y="204" width="640" height="72" fill="#fff"/>
+  <defs>
+    <!-- Fleur-de-lis drawn in a 100x100 box, origin top-left -->
+    <g id="fdl" fill="#fff">
+      <!-- centre petal -->
+      <path d="M50 3c-7 17-13 30-13 39 0 8 6 13 13 13s13-5 13-13c0-9-6-22-13-39z"/>
+      <!-- left horn: sweeps out and up, tapering to a point -->
+      <path d="M38 55c-9-3-19-11-23-21-2-6 1-11 7-9 8 2 14 12 18 22z"/>
+      <!-- right horn -->
+      <path d="M62 55c9-3 19-11 23-21 2-6-1-11-7-9-8 2-14 12-18 22z"/>
+      <!-- binding band -->
+      <rect x="30" y="55" width="40" height="10" rx="3"/>
+      <!-- stem flaring into a foot -->
+      <path d="M44 65h12v17c7 2 12 7 12 12H32c0-5 5-10 12-12z"/>
+    </g>
+  </defs>
+  <use href="#fdl" x="0" y="0" transform="translate(92 42)"/>
+  <use href="#fdl" x="0" y="0" transform="translate(448 42)"/>
+  <use href="#fdl" x="0" y="0" transform="translate(92 298)"/>
+  <use href="#fdl" x="0" y="0" transform="translate(448 298)"/>
+</svg>

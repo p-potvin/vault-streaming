@@ -111,14 +111,14 @@ body.player-idle #video-modal .video-wrapper {
   cursor: pointer;
 }
 
-/* Add padding when subtitles are active to prevent text overlap.
-   box-sizing is REQUIRED here: #video-player is height:100% and content-box by
-   default, so the padding was added ON TOP of the full height, overflowing the
-   wrapper. object-fit:contain then scaled the video down to fit that taller box,
-   which showed up as thick black bars down each side (pillarboxing). */
+/* Subtitles no longer resize the video. Reserving space with padding cannot
+   work here whichever way box-sizing is set: with content-box the element
+   overflows the wrapper, with border-box the content box shrinks — and either
+   way object-fit:contain rescales the picture to fit the new box, leaving gaps
+   along the bottom AND both sides. The video now always fills the wrapper and
+   cues are lifted clear of the controls instead (liftCues in subtitles.js). */
 .video-wrapper.subtitles-active #video-player {
   box-sizing: border-box;
-  padding-bottom: 40px;
 }
 
 #custom-controls {
@@ -452,3 +452,47 @@ video::cue {
   border-color: var(--vault-accent);
   background: rgba(116, 177, 190, 0.1);
 }
+
+/* ── Hand-off from the source-search dialog to the player ──────────────────
+   The dialog used to be hidden the moment a source resolved, while playStream
+   still had async work left (subtitle lookup, audio probe) before revealing the
+   player — so the grid flashed in between. The player shell is now raised
+   first, showing this overlay, and the dialog fades out over it. */
+#player-preparing {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #000;
+  z-index: 5;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vault-slate, #a394cc);
+}
+
+#video-modal.preparing #player-preparing { display: flex; }
+
+.player-preparing-spinner {
+  width: 34px;
+  height: 34px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--vault-accent);
+  border-radius: 50%;
+  animation: vw-preparing-spin 0.9s linear infinite;
+}
+
+@keyframes vw-preparing-spin { to { transform: rotate(360deg); } }
+
+/* Fade the dialog out rather than cutting it. */
+#rd-stream-dialog.handing-off,
+#rd-stream-backdrop.handing-off {
+  transition: opacity 0.22s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+

@@ -246,5 +246,6 @@ window.translationsEn = {
   toastWaitForVideo: "Wait for video to load",
   toastPlaybackError: "Playback Error",
   toastSearchingSubs: "Searching OpenSubtitles for",
-  providerAll: "All"
+  providerAll: "All",
+  preparingStream: "Preparing stream…"
 };

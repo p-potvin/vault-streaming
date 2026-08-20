@@ -362,6 +362,10 @@ function saveAndSetVolume(vol) {
 function initPlayer() {
     vp = el('video-player');
 
+    // Cues are nudged clear of the control bar instead of shrinking the video
+    // (see .video-wrapper.subtitles-active in player.css).
+    if (typeof window.attachCueLifting === 'function') window.attachCueLifting(vp);
+
     // Close / stop video, trailers, and livestream when app is minimized to tray
     if (window.electronAPI && typeof window.electronAPI.onAppHidden === 'function') {
         window.electronAPI.onAppHidden(() => {
@@ -1488,11 +1492,40 @@ function initPlayer() {
     }
 }
 
+// Bring the player up in a "preparing" state and dissolve the source-search
+// dialog into it. Previously the dialog was hidden the moment a source resolved
+// while playStream still had async work to do, so the user watched the dialog
+// vanish, the grid reappear, and then the player drop in on top.
+function beginPlayerHandoff() {
+    const modal = el('video-modal');
+    if (!modal) return;
+    modal.classList.remove('minimized');
+    modal.classList.add('preparing');
+    modal.style.display = 'flex';
+
+    for (const id of ['rd-stream-dialog', 'rd-stream-backdrop']) {
+        const node = el(id);
+        if (!node || node.style.display === 'none') continue;
+        node.classList.add('handing-off');
+        setTimeout(() => {
+            node.style.display = 'none';
+            node.classList.remove('handing-off');
+            node.style.opacity = '';
+        }, 240);
+    }
+}
+
+function endPlayerHandoff() {
+    const modal = el('video-modal');
+    if (modal) modal.classList.remove('preparing');
+}
+
 async function playStream(url, title) {
     if (window.autoplayTimer) {
         clearInterval(window.autoplayTimer);
         window.autoplayTimer = null;
     }
+    beginPlayerHandoff();
     const endedOverlay = el('video-ended-overlay');
     if (endedOverlay) endedOverlay.style.display = 'none';
 
@@ -1751,6 +1784,19 @@ async function playStream(url, title) {
     btnPlay.innerHTML = PAUSE_ICON_SVG;
     el('video-modal').style.display = 'flex';
     el('video-modal').focus();
+
+    // Hold the overlay until there are frames to show. loadeddata is the first
+    // point the element can actually paint; the timeout keeps a stalled source
+    // from leaving the spinner up forever, and an error tears it down too.
+    const clearOverlay = () => {
+        endPlayerHandoff();
+        vp.removeEventListener('loadeddata', clearOverlay);
+        vp.removeEventListener('error', clearOverlay);
+        clearTimeout(handoffTimeout);
+    };
+    const handoffTimeout = setTimeout(clearOverlay, 15000);
+    vp.addEventListener('loadeddata', clearOverlay);
+    vp.addEventListener('error', clearOverlay);
 
     vp.play().catch(e => console.log("Stream playback start prevented or failed:", e));
 }
