@@ -17,13 +17,18 @@
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$LogDir = Join-Path $env:LOCALAPPDATA 'VaultStreaming'
+$LogDir = Join-Path $RepoRoot 'logs'
 $LogFile = Join-Path $LogDir 'web-server.log'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Write-Log($msg) {
     $line = "{0} {1}" -f (Get-Date -Format 'ddd, dd MMM yyyy HH:mm'), $msg
     Add-Content -Path $LogFile -Value $line
+}
+
+trap {
+    try { Write-Log "FATAL: $($_.Exception.Message)" } catch { }
+    exit 1
 }
 
 $tailscale = 'C:\Program Files\Tailscale\tailscale.exe'
@@ -73,10 +78,10 @@ $recentFailures = 0
 $lastStart = Get-Date
 
 while ($true) {
-    # 2>&1 folds stderr into the same pipe so Out-File can write UTF-8; the old
-    # `*>> $LogFile` redirection produced a UTF-16 log that reads as spaced-out
-    # garbage in every normal tool.
-    & node "web/server.js" 2>&1 | Out-File -FilePath $LogFile -Encoding utf8 -Append
+    # Keep the child attached through cmd redirection. A PowerShell pipeline to
+    # Out-File can throw a broken-pipe console error under a detached conhost
+    # task and terminate this supervisor after the child exits.
+    & cmd.exe /d /c "node web/server.js >> `"$LogFile`" 2>&1"
     $code = $LASTEXITCODE
     $ranFor = (Get-Date) - $lastStart
 
