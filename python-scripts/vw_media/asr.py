@@ -17,6 +17,8 @@ The wrapper lives in a differently-named package in each repo, so we probe.
 import gc
 import importlib
 import os
+import subprocess
+import tempfile
 import time
 
 from . import telemetry
@@ -105,6 +107,105 @@ def release():
         pass
 
 
+# ---------------------------------------------------------------- nemo-speech
+# Default engine. The PyTorch/NeMo wrapper below stays as a fallback, but it is
+# no longer the first choice: it pulls torch and the NeMo stack into the process
+# for a job that a 1.3 MB native binary already does, and the native path shares
+# the same engine, models and defaults as the `vw better-subtitles` command, so
+# a transcript produced here matches one produced there.
+#
+# parakeet-tdt is the default to match vault-commander. Measured on 111 minutes
+# of podcast it returned 20,565 words with 3.6 minutes of gaps in 59 s, against
+# nemotron-3.5's 18,984 words, 14.2 minutes of gaps and 339 s. nemotron-3.5 is
+# still the one to pick for multilingual or code-switched audio -- set
+# VW_ASR_MODEL=nemotron-3.5 -- because it is the only model that takes a
+# language prompt or reports a detected language.
+NEMO_SPEECH_MODEL = "parakeet-tdt"
+
+_CUDA_BIN = (
+    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin\x64",
+    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin",
+)
+
+
+def find_nemo_speech():
+    """Locate nemo-speech.exe, or return None if this machine has no build.
+
+    Mirrors the search vault-commander's subtitles_server.py uses, including the
+    build order: build-cuda is the production build, build-s2s is the same CUDA
+    configuration plus the S2S targets, build-norelpos is the relpos-off variant
+    kept for A/B work.
+    """
+    override = os.environ.get("VW_NEMO_SPEECH")
+    if override:
+        p = override
+        if os.path.isdir(p):
+            p = os.path.join(p, "nemo-speech.exe")
+        if os.path.isfile(p):
+            return p
+        return None
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    repos = os.path.abspath(os.path.join(here, "..", "..", ".."))
+    roots = [
+        os.path.join(repos, "vault-cacophony", "NeMo-Speech.cpp"),
+        os.path.join(os.path.expanduser("~"), "Desktop", "Github Repos",
+                     "vault-cacophony", "NeMo-Speech.cpp"),
+    ]
+    for build in ("build-cuda", "build-s2s", "build-norelpos"):
+        for root in roots:
+            exe = os.path.join(root, build, "bin", "nemo-speech.exe")
+            if os.path.isfile(exe):
+                return exe
+    return None
+
+
+def _nemo_speech_transcribe(wav_path, language, model_name, status_callback):
+    """Transcribe through nemo-speech.exe, returning segment dicts.
+
+    The engine writes SRT itself, so the cue grouping is the engine's rather
+    than a second implementation here, and subtitles.read_srt turns it straight
+    back into the {"start","end","text"} contract this module already returns.
+    """
+    from . import subtitles as _subtitles
+
+    exe = find_nemo_speech()
+    if not exe:
+        return None
+
+    if status_callback:
+        status_callback(f"Transcribing with {model_name}...")
+
+    out_dir = tempfile.mkdtemp(prefix="vw_asr_")
+    out_srt = os.path.join(out_dir, "out.srt")
+    cmd = [exe, "transcribe", "--model", model_name,
+           "-f", "srt", "-o", out_srt, wav_path]
+    # Only the nemotron models are prompt-conditioned; parakeet takes no
+    # language and ignores it.
+    if language and model_name.startswith("nemotron"):
+        cmd += ["-l", language]
+
+    env = os.environ.copy()
+    existing = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join([p for p in _CUDA_BIN if os.path.isdir(p)] + [existing])
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        if proc.returncode != 0 or not os.path.isfile(out_srt):
+            detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+            raise RuntimeError(
+                "nemo-speech transcribe failed (exit {}): {}".format(
+                    proc.returncode, detail[-1] if detail else "no output"))
+        return _subtitles.read_srt(out_srt)
+    finally:
+        try:
+            if os.path.isfile(out_srt):
+                os.remove(out_srt)
+            os.rmdir(out_dir)
+        except OSError:
+            pass
+
+
 def transcribe(wav_path, language="en", model=None, status_callback=None):
     """Transcribe *wav_path*, returning segment dicts.
 
@@ -123,19 +224,34 @@ def transcribe(wav_path, language="en", model=None, status_callback=None):
         audio_seconds=audio_seconds,
         language=language,
     ) as run:
-        engine = model or get_model(status_callback=status_callback)
-        if _pending_load_ms is not None:
-            run.set(load_ms=_pending_load_ms)
-            _pending_load_ms = None
-            run.tag("cold-start")
-        # The model name is only known once the wrapper has resolved it.
-        run.set(model=getattr(engine, "model_name", None) or _model_name or DEFAULT_MODEL)
+        # nemo-speech first: same engine, models and defaults as the
+        # `vw better-subtitles` command, and no torch import. Falls through to
+        # the PyTorch wrapper when no build is present on this machine, or when
+        # VW_ASR_ENGINE=torch pins it explicitly.
+        result = None
+        if model is None and os.environ.get("VW_ASR_ENGINE", "").lower() != "torch":
+            native_model = (
+                os.environ.get("VW_ASR_MODEL") or NEMO_SPEECH_MODEL)
+            result = _nemo_speech_transcribe(
+                wav_path, language, native_model, status_callback)
+            if result is not None:
+                run.set(model=native_model)
+                run.tag("nemo-speech")
 
-        segments = engine.transcribe_file(wav_path, language=language) or []
-        result = [
-            {"start": float(seg.start), "end": float(seg.end), "text": str(seg.text)}
-            for seg in segments
-        ]
+        if result is None:
+            engine = model or get_model(status_callback=status_callback)
+            if _pending_load_ms is not None:
+                run.set(load_ms=_pending_load_ms)
+                _pending_load_ms = None
+                run.tag("cold-start")
+            # The model name is only known once the wrapper has resolved it.
+            run.set(model=getattr(engine, "model_name", None) or _model_name or DEFAULT_MODEL)
+
+            segments = engine.transcribe_file(wav_path, language=language) or []
+            result = [
+                {"start": float(seg.start), "end": float(seg.end), "text": str(seg.text)}
+                for seg in segments
+            ]
 
         # Zero segments is a real answer -- silence -- not a failure, so it is
         # recorded as a successful run with no output rather than an error.
