@@ -1,9 +1,6 @@
 name: Build Unsigned iOS App
 
 on:
-  push:
-    branches:
-      - 'vw-codex-ios-container'
   workflow_dispatch:
   repository_dispatch:
     types: [build-ios, build-ipa]
