@@ -95,7 +95,8 @@ let splashFinished = false;
 function finishSplash() {
     if (splashFinished) return;
     splashFinished = true;
-    const MIN_MS = 3000;
+    const isE2E = process.env.VAULT_STREAMING_E2E === '1';
+    const MIN_MS = isE2E ? 0 : 3000;
     const wait = Math.max(0, MIN_MS - (Date.now() - splashShownAt));
     setTimeout(() => {
         if (splashWindow && !splashWindow.isDestroyed()) { splashWindow.close(); splashWindow = null; }
@@ -201,11 +202,11 @@ function createTray() {
     if (fs.existsSync(trayIconPath)) {
         tray = new Tray(trayIconPath);
         const contextMenu = Menu.buildFromTemplate([
-            { label: 'Show Vault Explorer', click: () => { mainWindow.show(); } },
+            { label: 'Show Vault Streaming', click: () => { mainWindow.show(); } },
             { type: 'separator' },
             { label: 'Quit', click: () => { isQuitting = true; app.quit(); } }
         ]);
-        tray.setToolTip('Vault Explorer');
+        tray.setToolTip('Vault Streaming');
         tray.setContextMenu(contextMenu);
         tray.on('double-click', () => {
             mainWindow.show();
@@ -214,9 +215,10 @@ function createTray() {
 }
 
 function createWindow() {
+    const isE2E = process.env.VAULT_STREAMING_E2E === '1';
     mainWindow = new BrowserWindow({
         width: 1200, height: 800,
-        show: false, // revealed by finishSplash() once ready (see splash flow)
+        show: isE2E, // revealed by finishSplash() once ready in normal mode
         icon: path.join(__dirname, 'build', 'icon.ico'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -294,17 +296,23 @@ function createWindow() {
 
 app.whenReady().then(async () => {
     try {
-        // Clean up any orphaned vault-explorer processes from a previous bad exit
+        // Clean up any orphaned vault-streaming processes from a previous bad exit
         killAllOwnProcesses(false);
 
-        // wait for Widevine CDM installation to finish
-        // this is from the castlabs branch of electron
-        await components.whenReady();
+        // wait for Widevine CDM installation to finish (castlabs branch)
+        if (components && typeof components.whenReady === 'function') {
+            try {
+                await Promise.race([
+                    components.whenReady(),
+                    new Promise((r) => setTimeout(r, 1500))
+                ]);
+            } catch (_) { }
+        }
 
-        createSplash();
+        const isE2E = process.env.VAULT_STREAMING_E2E === '1';
+        if (!isE2E) createSplash();
         createWindow();
-        // Safety net: never let a missed 'ready-to-show' strand the app on the splash.
-        setTimeout(finishSplash, 8000);
+        if (!isE2E) setTimeout(finishSplash, 8000);
         app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
         // Remove leftover .tmp files from previous crashes/kills in the background.
@@ -378,7 +386,7 @@ const { registerClipIpc } = require('./src/ipc/clip.ipc');
 const { registerTrailerCacheIpc } = require('./src/ipc/trailer-cache.ipc');
 const { registerAudioTracksIpc } = require('./src/ipc/audio-tracks.ipc');
 const { registerDebridStatsIpc } = require('./src/telemetry/debrid-stats');
-
+const { registerNormalizationHandlers } = require('./src/normalization');
 
 registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings);
 registerMediaIpc(ipcMain);
@@ -388,6 +396,7 @@ registerClipIpc(ipcMain);
 registerTrailerCacheIpc(ipcMain);
 registerAudioTracksIpc(ipcMain);
 registerDebridStatsIpc(ipcMain);
+registerNormalizationHandlers(ipcMain);
 
 // Register Modular Handlers
 tmdbHandlers.registerTmdbHandlers(ipcMain);

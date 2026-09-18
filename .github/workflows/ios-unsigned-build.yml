@@ -1,0 +1,50 @@
+name: Build Unsigned iOS App
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [build-ios, build-ipa]
+
+jobs:
+  build-unsigned-ipa:
+    name: Build Unsigned IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: Build Unsigned iOS Archive
+        run: |
+          xcodebuild clean build \
+            -project ios/VaultStreaming.xcodeproj \
+            -scheme VaultStreaming \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            BUILD_DIR="${GITHUB_WORKSPACE}/build"
+
+      - name: Package Unsigned IPA
+        run: |
+          chmod +x ios/scripts/package-unsigned-ipa.sh
+          ./ios/scripts/package-unsigned-ipa.sh "${GITHUB_WORKSPACE}/build/Release-iphoneos" "${GITHUB_WORKSPACE}/build/VaultStreaming-unsigned.ipa"
+
+      - name: Verify IPA Integrity
+        run: |
+          ls -lh "${GITHUB_WORKSPACE}/build/VaultStreaming-unsigned.ipa"
+          unzip -l "${GITHUB_WORKSPACE}/build/VaultStreaming-unsigned.ipa" | head -n 25
+
+      - name: Upload Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VaultStreaming-iOS-Unsigned
+          path: build/VaultStreaming-unsigned.ipa
+          retention-days: 14
+          if-no-files-found: error

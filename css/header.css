@@ -841,3 +841,59 @@
   background-image: url("../public/flags/qc.svg");
 }
 
+/* ===== Mobile-First Responsive Shell & Navigation ===== */
+@media (max-width: 650px) {
+  .titlebar {
+    height: auto;
+    min-height: 44px;
+    padding: 0 12px;
+    padding-top: env(safe-area-inset-top, 6px);
+    -webkit-app-region: no-drag;
+  }
+
+  .sub-nav-bar {
+    padding: 8px 12px;
+  }
+
+  .sub-nav-streaming {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .sub-nav-streaming::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sub-nav-pill {
+    white-space: nowrap;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    font-size: 11px;
+  }
+
+  .tmdb-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px 10px !important;
+  }
+
+  .tmdb-grid .file-card {
+    max-width: 100%;
+    padding: 8px;
+  }
+
+  .tmdb-movie-card .thumbnail-container {
+    height: 190px !important;
+  }
+}
+
+@media (min-width: 651px) and (max-width: 950px) {
+  .tmdb-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+

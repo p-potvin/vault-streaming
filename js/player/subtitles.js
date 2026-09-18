@@ -618,6 +618,7 @@ function startLiveSubtitleSession(videoPath, itemName, langs, volumeBoost) {
         translateTo,
         writeSrt,
         audioIndex,
+        separate: (window.appSettings && window.appSettings.aiSeparate !== false),
     }).then((res) => {
         if (!res || !res.success) {
             window.showToast(tr('toastLiveSubsFailed', 'Live subtitles failed to start: ') + ((res && res.error) || 'unknown'), 'error');
@@ -882,6 +883,9 @@ function initSubtitleListeners() {
 
     const optGen = el('opt-generate-subtitle');
     if (optGen) {
+        if (/iPhone|iPad|iPod|Android|VaultStreaming-iOS/i.test(navigator.userAgent) || (window.electronAPI && window.electronAPI.isWeb)) {
+            optGen.style.display = 'none';
+        }
         optGen.addEventListener('click', async (e) => {
             e.stopPropagation();
             el('subtitles-menu').style.display = 'none';

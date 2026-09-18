@@ -95,6 +95,224 @@
     if (set) set.clear();
   }
 
+  // ── In-DOM Web Context Menu Implementation ─────────────────────────────────
+  function showWebContextMenu(item) {
+    return new Promise((resolve) => {
+      // Remove any existing web context menu
+      const existing = document.getElementById('vw-web-context-menu');
+      if (existing) existing.remove();
+
+      let resolved = false;
+      const done = (val) => {
+        if (!resolved) {
+          resolved = true;
+          if (menuEl.parentNode) menuEl.remove();
+          document.removeEventListener('click', onDocClick, true);
+          document.removeEventListener('contextmenu', onDocClick, true);
+          document.removeEventListener('keydown', onKeyDown, true);
+          resolve(val);
+        }
+      };
+
+      const onDocClick = (e) => {
+        if (!menuEl.contains(e.target)) {
+          done('closed');
+        }
+      };
+      const onKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          done('closed');
+        }
+      };
+
+      // Build menu structure
+      let templ = [];
+      const hasAudioEnh = item.enhancements && item.enhancements.audio;
+      const hasVideoEnh = item.enhancements && item.enhancements.video;
+      const hasSubs = item.enhancements && item.enhancements.subtitles && item.enhancements.subtitles.length > 0;
+      const hasTrans = item.enhancements && item.enhancements.translation && item.enhancements.translation.length > 0;
+      const hasAnyEnhancement = item.enhancedPath || hasAudioEnh || hasVideoEnh || hasSubs || hasTrans;
+
+      if (item.type === 'videoPlayer') {
+        const isLocal = !item.isStreaming;
+        const subLabel = hasSubs ? `Generate Subtitles (${item.enhancements.subtitles.join(', ').toUpperCase()})` : 'Generate Subtitles';
+        const transLabel = hasTrans ? `Translate this video (${item.enhancements.translation.join(', ').toUpperCase()})` : 'Translate this video';
+
+        const aiSubmenu = [
+          { label: 'Enhance Audio 🪄', checked: !!hasAudioEnh, action: 'normalize-audio' },
+          { label: subLabel, checked: !!hasSubs, action: 'generate-subtitles-prompt' },
+          { label: transLabel, checked: !!hasTrans, action: 'translate-video-prompt' },
+          { label: 'Enhance Video 🪄', checked: !!hasVideoEnh, action: 'enhance-video-prompt' }
+        ];
+
+        if (hasAnyEnhancement) {
+          const revertItems = [];
+          if (hasAudioEnh) revertItems.push({ label: 'Audio Enhancement', action: 'revert-enhancement:audio' });
+          if (hasVideoEnh) revertItems.push({ label: 'Video Enhancement', action: 'revert-enhancement:video' });
+          if (hasSubs) revertItems.push({ label: 'Subtitles', action: 'revert-enhancement:subtitles' });
+          if (hasTrans) revertItems.push({ label: 'Translations', action: 'revert-enhancement:translation' });
+          if (revertItems.length > 0) revertItems.push({ type: 'separator' });
+          revertItems.push({ label: 'Everything', action: 'revert-enhancements' });
+
+          aiSubmenu.push({ type: 'separator' });
+          aiSubmenu.push({ label: 'Revert Enhancements', submenu: revertItems });
+        }
+
+        templ = [
+          { label: item.isPlaying ? 'Pause' : 'Play', action: 'play-pause' },
+          { label: item.isMuted ? 'Unmute' : 'Mute', action: 'mute' },
+          { type: 'separator' },
+          {
+            label: 'Playback Speed', submenu: [
+              { label: '0.5x', checked: item.speed === 0.5, action: 'speed:0.5' },
+              { label: '0.75x', checked: item.speed === 0.75, action: 'speed:0.75' },
+              { label: 'Normal', checked: !item.speed || item.speed === 1, action: 'speed:1' },
+              { label: '1.25x', checked: item.speed === 1.25, action: 'speed:1.25' },
+              { label: '1.5x', checked: item.speed === 1.5, action: 'speed:1.5' },
+              { label: '2x', checked: item.speed === 2, action: 'speed:2' }
+            ]
+          },
+          { label: 'Picture-in-Picture', action: 'pip' },
+          { label: 'Fullscreen', action: 'fullscreen' },
+          { type: 'separator' },
+          { label: 'AI Enhancements 🪄', submenu: aiSubmenu },
+          { type: 'separator' },
+          {
+            label: isLocal ? 'Copy Path' : 'Copy Stream URL',
+            action: 'copied',
+            click: () => {
+              if (navigator.clipboard) navigator.clipboard.writeText(item.path || '');
+            }
+          },
+          { type: 'separator' },
+          { label: 'Properties', action: 'properties' }
+        ];
+      } else {
+        templ = [
+          { label: 'Refresh', action: 'bg-refresh' },
+          { label: 'Properties', action: 'properties' }
+        ];
+      }
+
+      const menuEl = document.createElement('div');
+      menuEl.id = 'vw-web-context-menu';
+      menuEl.style.cssText = `
+        position: fixed;
+        z-index: 999999;
+        min-width: 180px;
+        background: rgba(22, 24, 34, 0.95);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 12px 36px rgba(0,0,0,0.6), 0 0 1px rgba(255,255,255,0.2);
+        border-radius: 8px;
+        padding: 6px 0;
+        font-family: var(--font-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+        font-size: 13px;
+        color: #f0f0f5;
+        user-select: none;
+      `;
+
+      function renderItems(items, container) {
+        items.forEach(it => {
+          if (it.type === 'separator') {
+            const sep = document.createElement('div');
+            sep.style.cssText = 'height: 1px; background: rgba(255,255,255,0.08); margin: 4px 8px;';
+            container.appendChild(sep);
+            return;
+          }
+
+          const row = document.createElement('div');
+          row.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 14px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.15s ease;
+          `;
+          row.onmouseenter = () => {
+            row.style.background = 'rgba(176, 124, 255, 0.2)';
+            if (it.submenu) {
+              const sub = row.querySelector('.vw-sub-menu');
+              if (sub) sub.style.display = 'block';
+            }
+          };
+          row.onmouseleave = () => {
+            row.style.background = 'transparent';
+            if (it.submenu) {
+              const sub = row.querySelector('.vw-sub-menu');
+              if (sub) sub.style.display = 'none';
+            }
+          };
+
+          const left = document.createElement('div');
+          left.style.cssText = 'display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+          if (it.checked) {
+            const check = document.createElement('span');
+            check.textContent = '✓ ';
+            check.style.color = '#B07CFF';
+            check.style.fontWeight = 'bold';
+            left.appendChild(check);
+          }
+          const labelSpan = document.createElement('span');
+          labelSpan.textContent = it.label;
+          left.appendChild(labelSpan);
+          row.appendChild(left);
+
+          if (it.submenu) {
+            const arrow = document.createElement('span');
+            arrow.textContent = '▸';
+            arrow.style.opacity = '0.6';
+            row.appendChild(arrow);
+
+            const subMenuEl = document.createElement('div');
+            subMenuEl.className = 'vw-sub-menu';
+            subMenuEl.style.cssText = `
+              display: none;
+              position: absolute;
+              left: 100%;
+              top: -6px;
+              min-width: 180px;
+              background: rgba(22, 24, 34, 0.95);
+              backdrop-filter: blur(16px);
+              -webkit-backdrop-filter: blur(16px);
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+              border-radius: 8px;
+              padding: 6px 0;
+            `;
+            renderItems(it.submenu, subMenuEl);
+            row.appendChild(subMenuEl);
+          } else {
+            row.onclick = (e) => {
+              e.stopPropagation();
+              if (it.click) it.click();
+              done(it.action || 'closed');
+            };
+          }
+
+          container.appendChild(row);
+        });
+      }
+
+      renderItems(templ, menuEl);
+      document.body.appendChild(menuEl);
+
+      const posX = Math.max(10, Math.min((item.clientX || 100), window.innerWidth - 220));
+      const posY = Math.max(10, Math.min((item.clientY || 100), window.innerHeight - 300));
+      menuEl.style.left = `${posX}px`;
+      menuEl.style.top = `${posY}px`;
+
+      setTimeout(() => {
+        document.addEventListener('click', onDocClick, true);
+        document.addEventListener('contextmenu', onDocClick, true);
+        document.addEventListener('keydown', onKeyDown, true);
+      }, 50);
+    });
+  }
+
   // ── The API surface (mirrors preload.js) ──────────────────────────────────
   window.electronAPI = {
     openDirectory: inv('dialog:openDirectory'),
@@ -106,7 +324,7 @@
     getFileSize: inv('get-file-size'),
     openFile: inv('open-file'),
     showInFolder: inv('show-in-folder'),
-    showContextMenu: inv('show-context-menu'),
+    showContextMenu: (item) => showWebContextMenu(item),
     generateWebm: inv('generate-webm'),
     upscaleVideo: inv('upscale-video'),
     renameFile: inv('rename-file'),
@@ -129,6 +347,11 @@
     offWebmProgress: () => off('generate-webm-progress'),
     normalizeAudio: (videoPath, vaultRoot, transcribe, translateTo, options = {}) =>
       invoke('normalize-audio', { videoPath, vaultRoot, transcribe, translateTo, volumeBoost: options.volumeBoost }),
+    enhanceAudio: inv('enhance-audio'),
+    generateSubtitles: inv('generate-subtitles'),
+    translateVideo: inv('translate-video'),
+    enhanceVideo: inv('enhance-video'),
+    getEnhancementState: inv('get-enhancement-state'),
     onNormalizeProgress: (cb) => on('normalize-progress', cb),
     offNormalizeProgress: () => off('normalize-progress'),
     onUpscaleProgress: (cb) => on('upscale-progress', cb),
@@ -150,6 +373,7 @@
 
     runASRBenchmark: (forceSimulation) => invoke('run-asr-benchmark', { forceSimulation }),
     revertEnhancements: inv('revert-enhancements'),
+    revertEnhancementTarget: inv('revert-enhancement-target'),
 
     // TMDB / KinoCheck
     searchTMDB: (query, page = 1, language = 'en-US') => invoke('search-tmdb', { query, page, language }),

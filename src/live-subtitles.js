@@ -27,8 +27,11 @@ function userNemoPath() {
     return path.join(userModelsDir(), TDT_NEMO_NAME);
 }
 function devExtractedDir() {
-    const cfg = path.join(__dirname, '..', 'tools', 'models', 'nemotron-3.5-asr-streaming-0.6b', 'model_config.yaml');
-    return fs.existsSync(cfg) ? path.dirname(cfg) : null;
+    const cfgNemotron = utils.resolveToolsDir('models', 'nemotron-3.5-asr-streaming-0.6b', 'model_config.yaml');
+    if (fs.existsSync(cfgNemotron)) return path.dirname(cfgNemotron);
+    const cfgParakeet = utils.resolveToolsDir('models', 'parakeet-tdt-0.6b-v3', 'model_config.yaml');
+    if (fs.existsSync(cfgParakeet)) return path.dirname(cfgParakeet);
+    return null;
 }
 function hfCacheNemo() {
     const base = path.join(os.homedir(), '.cache', 'huggingface', 'hub',
@@ -135,13 +138,6 @@ let lastSender = null;      // renderer to route cues/status to
 let cueCount = 0;
 
 function getPythonExe() {
-    const candidates = [
-        'C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\.venv\\Scripts\\python.exe',
-        path.join(__dirname, '..', '.venv', 'Scripts', 'python.exe'),
-    ];
-    for (const c of candidates) {
-        if (fs.existsSync(c)) return c;
-    }
     return utils.getRobustPythonExe();
 }
 
@@ -197,17 +193,11 @@ function handleLine(line) {
 
 function ensureDaemon() {
     if (daemon) return;
-    const script = path.join(__dirname, '..', 'python-scripts', 'live_subtitles.py');
+    const script = utils.resolveScriptPath('live_subtitles.py');
     const pythonExe = getPythonExe();
-    const env = { ...process.env };
-    env.PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = 'python';
-    env.PYTHONPATH = path.join(__dirname, '..');
-    // Force UTF-8 stdio so multilingual cue text can't trip a cp1252 error or
-    // garble the JSON on the pipe.
-    env.PYTHONUTF8 = '1';
-    env.PYTHONIOENCODING = 'utf-8';
-    // Tell the wrapper where a downloaded .nemo lives (checked before HF cache).
-    env.VAULT_MODEL_DIR = userModelsDir();
+    const env = utils.getPythonEnv({
+        VAULT_MODEL_DIR: userModelsDir(),
+    });
 
     console.log('[main:live-subs] warming daemon (loading model)...');
     daemon = spawn(pythonExe, ['-u', script, '--daemon'], { env, windowsHide: true });
@@ -252,7 +242,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
         return { success: true, ready: daemonReady, modelPresent: modelPresent() };
     });
 
-    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt, audioIndex } = {}) => {
+    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt, audioIndex, separate } = {}) => {
         // Vault Streaming plays remote (Comet/RD) URLs, so http(s) sources are
         // allowed here (ffmpeg reads them). SRT is opt-in and only meaningful for
         // a local file — see the python daemon.
@@ -279,6 +269,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
             // Which audio track ASR should listen to — matches what the player
             // is actually playing (see the audio-track picker).
             audioIndex: Number.isInteger(audioIndex) && audioIndex >= 0 ? audioIndex : 0,
+            separate: separate !== false,
         });
         return { success: ok, ready: daemonReady };
     });

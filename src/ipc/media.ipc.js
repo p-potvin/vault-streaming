@@ -68,10 +68,8 @@ function registerMediaIpc(ipcMain) {
             } catch (e) {}
         }
 
-        const pythonPath = process.platform === 'win32'
-            ? path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe')
-            : path.join(__dirname, '..', '..', '.venv', 'bin', 'python');
-        const scriptPath = path.join(__dirname, '..', '..', 'python-scripts', 'rtx_vsr_stream.py');
+        const pythonPath = utils.getRobustPythonExe();
+        const scriptPath = utils.resolveScriptPath('rtx_vsr_stream.py');
 
         if (!fs.existsSync(pythonPath)) {
             console.error('[media.ipc:upscale] Python interpreter not found:', pythonPath);
@@ -94,7 +92,8 @@ function registerMediaIpc(ipcMain) {
             ];
 
             console.log(`[media.ipc:upscale] Spawning: ${pythonPath} ${args.join(' ')}`);
-            const proc = child_process.spawn(pythonPath, args, { windowsHide: true });
+            const env = utils.getPythonEnv();
+            const proc = child_process.spawn(pythonPath, args, { env, windowsHide: true });
 
             let errorData = '';
             let stdoutBuffer = '';
@@ -289,10 +288,8 @@ function registerMediaIpc(ipcMain) {
             return { success: false, error: 'File not found' };
         }
 
-        const pythonPath = process.platform === 'win32'
-            ? path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe')
-            : path.join(__dirname, '..', '..', '.venv', 'bin', 'python');
-        const scriptPath = path.join(__dirname, '..', '..', 'python-scripts', 'rtx_vsr_stream.py');
+        const pythonPath = utils.getRobustPythonExe();
+        const scriptPath = utils.resolveScriptPath('rtx_vsr_stream.py');
 
         const args = [
             scriptPath,
@@ -308,10 +305,11 @@ function registerMediaIpc(ipcMain) {
         console.log(`[media.ipc:upscale-stream] Spawning: ${pythonPath} ${args.join(' ')}`);
 
         try {
+            const env = utils.getPythonEnv({ PYTHONUNBUFFERED: '1' });
             const proc = child_process.spawn(pythonPath, args, {
                 windowsHide: true,
                 // Ensure binary stdout is not mangled
-                env: { ...process.env, PYTHONUNBUFFERED: '1' },
+                env,
             });
             upscaleStreamProcess = proc;
 

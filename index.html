@@ -4,7 +4,9 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Vault Streaming</title>
   <link href="css/index.css" rel="stylesheet">
   <link href="css/header.css" rel="stylesheet">
@@ -346,6 +348,12 @@
           title="Show all toasts and console logs. When off, only errors and essential notifications appear.">
           <span class="settings-toggle-label" data-i18n="settingDevMode">Dev Mode (verbose toasts/logs):</span>
           <input type="checkbox" id="settings-dev-mode" class="settings-checkbox" />
+        </div>
+
+        <div class="settings-toggle-row"
+          title="Isolate vocal stem with BS-RoFormer to eliminate background music/noise before live ASR subtitles and translation.">
+          <span class="settings-toggle-label" data-i18n="settingAiSeparate">AI Vocal Separation (BS-RoFormer):</span>
+          <input type="checkbox" id="settings-ai-separate" class="settings-checkbox" checked />
         </div>
 
         <div>

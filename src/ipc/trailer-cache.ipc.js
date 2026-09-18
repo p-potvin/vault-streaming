@@ -25,6 +25,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 const { makeProxiedRequest, uploadBufferWithProxy } = require('../realdebrid/proxy');
+const utils = require('../utils');
 
 const ACCESS_DIR = 'C:\\Users\\Administrator\\Desktop\\Github Repos\\.access';
 const cacheFile = () => path.join(app.getPath('userData'), 'trailer-cache.json');
@@ -51,8 +52,13 @@ function loadCache() {
     try { return JSON.parse(fs.readFileSync(cacheFile(), 'utf8')); } catch (_) { return {}; }
 }
 function saveCache(map) {
-    try { fs.writeFileSync(cacheFile(), JSON.stringify(map, null, 2)); }
-    catch (e) { console.error('[trailer-cache] save failed:', e.message); }
+    try {
+        const f = cacheFile();
+        fs.mkdirSync(path.dirname(f), { recursive: true });
+        fs.writeFileSync(f, JSON.stringify(map, null, 2));
+    } catch (e) {
+        console.error('[trailer-cache] save failed:', e.message);
+    }
 }
 // Merge patch into one entry, re-reading first so concurrent host callbacks don't clobber.
 function patchEntry(youtubeId, patch) {
@@ -83,9 +89,10 @@ function ytDlpDownload(youtubeId) {
     return new Promise((resolve, reject) => {
         const out = path.join(os.tmpdir(), `vw_trailer_${youtubeId}_${Date.now()}.mp4`);
         const url = `https://www.youtube.com/watch?v=${youtubeId}`;
+        const ytDlp = (utils && typeof utils.resolveToolPath === 'function') ? utils.resolveToolPath('yt-dlp') : 'yt-dlp';
         const args = ['--format', '22/18/best[ext=mp4]/best', '--no-playlist', '--no-warnings',
             '--no-check-certificates', '--extractor-args', 'youtube:player_client=android,web', '-o', out, url];
-        const proc = spawn('yt-dlp', args, { windowsHide: true });
+        const proc = spawn(ytDlp, args, { windowsHide: true });
         let stderr = '';
         proc.stderr.on('data', (d) => { stderr += d.toString(); });
         proc.on('close', (code) => {

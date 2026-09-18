@@ -57,9 +57,11 @@ async function handlePlayerContextMenu(action, menuItem) {
     } else if (action === 'normalize-audio') {
         if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
         window.showToast(tr('toastEnhancingAudio', 'Enhancing audio in background...'), 'success');
-        window.electronAPI.normalizeAudio(itemPath, window.currentRealPath, false).then(res => {
+        const runner = window.electronAPI.enhanceAudio || window.electronAPI.normalizeAudio;
+        runner({ videoPath: itemPath, vaultRoot: window.currentRealPath, volumeBoost: 1.5 }).then(res => {
             if (res.success || res.status === 'SUCCESS' || res.status === 'EXISTS') {
                 window.showToast(`${menuItem.name || 'Video'}: Audio enhanced`, 'success');
+                if (typeof refreshDirectoryWithScrollPreservation === 'function') refreshDirectoryWithScrollPreservation();
             } else {
                 window.showToast(`${menuItem.name || 'Video'}: Audio enhancement failed: ` + (res.error || 'Unknown'), 'error');
             }
@@ -73,10 +75,14 @@ async function handlePlayerContextMenu(action, menuItem) {
             window.appSettings.preferredASRLangs = langs;
             window.electronAPI.saveSettings(window.appSettings);
             window.showToast(`Generating subtitles for ${menuItem.name || 'video'}: ${langs.join(', ').toUpperCase()}`, 'success');
-            window.electronAPI.normalizeAudio(itemPath, window.currentRealPath, true).then(res => {
+            const runner = window.electronAPI.generateSubtitles || window.electronAPI.normalizeAudio;
+            runner({ videoPath: itemPath, vaultRoot: window.currentRealPath, language: langs[0] }).then(async res => {
                 if (res.success || res.status === 'SUCCESS' || res.status === 'EXISTS') {
                     window.showToast(`${menuItem.name || 'Video'}: Subtitles generated`, 'success');
-                    refreshDirectoryWithScrollPreservation();
+                    if (typeof loadActiveSubtitles === 'function') {
+                        await loadActiveSubtitles(itemPath);
+                    }
+                    if (typeof refreshDirectoryWithScrollPreservation === 'function') refreshDirectoryWithScrollPreservation();
                 } else {
                     window.showToast(`${menuItem.name || 'Video'}: Subtitles failed: ` + (res.error || 'Unknown'), 'error');
                 }
@@ -91,10 +97,14 @@ async function handlePlayerContextMenu(action, menuItem) {
             window.appSettings.preferredTransLang = lang[0];
             window.electronAPI.saveSettings(window.appSettings);
             window.showToast(`Synthesizing translation to ${lang[0].toUpperCase()} for ${menuItem.name || 'video'}...`, 'success');
-            window.electronAPI.normalizeAudio(itemPath, window.currentRealPath, false, lang[0]).then(res => {
+            const runner = window.electronAPI.translateVideo || window.electronAPI.normalizeAudio;
+            runner({ videoPath: itemPath, vaultRoot: window.currentRealPath, translateTo: lang[0] }).then(async res => {
                 if (res.success || res.status === 'SUCCESS' || res.status === 'EXISTS') {
                     window.showToast(`${menuItem.name || 'Video'}: Translation complete`, 'success');
-                    refreshDirectoryWithScrollPreservation();
+                    if (typeof loadActiveSubtitles === 'function') {
+                        await loadActiveSubtitles(itemPath);
+                    }
+                    if (typeof refreshDirectoryWithScrollPreservation === 'function') refreshDirectoryWithScrollPreservation();
                 } else {
                     window.showToast(`${menuItem.name || 'Video'}: Translation failed: ` + (res.error || 'Unknown'), 'error');
                 }
@@ -106,16 +116,44 @@ async function handlePlayerContextMenu(action, menuItem) {
         const config = await window.showVideoEnhancementDialog(dialogItem);
         if (config && config.execute) {
             window.showToast(`AI Video Optimization started for ${menuItem.name || 'video'}...`, 'success');
-            const vsrQuality = (window.appSettings && window.appSettings.vsrQuality) || 'HIGH';
-            const vsrScale = (window.appSettings && window.appSettings.vsrScale) || '2';
+            const vsrQuality = config.quality || (window.appSettings && window.appSettings.vsrQuality) || 'HIGH';
+            const vsrScale = config.scale || (window.appSettings && window.appSettings.vsrScale) || '2';
             const vsrChroma = (window.appSettings && window.appSettings.vsrChroma) || 'yuv420p';
-            window.electronAPI.upscaleVideo({ path: itemPath, quality: vsrQuality, scale: vsrScale, chroma: vsrChroma }).then(res => {
+            const runner = window.electronAPI.enhanceVideo || window.electronAPI.upscaleVideo;
+            runner({ videoPath: itemPath, path: itemPath, quality: vsrQuality, scale: vsrScale, chroma: vsrChroma }).then(res => {
                 if (res.success) {
-                    window.showToast(`${menuItem.name || 'Video'}: Enhancement started`, 'success');
+                    window.showToast(`${menuItem.name || 'Video'}: Enhancement finished`, 'success');
+                    if (typeof refreshDirectoryWithScrollPreservation === 'function') refreshDirectoryWithScrollPreservation();
                 } else {
                     window.showToast(`${menuItem.name || 'Video'}: Enhancement failed: ` + (res.error || 'Unknown'), 'error');
                 }
             });
+        }
+    } else if (action === 'revert-enhancements' || (typeof action === 'string' && action.startsWith('revert-enhancement:'))) {
+        if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
+        const target = action.startsWith('revert-enhancement:') ? action.split(':')[1] : null;
+        const label = target ? `${target.charAt(0).toUpperCase() + target.slice(1)} Enhancement` : 'All Enhancements';
+        const confirmed = typeof window.showGenericConfirmModal === 'function'
+            ? await window.showGenericConfirmModal(
+                `Revert ${label}`,
+                `Are you sure you want to revert ${label.toLowerCase()} for "${menuItem.name || 'this video'}"?`,
+                'Revert',
+                'btn-danger'
+            )
+            : confirm(`Are you sure you want to revert ${label.toLowerCase()} for "${menuItem.name || 'this video'}"?`);
+        if (!confirmed) return;
+        window.showToast(`Reverting ${label.toLowerCase()}...`, 'info');
+        const res = target
+            ? await (window.electronAPI.revertEnhancementTarget ? window.electronAPI.revertEnhancementTarget({ videoPath: itemPath, target }) : window.electronAPI.revertEnhancements(itemPath))
+            : await window.electronAPI.revertEnhancements(itemPath);
+        if (res && res.success) {
+            window.showToast(`${label} reverted successfully`, 'success');
+            if (typeof loadActiveSubtitles === 'function') {
+                await loadActiveSubtitles(itemPath);
+            }
+            if (typeof refreshDirectoryWithScrollPreservation === 'function') refreshDirectoryWithScrollPreservation();
+        } else {
+            window.showToast(`Failed to revert: ${res && res.error ? res.error : 'Unknown error'}`, 'error');
         }
     } else if (action === 'properties') {
         if (!itemPath) { window.showToast(tr('toastNoVideoPath', 'No video path available'), 'error'); return; }
@@ -471,14 +509,32 @@ function initPlayer() {
             e.stopPropagation();
             const item = window.currentPlayingItem || window.activeStreamingMedia || {};
             const isStreaming = !!window.activeStreamingMedia && !window.currentPlayingItem;
+            const targetPath = item.path || item.src || (vp.src ? decodeURIComponent(vp.src.replace('file:///', '').replace(/\//g, '\\')) : '');
+
+            let enhancementsState = { audio: false, video: false, subtitles: [], translation: [] };
+            let enhancedPath = null;
+            if (targetPath && window.electronAPI && typeof window.electronAPI.getEnhancementState === 'function') {
+                try {
+                    const enhRes = await window.electronAPI.getEnhancementState(targetPath);
+                    if (enhRes && enhRes.success && enhRes.state) {
+                        enhancementsState = enhRes.state;
+                        enhancedPath = enhRes.state.enhancedPath;
+                    }
+                } catch (_) {}
+            }
+
             const menuItem = {
                 type: 'videoPlayer',
-                path: item.path || item.src || (vp.src ? decodeURIComponent(vp.src.replace('file:///', '').replace(/\//g, '\\')) : ''),
+                path: targetPath,
                 name: item.name || item.title || 'Video',
                 isStreaming,
                 isPlaying: !vp.paused,
                 isMuted: vp.muted,
-                speed: vp.playbackRate
+                speed: vp.playbackRate,
+                enhancements: enhancementsState,
+                enhancedPath: enhancedPath,
+                clientX: e.clientX,
+                clientY: e.clientY
             };
             const action = await window.electronAPI.showContextMenu(menuItem);
             await handlePlayerContextMenu(action, menuItem);

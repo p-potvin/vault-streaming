@@ -198,18 +198,51 @@ def build_ffmpeg_cmd(video_path, start, sample_rate, volume_boost, audio_index=0
     return cmd
 
 
-class Translator:
-    """Lazy GoogleTranslator (deep_translator) with a per-session text cache."""
+def _find_riva_model():
+    candidates = [
+        os.environ.get("VW_RIVA_MODEL"),
+        os.path.join(os.path.expanduser("~"), "Desktop", "Github Repos", "vault-cacophony", "audio.cpp", "models", "Riva-Translate-4B-Instruct.i1-Q4_K_M.gguf"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return os.path.abspath(c)
+    return None
 
-    def __init__(self, target):
+
+class Translator:
+    """Lazy Neural (Riva-Translate-4B GGUF on CUDA) / Google Translator with a per-session text cache."""
+
+    def __init__(self, target, source="en"):
         self.target = target
+        self.source = source or "en"
         self._impl = None
+        self._engine_type = None
         self._cache = {}
 
     def _ensure(self):
         if self._impl is None:
-            from deep_translator import GoogleTranslator
-            self._impl = GoogleTranslator(source="auto", target=self.target)
+            riva_path = _find_riva_model()
+            if riva_path:
+                try:
+                    cacophony_dir = os.path.dirname(os.path.dirname(os.path.dirname(riva_path)))
+                    scripts_dir = os.path.join(cacophony_dir, "scripts")
+                    if scripts_dir not in sys.path:
+                        sys.path.insert(0, scripts_dir)
+                    from riva_engine import RivaEngine
+                    self._impl = RivaEngine(model_path=riva_path)
+                    self._engine_type = "riva"
+                    dbg(f"loaded local NVIDIA Riva-Translate-4B on CUDA ({os.path.basename(riva_path)})")
+                    return
+                except Exception as e:
+                    dbg(f"RivaEngine load failed ({e}); falling back to GoogleTranslator")
+
+            try:
+                from deep_translator import GoogleTranslator
+                self._impl = GoogleTranslator(source=self.source or "auto", target=self.target)
+                self._engine_type = "google"
+                dbg("loaded GoogleTranslator fallback")
+            except Exception as e:
+                dbg(f"GoogleTranslator init failed: {e}")
 
     def translate(self, text):
         if not text:
@@ -218,7 +251,12 @@ class Translator:
             return self._cache[text]
         try:
             self._ensure()
-            out = self._impl.translate(text) or text
+            if self._engine_type == "riva":
+                out = self._impl.translate(text, target_lang=self.target, source_lang=self.source) or text
+            elif self._engine_type == "google":
+                out = self._impl.translate(text) or text
+            else:
+                out = text
         except Exception as e:
             dbg(f"translate failed ({e}); using source text")
             out = text
@@ -348,7 +386,7 @@ def run_session(model, opts, stop_event):
     sample_rate = 16000
     silence_rms = 0.006
 
-    translator = Translator(translate_to) if translate_to else None
+    translator = Translator(translate_to, source=primary_lang) if translate_to else None
 
     # SRT sidecar is OPT-IN (default off) and only for local files — there's
     # nowhere to write a sidecar next to a remote http(s) stream URL.

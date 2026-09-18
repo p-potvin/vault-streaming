@@ -151,6 +151,7 @@ window.translationsQc = {
   countryJP: "Japon",
   countryKR: "Corée du Sud",
   settingsGeneralHeading: "Général et sous-titres",
+  settingAiSeparate: "Séparation vocale IA (BS-RoFormer) :",
   subOriginal: "Langue originale (par défaut)",
   subNone: "Aucun / désactivé",
   sizeSmall: "12px (petit)",

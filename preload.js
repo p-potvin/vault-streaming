@@ -33,6 +33,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWebmProgress: (cb) => ipcRenderer.on('generate-webm-progress', (_, data) => cb(data)),
   offWebmProgress: () => ipcRenderer.removeAllListeners('generate-webm-progress'),
   normalizeAudio: (videoPath, vaultRoot, transcribe, translateTo, options = {}) => ipcRenderer.invoke('normalize-audio', { videoPath, vaultRoot, transcribe, translateTo, volumeBoost: options.volumeBoost }),
+  enhanceAudio: (opts) => ipcRenderer.invoke('enhance-audio', opts),
+  generateSubtitles: (opts) => ipcRenderer.invoke('generate-subtitles', opts),
+  translateVideo: (opts) => ipcRenderer.invoke('translate-video', opts),
+  enhanceVideo: (opts) => ipcRenderer.invoke('enhance-video', opts),
+  getEnhancementState: (videoPath) => ipcRenderer.invoke('get-enhancement-state', videoPath),
   onNormalizeProgress: (cb) => ipcRenderer.on('normalize-progress', (_, data) => cb(data)),
   offNormalizeProgress: () => ipcRenderer.removeAllListeners('normalize-progress'),
   onUpscaleProgress: (cb) => ipcRenderer.on('upscale-progress', (_, data) => cb(data)),
@@ -53,6 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offTranscodeStatus: () => ipcRenderer.removeAllListeners('transcode-status'),
   runASRBenchmark: (forceSimulation) => ipcRenderer.invoke('run-asr-benchmark', { forceSimulation }),
   revertEnhancements: (p) => ipcRenderer.invoke('revert-enhancements', p),
+  revertEnhancementTarget: (data) => ipcRenderer.invoke('revert-enhancement-target', data),
 
   // TMDB / KinoCheck API
   searchTMDB: (query, page = 1, language = 'en-US') => ipcRenderer.invoke('search-tmdb', { query, page, language }),

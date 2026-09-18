@@ -149,6 +149,7 @@ window.translationsEn = {
   countryJP: "Japan",
   countryKR: "South Korea",
   settingsGeneralHeading: "General & Subtitles",
+  settingAiSeparate: "AI Vocal Separation (BS-RoFormer):",
   subOriginal: "Original Language (Default)",
   subNone: "None / Off",
   sizeSmall: "12px (Small)",
