@@ -1597,6 +1597,37 @@ async function playStream(url, title) {
     window.currentPlayingIndex = -1;
     trickFrames = [];
     vp.dataset.trickplay = '';
+
+    // Route to Swift native player when running inside the iOS app container
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vaultStreamingBridge) {
+        endPlayerHandoff();
+        const media = window.activeStreamingMedia || {};
+        const fetchProgress = (window.electronAPI && typeof window.electronAPI.getWatchProgress === 'function')
+            ? window.electronAPI.getWatchProgress({
+                mediaType: media.mediaType,
+                tmdbId: media.tmdbId,
+                title: media.title,
+                season: media.season,
+                episode: media.episode
+            }).catch(() => null)
+            : Promise.resolve(null);
+
+        fetchProgress.then((prog) => {
+            const startPos = (prog && prog.positionSec) || 0;
+            window.webkit.messageHandlers.vaultStreamingBridge.postMessage({
+                action: 'playNative',
+                url: url,
+                title: title || media.title || '',
+                posterUrl: media.backdropUrl || media.posterUrl || '',
+                startPosition: startPos,
+                mediaType: media.mediaType || null,
+                season: media.season || null,
+                episode: media.episode || null
+            });
+        });
+        return;
+    }
+
     vp.src = url;
 
     // Arm the overlay teardown HERE, immediately after the source is assigned.
@@ -1870,3 +1901,23 @@ async function playStream(url, title) {
 window.playItem = playItem;
 window.initPlayer = initPlayer;
 window.playStream = playStream;
+
+// Native iOS Player progress synchronization callback
+window.onNativePlaybackProgress = function (data) {
+    if (!data) return;
+    const { position, duration, completed } = data;
+    console.log('[NativeBridge] Progress received from iOS player:', position, '/', duration, 'completed:', completed);
+    if (window.activeStreamingMedia && window.electronAPI && typeof window.electronAPI.saveWatchProgress === 'function') {
+        window.electronAPI.saveWatchProgress({
+            mediaType: window.activeStreamingMedia.mediaType,
+            tmdbId: window.activeStreamingMedia.tmdbId,
+            title: window.activeStreamingMedia.title,
+            season: window.activeStreamingMedia.season,
+            episode: window.activeStreamingMedia.episode,
+            positionSec: Math.round(position || 0),
+            durationSec: Math.round(duration || 0),
+            completed: !!completed
+        }).catch(err => console.error('[NativeBridge] Failed to save progress:', err));
+    }
+};
+

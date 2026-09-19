@@ -12,6 +12,8 @@
 		300000000000000000000003 /* WebViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* WebViewWrapper.swift */; };
 		300000000000000000000004 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* ContentView.swift */; };
 		300000000000000000000005 /* VaultStreamingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* VaultStreamingApp.swift */; };
+		300000000000000000000009 /* StreamPlaybackItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* StreamPlaybackItem.swift */; };
+		300000000000000000000010 /* NativePlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* NativePlayerView.swift */; };
 		300000000000000000000007 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* LaunchScreen.storyboard */; };
 		300000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -23,6 +25,8 @@
 		200000000000000000000003 /* WebViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewWrapper.swift; sourceTree = "<group>"; };
 		200000000000000000000004 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		200000000000000000000005 /* VaultStreamingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultStreamingApp.swift; sourceTree = "<group>"; };
+		200000000000000000000009 /* StreamPlaybackItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamPlaybackItem.swift; sourceTree = "<group>"; };
+		200000000000000000000010 /* NativePlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePlayerView.swift; sourceTree = "<group>"; };
 		200000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		200000000000000000000007 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		200000000000000000000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -51,6 +55,8 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000005 /* VaultStreamingApp.swift */,
+				200000000000000000000009 /* StreamPlaybackItem.swift */,
+				200000000000000000000010 /* NativePlayerView.swift */,
 				200000000000000000000004 /* ContentView.swift */,
 				200000000000000000000003 /* WebViewWrapper.swift */,
 				200000000000000000000001 /* AppConfig.swift */,
@@ -144,6 +150,8 @@
 				300000000000000000000003 /* WebViewWrapper.swift in Sources */,
 				300000000000000000000004 /* ContentView.swift in Sources */,
 				300000000000000000000005 /* VaultStreamingApp.swift in Sources */,
+				300000000000000000000009 /* StreamPlaybackItem.swift in Sources */,
+				300000000000000000000010 /* NativePlayerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

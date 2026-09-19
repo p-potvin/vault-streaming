@@ -11,6 +11,9 @@ public struct ContentView: View {
     @State private var goBackToken: Int = 0
     @State private var goForwardToken: Int = 0
     
+    @State private var activeStream: StreamPlaybackItem? = nil
+    @State private var progressUpdate: ProgressUpdate? = nil
+    
     @State private var isLocked: Bool = AppConfig.isBiometricLockEnabled
     @State private var showSettings: Bool = false
     @State private var customURLInput: String = AppConfig.serverURL.absoluteString
@@ -62,6 +65,8 @@ public struct ContentView: View {
                     navigationError: $navigationError,
                     canGoBack: $canGoBack,
                     canGoForward: $canGoForward,
+                    activeStream: $activeStream,
+                    progressUpdate: $progressUpdate,
                     reloadToken: reloadToken,
                     goBackToken: goBackToken,
                     goForwardToken: goForwardToken
@@ -142,6 +147,17 @@ public struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) {
             settingsSheet
+        }
+        .fullScreenCover(item: $activeStream) { stream in
+            NativePlayerView(
+                item: stream,
+                serverURL: serverURL,
+                onDismiss: { position, duration, completed in
+                    self.progressUpdate = ProgressUpdate(position: position, duration: duration, completed: completed)
+                    self.activeStream = nil
+                }
+            )
+            .ignoresSafeArea()
         }
     }
     

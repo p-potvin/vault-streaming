@@ -1,6 +1,20 @@
 import SwiftUI
 import WebKit
 
+public struct ProgressUpdate: Equatable {
+    public let position: Double
+    public let duration: Double
+    public let completed: Bool
+    public let id: UUID
+    
+    public init(position: Double, duration: Double, completed: Bool) {
+        self.position = position
+        self.duration = duration
+        self.completed = completed
+        self.id = UUID()
+    }
+}
+
 /// SwiftUI wrapper around WKWebView with full cookie persistence, pull-to-refresh,
 /// navigation tracking, and native JavaScript bridge support for Vault Streaming.
 public struct WebViewWrapper: UIViewRepresentable {
@@ -9,6 +23,8 @@ public struct WebViewWrapper: UIViewRepresentable {
     @Binding var navigationError: String?
     @Binding var canGoBack: Bool
     @Binding var canGoForward: Bool
+    @Binding var activeStream: StreamPlaybackItem?
+    @Binding var progressUpdate: ProgressUpdate?
     
     // Actions triggered from parent view
     var reloadToken: Int
@@ -21,6 +37,8 @@ public struct WebViewWrapper: UIViewRepresentable {
         navigationError: Binding<String?>,
         canGoBack: Binding<Bool>,
         canGoForward: Binding<Bool>,
+        activeStream: Binding<StreamPlaybackItem?> = .constant(nil),
+        progressUpdate: Binding<ProgressUpdate?> = .constant(nil),
         reloadToken: Int = 0,
         goBackToken: Int = 0,
         goForwardToken: Int = 0
@@ -30,6 +48,8 @@ public struct WebViewWrapper: UIViewRepresentable {
         self._navigationError = navigationError
         self._canGoBack = canGoBack
         self._canGoForward = canGoForward
+        self._activeStream = activeStream
+        self._progressUpdate = progressUpdate
         self.reloadToken = reloadToken
         self.goBackToken = goBackToken
         self.goForwardToken = goForwardToken
@@ -106,6 +126,12 @@ public struct WebViewWrapper: UIViewRepresentable {
             context.coordinator.lastHandledReloadToken = reloadToken
             uiView.reload()
         }
+
+        if let update = progressUpdate, update.id != context.coordinator.lastHandledProgressUpdateId {
+            context.coordinator.lastHandledProgressUpdateId = update.id
+            let js = "if (typeof window.onNativePlaybackProgress === 'function') { window.onNativePlaybackProgress({ position: \(update.position), duration: \(update.duration), completed: \(update.completed) }); }"
+            uiView.evaluateJavaScript(js, completionHandler: nil)
+        }
     }
     
     public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
@@ -115,6 +141,7 @@ public struct WebViewWrapper: UIViewRepresentable {
         var lastHandledReloadToken: Int = 0
         var lastHandledGoBackToken: Int = 0
         var lastHandledGoForwardToken: Int = 0
+        var lastHandledProgressUpdateId: UUID?
         
         init(_ parent: WebViewWrapper) {
             self.parent = parent
@@ -187,6 +214,34 @@ public struct WebViewWrapper: UIViewRepresentable {
         public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "vaultStreamingBridge" else { return }
             print("[VaultStreamingBridge] Message: \(message.body)")
+            
+            if let dict = message.body as? [String: Any],
+               let action = dict["action"] as? String,
+               action == "playNative",
+               let urlString = dict["url"] as? String,
+               let playURL = URL(string: urlString) {
+                
+                let title = (dict["title"] as? String) ?? "Video Stream"
+                let posterUrl = dict["posterUrl"] as? String
+                let startPosition = (dict["startPosition"] as? Double) ?? 0.0
+                let mediaType = dict["mediaType"] as? String
+                let season = dict["season"] as? Int
+                let episode = dict["episode"] as? Int
+                
+                let item = StreamPlaybackItem(
+                    url: playURL,
+                    title: title,
+                    posterUrl: posterUrl,
+                    startPosition: startPosition,
+                    mediaType: mediaType,
+                    season: season,
+                    episode: episode
+                )
+                
+                DispatchQueue.main.async {
+                    self.parent.activeStream = item
+                }
+            }
         }
         
         // MARK: - WKUIDelegate (JavaScript Panels)

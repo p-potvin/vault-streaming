@@ -15,8 +15,8 @@
 //
 // Applied only here, on the web path. The desktop client keeps the full list.
 
-const DEFAULT_MAX_GB = 5;
-const DEFAULT_MAX_HEIGHT = 1080;
+const DEFAULT_MAX_GB = 120;
+const DEFAULT_MAX_HEIGHT = 2160;
 
 function maxGB() {
     const v = parseFloat(process.env.VW_WEB_MAX_SOURCE_GB);

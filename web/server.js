@@ -12,7 +12,9 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const child_process = require('child_process');
 const express = require('express');
+const utils = require('../src/utils');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -252,6 +254,48 @@ const MIME = {
     '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml',
     '.vtt': 'text/vtt', '.srt': 'application/x-subrip', '.ass': 'text/plain',
 };
+
+// ── Direct-Stream Transmuxer for iOS / Apple Devices ──────────────────────────
+// Repackages MKV streams with DTS/TrueHD audio into fragmented MP4 over HTTP
+// with -c:v copy (zero video re-encoding, near-zero CPU load).
+app.get('/api/stream/remux', (req, res) => {
+    const streamUrl = req.query.url;
+    if (!streamUrl) return res.status(400).send('Missing url parameter');
+
+    const startTime = parseFloat(req.query.startTime || 0);
+    const ffmpegPath = utils.getFFmpegPath ? utils.getFFmpegPath() : 'ffmpeg';
+
+    const args = [];
+    if (startTime > 0) {
+        args.push('-ss', String(startTime));
+    }
+    args.push(
+        '-i', streamUrl,
+        '-map', '0:v:0',
+        '-map', '0:a:0?',
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '256k',
+        '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+        '-f', 'mp4',
+        'pipe:1'
+    );
+
+    res.writeHead(200, {
+        'Content-Type': 'video/mp4',
+        'Transfer-Encoding': 'chunked',
+        'Accept-Ranges': 'none',
+        'Cache-Control': 'no-cache'
+    });
+
+    const proc = child_process.spawn(ffmpegPath, args, { windowsHide: true });
+    proc.stdout.pipe(res);
+    proc.stderr.on('data', () => {});
+
+    req.on('close', () => {
+        try { proc.kill('SIGKILL'); } catch (_) { try { proc.kill(); } catch (__) {} }
+    });
+});
 
 app.get('/api/media', (req, res) => {
     const target = req.query.path;
