@@ -34,6 +34,15 @@ function initSettingsListeners() {
         const backdrop = el('settings-backdrop');
         if (backdrop) backdrop.style.display = isOpening ? 'block' : 'none';
         if (isOpening) {
+            // Adapt settings UI for iOS web container vs desktop
+            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vaultStreamingBridge);
+            if (isIOS) {
+                document.querySelectorAll('.settings-vsr-group').forEach(node => { node.style.display = 'none'; });
+                const trayRow = document.getElementById('settings-minimize-to-tray')?.closest('.settings-toggle-row');
+                if (trayRow) trayRow.style.display = 'none';
+                document.querySelectorAll('.settings-folder-input').forEach(node => { node.closest('div')?.style?.setProperty('display', 'none'); });
+            }
+
             pillTagLoad(window.appSettings.globExclusions || []);
             if (el('settings-default-folder')) el('settings-default-folder').value = window.appSettings.defaultFolder || '';
             el('settings-default-lang').value = window.appSettings.lang || window.appSettings.defaultLang || 'en';

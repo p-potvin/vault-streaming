@@ -22,7 +22,8 @@ window.showMediaDetails = async function(movie, startAtTime = 0) {
 
     _currentModalTvId = movie.id;
     window._currentModalImdbId = movie.imdb_id || null;
-    _currentModalTitle = movie.title;
+    const resolvedTitle = movie.title || movie.name || 'Unknown Title';
+    _currentModalTitle = resolvedTitle;
     _currentModalMediaType = movie.media_type;
     window._currentTrailerKey = null;
     window._persistedTrailerTime = startAtTime;
@@ -31,12 +32,12 @@ window.showMediaDetails = async function(movie, startAtTime = 0) {
     modal.style.display = 'flex';
     
     // Draw initial badges
-    _populateExternalBadges(movie.title, movie.id, movie.media_type);
+    _populateExternalBadges(resolvedTitle, movie.id, movie.media_type);
 
     // Reset modal state
-    el('streaming-details-header-title').textContent = movie.title;
-    el('streaming-details-title').textContent = movie.title;
-    el('streaming-details-year').textContent = movie.year || '—';
+    el('streaming-details-header-title').textContent = resolvedTitle;
+    el('streaming-details-title').textContent = resolvedTitle;
+    el('streaming-details-year').textContent = movie.year || (movie.release_date ? movie.release_date.substring(0,4) : (movie.first_air_date ? movie.first_air_date.substring(0,4) : '—'));
     el('streaming-details-genres').textContent = movie.genres || '—';
     el('streaming-details-rating').innerHTML = `${window.icons.star('', 'width:13px;height:13px;vertical-align:middle;')} ${window.escapeHtml(String(movie.rating || '—'))}`;
     el('streaming-details-overview').textContent = movie.overview || '';
@@ -150,7 +151,14 @@ async function _setupMovieModal(movie) {
         btnStream.onclick = () => {
             el('streaming-details-modal').style.display = 'none';
             if (typeof window.destroyTrailer === 'function') window.destroyTrailer();
-            window.triggerRDStream(movie.title, movie.id, 'movie');
+            window.triggerRDStream(
+                movie.title || movie.name,
+                movie.id,
+                'movie',
+                null,
+                null,
+                { poster: movie.poster, year: movie.year }
+            );
         };
     }
 
@@ -358,7 +366,11 @@ window._streamEpisode = function(tvId, seasonNumber, episodeNumber) {
         tvId,
         'tv',
         seasonNumber,
-        episodeNumber
+        episodeNumber,
+        {
+            poster: el('streaming-details-poster')?.src || null,
+            year: el('streaming-details-year')?.textContent || null
+        }
     );
 };
 

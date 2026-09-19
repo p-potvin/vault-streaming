@@ -1601,6 +1601,11 @@ async function playStream(url, title) {
     // Route to Swift native player when running inside the iOS app container
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vaultStreamingBridge) {
         endPlayerHandoff();
+        const modal = el('video-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('preparing');
+        }
         const media = window.activeStreamingMedia || {};
         const fetchProgress = (window.electronAPI && typeof window.electronAPI.getWatchProgress === 'function')
             ? window.electronAPI.getWatchProgress({
@@ -1907,6 +1912,12 @@ window.onNativePlaybackProgress = function (data) {
     if (!data) return;
     const { position, duration, completed } = data;
     console.log('[NativeBridge] Progress received from iOS player:', position, '/', duration, 'completed:', completed);
+    const modal = el('video-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('preparing');
+        modal.classList.remove('minimized');
+    }
     if (window.activeStreamingMedia && window.electronAPI && typeof window.electronAPI.saveWatchProgress === 'function') {
         window.electronAPI.saveWatchProgress({
             mediaType: window.activeStreamingMedia.mediaType,
@@ -1920,4 +1931,28 @@ window.onNativePlaybackProgress = function (data) {
         }).catch(err => console.error('[NativeBridge] Failed to save progress:', err));
     }
 };
+
+// Handler when the native iOS media player is closed/dismissed
+window.onNativePlayerDismissed = function () {
+    console.log('[NativeBridge] Native player dismissed by user');
+    const modal = el('video-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('preparing');
+        modal.classList.remove('minimized');
+    }
+    const endedOverlay = el('video-ended-overlay');
+    if (endedOverlay) endedOverlay.style.display = 'none';
+    if (el('titlebar-video-title')) el('titlebar-video-title').style.display = 'none';
+    if (window.autoplayTimer) {
+        clearInterval(window.autoplayTimer);
+        window.autoplayTimer = null;
+    }
+    if (typeof vp !== 'undefined' && vp) {
+        vp.pause();
+        vp.removeAttribute('src');
+        vp.load();
+    }
+};
+
 

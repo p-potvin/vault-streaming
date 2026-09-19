@@ -261,16 +261,34 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
             torrentsList.appendChild(btn);
         });
 
-        // ── Auto-start the best result ─────────────────────────────────────
+        // ── Auto-start the best result (filtering out CAM/3D/promo releases) ──
         statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Auto-selecting best ${preferredQuality} ${preferredLang !== 'en' ? preferredLang.toUpperCase() + ' ' : ''}stream...`;
         await new Promise(r => setTimeout(r, 400));
         if (currentRequestNum !== _torrentRequestCounter) return;
         
-        const bestItem = ranked[0];
+        const isRejected = window.isRejectedForAutoPlay || (() => false);
+        const acceptableStreams = ranked.filter(t => !isRejected(t));
+
+        if (acceptableStreams.length === 0) {
+            // All streams are CAM / 3D / promo recordings! Never auto-play.
+            // Reveal the manual stream picker with a clear warning.
+            loadingStatus.style.display = 'none';
+            torrentsList.style.display = 'flex';
+            if (chooseManuallyBtn) chooseManuallyBtn.style.display = 'none';
+            
+            const warningBanner = document.createElement('div');
+            warningBanner.style.cssText = 'background: rgba(255, 107, 122, 0.15); border: 1px solid var(--vault-signal-alert, #FF6B7A); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; color: #fff; font-size: 11px; display: flex; align-items: center; gap: 8px; font-family: var(--font-sans);';
+            warningBanner.innerHTML = `${window.icons ? window.icons.alert('', 'width:16px; height:16px; stroke:var(--vault-signal-alert, #FF6B7A); flex-shrink:0;') : ''} <span><strong>Notice:</strong> Only CAM / low-quality or 3D releases were found. Auto-play disabled — select a stream manually below if you wish to proceed.</span>`;
+            torrentsList.insertBefore(warningBanner, torrentsList.firstChild);
+            return;
+        }
+
+        const bestItem = acceptableStreams[0];
+        const bestIndex = ranked.indexOf(bestItem);
         if (bestItem.isUsenet) {
-            window.startUsenetStreamFlow(bestItem, title, 0);
+            window.startUsenetStreamFlow(bestItem, title, bestIndex >= 0 ? bestIndex : 0);
         } else {
-            window.startRDDebridFlow(bestItem, title, 0);
+            window.startRDDebridFlow(bestItem, title, bestIndex >= 0 ? bestIndex : 0);
         }
 
     } catch (e) {

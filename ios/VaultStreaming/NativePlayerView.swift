@@ -58,6 +58,7 @@ public struct NativePlayerView: UIViewControllerRepresentable {
 
         // Setup time observer for Now Playing and progress tracking
         context.coordinator.setupTimeObserver()
+        context.coordinator.setupErrorObserver()
 
         player.play()
         return controller
@@ -79,10 +80,11 @@ public struct NativePlayerView: UIViewControllerRepresentable {
             // Direct-Stream transmuxer URL on the Vault Streaming server
             var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) ?? URLComponents()
             components.path = "/api/stream/remux"
-            components.queryItems = [
-                URLQueryItem(name: "url", value: sourceURL.absoluteString),
-                URLQueryItem(name: "startTime", value: String(startTime))
-            ]
+            var queryItems = components.queryItems ?? []
+            queryItems.removeAll { $0.name == "url" || $0.name == "startTime" }
+            queryItems.append(URLQueryItem(name: "url", value: sourceURL.absoluteString))
+            queryItems.append(URLQueryItem(name: "startTime", value: String(startTime)))
+            components.queryItems = queryItems
             if let remuxURL = components.url {
                 print("[NativePlayer] MKV container detected; routing through Direct-Stream transmuxer: \(remuxURL)")
                 return remuxURL
@@ -96,6 +98,8 @@ public struct NativePlayerView: UIViewControllerRepresentable {
         var parent: NativePlayerView
         weak var player: AVPlayer?
         var timeObserverToken: Any?
+        var statusObserver: NSKeyValueObservation?
+        var failureObserverToken: Any?
         var currentDuration: Double = 0
         var currentPosition: Double = 0
         var hasReportedDismiss = false
@@ -103,6 +107,23 @@ public struct NativePlayerView: UIViewControllerRepresentable {
         init(_ parent: NativePlayerView) {
             self.parent = parent
             self.currentPosition = parent.item.startPosition
+        }
+
+        func setupErrorObserver() {
+            guard let player = player else { return }
+            statusObserver = player.currentItem?.observe(\.status, options: [.new]) { item, _ in
+                if item.status == .failed {
+                    print("[NativePlayer] AVPlayerItem status failed: \(String(describing: item.error))")
+                }
+            }
+            failureObserverToken = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemFailedToPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { notification in
+                let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                print("[NativePlayer] AVPlayerItem failed to play to end time: \(String(describing: error))")
+            }
         }
 
         func setupTimeObserver() {
@@ -204,6 +225,12 @@ public struct NativePlayerView: UIViewControllerRepresentable {
         }
 
         func cleanup() {
+            statusObserver?.invalidate()
+            statusObserver = nil
+            if let fToken = failureObserverToken {
+                NotificationCenter.default.removeObserver(fToken)
+                failureObserverToken = nil
+            }
             if let token = timeObserverToken {
                 player?.removeTimeObserver(token)
                 timeObserverToken = nil

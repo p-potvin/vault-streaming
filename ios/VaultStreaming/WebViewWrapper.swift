@@ -129,7 +129,7 @@ public struct WebViewWrapper: UIViewRepresentable {
 
         if let update = progressUpdate, update.id != context.coordinator.lastHandledProgressUpdateId {
             context.coordinator.lastHandledProgressUpdateId = update.id
-            let js = "if (typeof window.onNativePlaybackProgress === 'function') { window.onNativePlaybackProgress({ position: \(update.position), duration: \(update.duration), completed: \(update.completed) }); }"
+            let js = "if (typeof window.onNativePlaybackProgress === 'function') { window.onNativePlaybackProgress({ position: \(update.position), duration: \(update.duration), completed: \(update.completed) }); } if (typeof window.onNativePlayerDismissed === 'function') { window.onNativePlayerDismissed(); }"
             uiView.evaluateJavaScript(js, completionHandler: nil)
         }
     }
