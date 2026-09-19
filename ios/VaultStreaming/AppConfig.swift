@@ -6,8 +6,8 @@ public struct AppConfig {
     public static let appVersion = "1.0.0"
     public static let customUserAgent = "VaultStreaming-iOS/\(appVersion) (VaultWares; Tailnet-First)"
     
-    /// Default canonical endpoint pointing to the Comet instance on OVH (tailnet-first).
-    public static let defaultServerURL = "http://100.67.25.118:5173"
+    /// Default canonical endpoint pointing to Vault Streaming web client on Tailnet.
+    public static let defaultServerURL = "https://streaming.vaultwares.ca/?token=cbSPErDf-BpWBOXz-norVbGkqABWSEKbiZWi5CY-UZI"
     
     /// Default VaultWares API gateway on OVH for dispatching transcode jobs to PC.
     public static let defaultApiGatewayURL = "https://api.vaultwares.ca"

@@ -193,7 +193,7 @@ public struct ContentView: View {
                         .disableAutocorrection(true)
                         .keyboardType(.URL)
                     
-                    Button("Reset to Comet on OVH (100.67.25.118:5173)") {
+                    Button("Reset to Streaming Web (streaming.vaultwares.ca)") {
                         customURLInput = AppConfig.defaultServerURL
                     }
                     .font(.footnote)
