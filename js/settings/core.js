@@ -35,7 +35,7 @@ function initSettingsListeners() {
         if (backdrop) backdrop.style.display = isOpening ? 'block' : 'none';
         if (isOpening) {
             // Adapt settings UI for iOS web container vs desktop
-            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vaultStreamingBridge);
+            const isIOS = /iPhone|iPad|iPod|VaultStreaming-iOS/i.test(navigator.userAgent) || (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vaultStreamingBridge) || window.location.search.includes('platform=ios');
             if (isIOS) {
                 document.querySelectorAll('.settings-vsr-group').forEach(node => { node.style.display = 'none'; });
                 const trayRow = document.getElementById('settings-minimize-to-tray')?.closest('.settings-toggle-row');
