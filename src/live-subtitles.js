@@ -232,58 +232,76 @@ function sendCmd(obj) {
     return false;
 }
 
+const aiSubtitles = require('./ai-subtitles');
+
 function registerLiveSubtitlesHandlers(ipcMain) {
-    // Called ~3s after the UI loads. Only preloads if the model is already on
-    // disk — we don't kick off a 2.5 GB download on every launch, only when the
-    // user actually invokes live subtitles (see start).
     ipcMain.handle('warm-live-subtitles', async (event) => {
         lastSender = event.sender;
-        if (modelPresent()) { ensureDaemon(); armIdleShutdown(); }
-        return { success: true, ready: daemonReady, modelPresent: modelPresent() };
+        return { success: true, ready: true, modelPresent: true };
     });
 
     ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt, audioIndex, separate } = {}) => {
-        // Vault Streaming plays remote (Comet/RD) URLs, so http(s) sources are
-        // allowed here (ffmpeg reads them). SRT is opt-in and only meaningful for
-        // a local file — see the python daemon.
         if (!videoPath) {
             return { success: false, error: 'No playback source for live subtitles.' };
         }
         lastSender = event.sender;
+
+        // Check settings for permanent subtitle storage
+        let savePermanently = false;
         try {
-            await ensureModel();
-        } catch (e) {
-            return { success: false, error: 'Model download failed: ' + e.message };
-        }
-        cueCount = 0;
-        cancelIdleShutdown();
-        const parsedBoost = Number.parseFloat(volumeBoost);
-        const ok = sendCmd({
-            cmd: 'start',
+            const settingsFile = path.join(app.getPath('userData'), 'vault-settings.json');
+            if (fs.existsSync(settingsFile)) {
+                const s = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+                savePermanently = !!s.saveAiSubtitles;
+            }
+        } catch (_) {}
+
+        forward('live-subtitle-status', { status: 'started', videoPath });
+
+        // Dispatch asynchronous vw better-subtitles job
+        aiSubtitles.runBetterSubtitles({
             videoPath,
-            langs: Array.isArray(langs) && langs.length ? langs : ['en'],
-            volumeBoost: Number.isFinite(parsedBoost) ? Math.min(2.5, Math.max(1, parsedBoost)) : 1.0,
-            start: Math.max(0, Number.parseFloat(startTime) || 0),
-            translateTo: translateTo || null,
-            writeSrt: !!writeSrt,
-            // Which audio track ASR should listen to — matches what the player
-            // is actually playing (see the audio-track picker).
-            audioIndex: Number.isInteger(audioIndex) && audioIndex >= 0 ? audioIndex : 0,
-            separate: separate !== false,
+            savePermanently,
+            translateTo: translateTo || (Array.isArray(langs) ? langs[0] : null),
+            onProgress: (statusData) => {
+                forward('live-subtitle-status', { videoPath, ...statusData });
+            },
+            onCue: (cue) => {
+                forward('live-subtitle-cue', { videoPath, ...cue });
+            }
+        }).then(result => {
+            console.log('[live-subs] vw better-subtitles finished:', result);
+            forward('live-subtitle-status', {
+                final: true,
+                status: 'SUCCESS',
+                videoPath,
+                cues: result.cuesCount,
+                path: result.path,
+                srtPath: result.srtPath
+            });
+        }).catch(err => {
+            console.error('[live-subs] vw better-subtitles error:', err);
+            forward('live-subtitle-status', {
+                final: true,
+                status: 'FAILED',
+                videoPath,
+                error: err.message
+            });
         });
-        return { success: ok, ready: daemonReady };
+
+        return { success: true, ready: true };
     });
 
     ipcMain.handle('stop-live-subtitles', async () => {
-        const ok = sendCmd({ cmd: 'stop' });
-        armIdleShutdown();
-        return { success: ok };
+        try { aiSubtitles.cleanupAllAiSubtitles(); } catch (_) {}
+        return { success: true };
     });
 }
 
-// Cleanly shut the daemon down on app quit.
+// Cleanly shut down subtitle processes and purge temp files on app quit
 function shutdownLiveSubtitles() {
     cancelIdleShutdown();
+    try { aiSubtitles.cleanupAllAiSubtitles(); } catch (_) {}
     if (daemon) {
         try { daemon.stdin.write(JSON.stringify({ cmd: 'quit' }) + '\n'); } catch (e) { /* noop */ }
         try { daemon.kill(); } catch (e) { /* noop */ }

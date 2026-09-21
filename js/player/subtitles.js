@@ -5,6 +5,20 @@
 // both live (VTTCue) and file-loaded cues.
 window.SUBTITLE_CUE_LINE = -4;
 
+// Convert SubRip (.srt) to WebVTT format for browser <track> elements
+function srtToVtt(srtText) {
+    if (!srtText) return 'WEBVTT\n\n';
+    let vtt = srtText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    vtt = vtt.replace(/^\uFEFF/, '');
+    vtt = vtt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+    vtt = vtt.replace(/(\d{2}:\d{2}),(\d{3})/g, '00:$1.$2');
+    if (!vtt.trim().startsWith('WEBVTT')) {
+        vtt = 'WEBVTT\n\n' + vtt;
+    }
+    return vtt;
+}
+window.srtToVtt = srtToVtt;
+
 // File-loaded cues are parsed by the browser with line:auto, which puts them at
 // the very bottom — underneath the controls. Re-anchor them once they exist.
 function raiseTrackCues(track) {
@@ -164,7 +178,9 @@ function selectSubtitleByIndex(idx) {
         track.dataset.downloaded = "false";
         track.src = "";
     } else {
-        track.src = window.sanitizePath(sub.path);
+        const subPath = sub.path || '';
+        const vttPath = subPath.replace(/\.srt$/i, '.vtt');
+        track.src = window.sanitizePath(vttPath || subPath);
     }
     vp.appendChild(track);
 
@@ -766,7 +782,20 @@ function ensureLiveSubtitleListeners() {
         if (s.status === 'started') { updateLiveSubButton(true); return; }
         if (s.final) {
             if (s.status === 'SUCCESS') {
-                window.showToast(`Live subtitles finished — ${s.cues || 0} cues written to sidecar.`, 'success');
+                window.showToast(`AI subtitles ready — ${s.cues || 0} cues generated.`, 'success');
+                if (s.path) {
+                    const vp = el('video-player');
+                    if (vp) {
+                        const track = document.createElement('track');
+                        track.kind = 'subtitles';
+                        track.label = `AI Subtitles (${window._liveSubItemName || 'Generated'})`;
+                        track.srclang = 'und';
+                        track.src = window.sanitizePath(s.path);
+                        vp.appendChild(track);
+                        refreshSubtitlesList();
+                        selectSubtitleTrack(vp.textTracks.length - 1);
+                    }
+                }
             } else if (s.status === 'FAILED') {
                 window.showToast(tr('toastLiveSubsError', 'Live subtitles error: ') + (s.error || 'unknown'), 'error');
             }
@@ -945,21 +974,30 @@ function initSubtitleListeners() {
         // Uploading a subtitle is exclusive with a running AI session.
         if (window._liveSubActive) window.stopLiveSubtitles(true);
 
-        const track = document.createElement('track');
-        track.kind = 'subtitles';
-        track.label = file.name;
-        track.srclang = 'und';
-        track.src = URL.createObjectURL(file);
+        const reader = new FileReader();
+        reader.onload = function () {
+            let content = reader.result;
+            if (file.name.toLowerCase().endsWith('.srt')) {
+                content = window.srtToVtt ? window.srtToVtt(content) : content;
+            }
+            const blob = new Blob([content], { type: 'text/vtt' });
+            const track = document.createElement('track');
+            track.kind = 'subtitles';
+            track.label = file.name;
+            track.srclang = 'und';
+            track.src = URL.createObjectURL(blob);
 
-        vp.appendChild(track);
-        refreshSubtitlesList();
+            vp.appendChild(track);
+            refreshSubtitlesList();
 
-        const trackIdx = vp.textTracks.length - 1;
-        selectSubtitleTrack(trackIdx);
+            const trackIdx = vp.textTracks.length - 1;
+            selectSubtitleTrack(trackIdx);
 
-        const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
-        window.showToast((t.subtitlesLoaded || 'Subtitles loaded: ') + file.name, 'success');
-        e.target.value = '';
+            const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
+            window.showToast((t.subtitlesLoaded || 'Subtitles loaded: ') + file.name, 'success');
+            e.target.value = '';
+        };
+        reader.readAsText(file);
     });
 }
 
@@ -1117,7 +1155,9 @@ async function loadActiveSubtitles(videoPath) {
                     track.dataset.downloaded = "false";
                     track.src = "";
                 } else {
-                    track.src = window.sanitizePath(bestSub.path);
+                    const bestPath = bestSub.path || '';
+                    const vttPath = bestPath.replace(/\.srt$/i, '.vtt');
+                    track.src = window.sanitizePath(vttPath || bestPath);
                 }
                 vpReal.appendChild(track);
             }

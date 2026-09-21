@@ -153,9 +153,19 @@ function performFullAppCleanup() {
     console.log('[main:cleanup] Full app cleanup requested');
     try { liveSubtitlesHandlers.shutdownLiveSubtitles(); } catch (e) { /* noop */ }
     try { watchHistoryHandlers.flushNow(); } catch (e) { /* noop */ }
-    // NOTE: the old killNodeProcesses() nuked EVERY node.exe on the machine —
-    // removed. utils.killAllActiveSubprocesses() already kills our own tracked
-    // subprocess trees.
+    // Clean stale temp storage matching vw-* or vault-streaming
+    try {
+        const tmp = os.tmpdir();
+        const entries = fs.readdirSync(tmp);
+        for (const entry of entries) {
+            if (entry.startsWith('vw-') || entry.startsWith('vault-streaming')) {
+                const full = path.join(tmp, entry);
+                try {
+                    fs.rmSync(full, { recursive: true, force: true });
+                } catch (_) {}
+            }
+        }
+    } catch (_) {}
     utils.killAllActiveSubprocesses();
     killAllOwnProcesses(true);
 }
@@ -274,6 +284,13 @@ function createWindow() {
             callback({ cancel: false, responseHeaders });
         }
     );
+
+    mainWindow.webContents.on('console-message', (event, ...args) => {
+        const message = event?.message ?? args[1] ?? '';
+        const level = event?.level ?? args[0] ?? 0;
+        const lvl = level === 3 ? 'ERROR' : (level === 2 ? 'WARN' : 'INFO');
+        console.log(`[Renderer:${lvl}] ${message}`);
+    });
 
     mainWindow.loadFile('index.html');
 

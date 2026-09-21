@@ -200,7 +200,28 @@ function registerTmdbHandlers(ipcMain) {
                 return { success: false, status: response.status, error: errText };
             }
 
-            const data = await response.json();
+            let data = await response.json();
+            // If search with language modifier (e.g. "the 2 popes in french") returned 0 results,
+            // sanitize language suffix and retry search automatically.
+            if (query && (!data.results || data.results.length === 0)) {
+                const langPattern = /\b(in\s+french|in\s+english|en\s+francais|en\s+français|french|francais|français|vf|vff|vfq|vostfr|subfrench)\b/gi;
+                const cleanedQuery = query.replace(langPattern, '').replace(/\s+/g, ' ').trim();
+                if (cleanedQuery && cleanedQuery.toLowerCase() !== query.toLowerCase()) {
+                    console.log(`[TMDB] Retrying search with sanitized query: "${cleanedQuery}" (original was "${query}")`);
+                    const retryUrl = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(cleanedQuery)}&include_adult=false&language=${language}&page=${page}`;
+                    const retryRes = await fetchWithTimeout(retryUrl, {
+                        method: 'GET',
+                        headers: {
+                            accept: 'application/json',
+                            Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
+                        }
+                    });
+                    if (retryRes.ok) {
+                        data = await retryRes.json();
+                    }
+                }
+            }
+
             const results = (data.results || []).map(item => {
                 const title = item.title || item.name || 'Untitled';
                 const dateStr = item.release_date || item.first_air_date || '';

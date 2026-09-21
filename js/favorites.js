@@ -302,6 +302,7 @@ window.renderLibrary = async function (useCache = false) {
         card.setAttribute('data-id', String(movie.id));
         if (typeof window.applyWatchStatusCues === 'function') window.applyWatchStatusCues(card, movie);
         window.attachPremiumHoverCard(card, movie);
+        if (typeof window.attachCardTouchInteractions === 'function') window.attachCardTouchInteractions(card, movie);
         grid.appendChild(card);
     });
 };

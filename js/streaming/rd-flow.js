@@ -747,6 +747,10 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
                     errMsg = window.currentLang === 'fr'
                         ? "Aucun des liens testés n'est autorisé par Real-Debrid."
                         : "None of the tested links are allowed by Real-Debrid.";
+                } else if (lastError && (lastError.includes('placeholder') || lastError.includes('not available through Comet') || lastError.includes('not actually cached'))) {
+                    errMsg = window.currentLang === 'fr'
+                        ? "Aucun des flux trouvés n'est actuellement en cache sur Real-Debrid. Choisissez un flux manuellement ou réessayez plus tard."
+                        : "None of the found streams are currently cached on Real-Debrid. Select a stream manually or try again later.";
                 } else {
                     errMsg = lastError;
                 }
@@ -767,12 +771,25 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
 
         // SUCCESS! The dialog is dismissed by beginPlayerHandoff() once the
         // player shell is up, so the two never both disappear at once.
+        const successfulTorrent = torrentsToTry.find(t => t.magnet === response.magnet || t.hash === response.hash);
         if (window.activeStreamingMedia) {
-            const successfulTorrent = torrentsToTry.find(t => t.magnet === response.magnet || t.hash === response.hash);
             window.activeStreamingMedia.quality = (successfulTorrent || {}).quality || '';
         }
         window.playStream(response.streamUrl, movieTitle);
         window.showToast(tr('toastRdStreamLoaded', 'Direct high-speed RD stream loaded successfully!'), 'success');
+        const prefLang = typeof getPreferredLang === 'function' ? getPreferredLang() : (window.appSettings?.streamLang || 'en');
+        if (prefLang === 'fr') {
+            const sText = `${(successfulTorrent && successfulTorrent.desc) || ''} ${(successfulTorrent && successfulTorrent.name) || ''}`.toLowerCase();
+            const hasFrench = /\b(vf|vff|vfq|vfi|french|truefrench|multi|dual|vostfr)\b/.test(sText);
+            if (!hasFrench) {
+                setTimeout(() => {
+                    window.showToast(window.currentLang === 'fr'
+                        ? 'Aucun flux français en cache. Lecture du meilleur flux en cache (sous-titres français disponibles).'
+                        : 'No cached French stream found. Playing best cached stream (French subtitles available).',
+                        'info', 6000);
+                }, 1200);
+            }
+        }
     } catch (e) {
         console.error('Real-Debrid streaming workflow failed:', e);
         loadingStatus.querySelector('.spinner').style.display = 'none';

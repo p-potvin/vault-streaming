@@ -235,7 +235,13 @@ app.get('/api/events', (req, res) => {
 function allowedRoots() {
     const roots = (loadSettings().folders || []).map(f => f && f.path).filter(Boolean);
     const extra = (process.env.VW_WEB_MEDIA_ROOTS || '').split(/[;,]/).map(s => s.trim()).filter(Boolean);
-    return [...roots, ...extra].map(r => path.resolve(r));
+    const subRoots = [
+        path.join(USER_DATA, 'subtitles'),
+        path.join(os.homedir(), 'Videos', 'Subtitles'),
+        path.join(os.tmpdir(), 'vault-streaming'),
+        os.tmpdir()
+    ];
+    return [...roots, ...extra, ...subRoots].map(r => path.resolve(r));
 }
 
 function isInsideAllowedRoot(target) {
@@ -318,6 +324,7 @@ app.get('/api/media', (req, res) => {
 
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Content-Type', type);
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
     if (req.method === 'HEAD') {
         res.setHeader('Content-Length', stat.size);
@@ -388,12 +395,29 @@ function firstLanAddress() {
     return 'localhost';
 }
 
+function cleanupVwTempFiles() {
+    try {
+        const tmp = os.tmpdir();
+        const entries = fs.readdirSync(tmp);
+        for (const entry of entries) {
+            if (entry.startsWith('vw-') || entry.startsWith('vault-streaming')) {
+                const full = path.join(tmp, entry);
+                try {
+                    fs.rmSync(full, { recursive: true, force: true });
+                } catch (_) {}
+            }
+        }
+    } catch (_) {}
+}
+
 function shutdown() {
     console.log('\n[web] Shutting down…');
     try { liveSubtitlesHandlers.shutdownLiveSubtitles(); } catch (_) { }
     try { watchHistoryHandlers.flushNow(); } catch (_) { }
+    try { cleanupVwTempFiles(); } catch (_) { }
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+process.on('exit', () => { try { cleanupVwTempFiles(); } catch (_) {} });

@@ -15,6 +15,7 @@
   <link href="css/clip.css" rel="stylesheet">
   <link href="css/tooltips.css" rel="stylesheet">
   <link href="css/modals.css" rel="stylesheet">
+  <link href="css/mobile.css" rel="stylesheet">
   <link href="node_modules/flag-icons/css/flag-icons.min.css" rel="stylesheet">
   <!-- Load client-side JS modular services -->
   <script src="js/translations.en.js" defer></script>
@@ -44,6 +45,7 @@
   <script src="js/navigation/tabs.js" defer></script>
   <script src="js/navigation/keybindings.js" defer></script>
   <script src="js/app.js" defer></script>
+  <script src="js/mobile.js" defer></script>
   <script src="js/tooltip.js" defer></script>
 </head>
 
@@ -354,6 +356,12 @@
           title="Isolate vocal stem with BS-RoFormer to eliminate background music/noise before live ASR subtitles and translation.">
           <span class="settings-toggle-label" data-i18n="settingAiSeparate">AI Vocal Separation (BS-RoFormer):</span>
           <input type="checkbox" id="settings-ai-separate" class="settings-checkbox" checked />
+        </div>
+
+        <div class="settings-toggle-row"
+          title="Save generated .srt subtitles permanently in default Windows location (%USERPROFILE%\Videos\Subtitles). When off, subtitles are kept only for the session and cleaned on exit.">
+          <span class="settings-toggle-label" data-i18n="settingSaveAiSubtitles">Save AI Subtitles Permanently:</span>
+          <input type="checkbox" id="settings-save-ai-subtitles" class="settings-checkbox" />
         </div>
 
         <div>

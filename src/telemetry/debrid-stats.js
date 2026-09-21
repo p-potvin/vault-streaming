@@ -22,7 +22,15 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
-const statsFile = () => path.join(app.getPath('userData'), 'debrid-stats.json');
+const statsFile = () => {
+    try {
+        if (app && typeof app.getPath === 'function') {
+            return path.join(app.getPath('userData'), 'debrid-stats.json');
+        }
+    } catch (_) {}
+    const base = process.env.APPDATA || (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library/Application Support') : path.join(process.env.HOME || '', '.config'));
+    return path.join(base, 'vault-streaming', 'debrid-stats.json');
+};
 
 // Two-letter codes Comet puts in the stream name, e.g. "[TB⚡] …", "[AD] …".
 const PROVIDER_CODES = {

@@ -24,22 +24,32 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 // Load environment variables from .env if process.env doesn't have it
 let envConfig = {};
 try {
-    const envPath = path.join(__dirname, '..', '.env');
-    if (fs.existsSync(envPath)) {
-        const envContent = fs.readFileSync(envPath, 'utf8');
-        envContent.split(/\r?\n/).forEach(line => {
-            const parts = line.split('=');
-            if (parts.length >= 2) {
-                const key = parts[0].trim();
-                const value = parts.slice(1).join('=').trim();
-                if (key) {
-                    if (!process.env[key]) {
-                        process.env[key] = value;
+    const envPaths = [
+        path.join(process.cwd(), '.env'),
+        path.join(path.dirname(process.execPath), '.env'),
+        process.resourcesPath ? path.join(process.resourcesPath, '.env') : null,
+        path.join(__dirname, '.env'),
+        path.join(__dirname, '..', '.env'),
+        path.join(__dirname, '..', '..', '.env')
+    ].filter(Boolean);
+    for (const envPath of envPaths) {
+        if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, 'utf8');
+            envContent.split(/\r?\n/).forEach(line => {
+                const parts = line.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    const value = parts.slice(1).join('=').trim();
+                    if (key) {
+                        if (!process.env[key]) {
+                            process.env[key] = value;
+                        }
+                        envConfig[key] = process.env[key];
                     }
-                    envConfig[key] = process.env[key];
                 }
-            }
-        });
+            });
+            break;
+        }
     }
 } catch (e) {
     console.error('[Real-Debrid] Failed to load .env file:', e);

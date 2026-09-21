@@ -148,34 +148,6 @@ function registerMediaIpc(ipcMain) {
         });
     });
 
-    // Revert Enhancements
-    ipcMain.handle('revert-enhancements', async (_event, filePath) => {
-        if (typeof filePath !== 'string' || !fs.existsSync(filePath)) {
-            return { success: false, error: 'File not found' };
-        }
-        const dir = path.dirname(filePath);
-        const ext = path.extname(filePath);
-        const baseName = path.basename(filePath, ext);
-        const enhancedFile = path.join(dir, '.thumbs', `${baseName}_enhanced${ext}`);
-        const metaPath = filePath + '.meta.json';
-
-        try {
-            if (fs.existsSync(enhancedFile)) {
-                fs.unlinkSync(enhancedFile);
-            }
-            if (fs.existsSync(metaPath)) {
-                try {
-                    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-                    meta.enhancements = { audio: false, video: false, subtitles: [], translation: [] };
-                    delete meta.enhancedPath;
-                    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
-                } catch (e) {}
-            }
-            return { success: true };
-        } catch (err) {
-            return { success: false, error: err.message };
-        }
-    });
 
     // Get File Properties
     ipcMain.handle('get-file-properties', async (_event, filePath) => {
