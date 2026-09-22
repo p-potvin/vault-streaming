@@ -153,18 +153,10 @@ function performFullAppCleanup() {
     console.log('[main:cleanup] Full app cleanup requested');
     try { liveSubtitlesHandlers.shutdownLiveSubtitles(); } catch (e) { /* noop */ }
     try { watchHistoryHandlers.flushNow(); } catch (e) { /* noop */ }
-    // Clean stale temp storage matching vw-* or vault-streaming
+    // Clean only the temporary root created and owned by this app.
     try {
-        const tmp = os.tmpdir();
-        const entries = fs.readdirSync(tmp);
-        for (const entry of entries) {
-            if (entry.startsWith('vw-') || entry.startsWith('vault-streaming')) {
-                const full = path.join(tmp, entry);
-                try {
-                    fs.rmSync(full, { recursive: true, force: true });
-                } catch (_) {}
-            }
-        }
+        const appTempRoot = path.join(os.tmpdir(), 'vault-streaming');
+        fs.rmSync(appTempRoot, { recursive: true, force: true });
     } catch (_) {}
     utils.killAllActiveSubprocesses();
     killAllOwnProcesses(true);
@@ -420,4 +412,3 @@ tmdbHandlers.registerTmdbHandlers(ipcMain);
 realDebridHandlers.registerRealDebridHandlers(ipcMain);
 watchHistoryHandlers.registerWatchHistoryHandlers(ipcMain, app);
 liveSubtitlesHandlers.registerLiveSubtitlesHandlers(ipcMain);
-
