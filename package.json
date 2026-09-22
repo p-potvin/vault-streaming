@@ -1,7 +1,7 @@
 {
   "name": "vault-streaming",
-  "version": "1.9.0",
-  "description": "VaultWares streaming client - Torrents + Real-Debrid via Comet, TMDB movie & series streaming.",
+  "version": "2.0.3",
+  "description": "Vault Streaming Desktop App - TMDB movie & series browser.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -58,10 +58,17 @@
         ]
       }
     ],
+    "asarUnpack": [
+      "tools/**",
+      "python-scripts/**",
+      "vault_streaming/**"
+    ],
+	"electronLanguages": ["en-US", "fr-CA"], 
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",
-      "publisherName": "VaultWares"
+	  "requestedExecutionLevel": "asInvoker",
+      "legalTrademarks": "VaultWares"
     },
     "nsis": {
       "oneClick": false,
@@ -80,12 +87,6 @@
     "express": "^5.2.1",
     "flag-icons": "^7.5.0",
     "node-fetch": "^3.3.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "electron-winstaller"
-    ]
   },
   "allowScripts": {
     "electron@41.2.1": true,

@@ -226,34 +226,38 @@ window.renderLibrary = async function (useCache = false) {
                     tmdbId: movie.id,
                     title: movie.title || movie.name
                 });
-                if (prog && prog.streamUrl && !prog.completed && prog.positionSec > 0) {
-                    window.activeStreamingMedia = {
-                        mediaType: movie.media_type,
-                        tmdbId: movie.id,
-                        title: movie.title || movie.name,
-                        season: prog.season || null,
-                        episode: prog.episode || null,
-                        poster: movie.poster,
-                        year: movie.year,
-                        streamUrl: prog.streamUrl,
-                        streamTitle: prog.streamTitle || movie.title || movie.name,
-                        quality: prog.quality,
-                        selectedSubtitleTrackIdx: prog.selectedSubtitleTrackIdx,
-                        selectedSubtitleLabel: prog.selectedSubtitleLabel,
-                        selectedSubtitleLang: prog.selectedSubtitleLang
-                    };
-                    window.playStream(prog.streamUrl, prog.streamTitle || movie.title || movie.name);
-                    const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
-                    window.showToast(t.resumingStream || 'Resuming stream...', 'success');
-                } else if (movie.media_type === 'tv') {
-                    // Series with no in-progress episode → open the season screen.
-                    // The last-watched season is remembered/preselected inside showMediaDetails.
-                    window.showMediaDetails(movie);
+                const isTV = movie.media_type === 'tv';
+                if (isTV) {
+                    if (prog && prog.season && prog.episode && !prog.completed) {
+                        const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
+                        window.showToast(t.resumingStream || 'Resuming stream...', 'info');
+                        window.triggerRDStream(
+                            movie.title || movie.name,
+                            movie.id,
+                            'tv',
+                            prog.season,
+                            prog.episode,
+                            { poster: movie.poster, year: movie.year }
+                        );
+                    } else {
+                        // Series with no in-progress episode → open the season screen.
+                        // The last-watched season is remembered/preselected inside showMediaDetails.
+                        window.showMediaDetails(movie);
+                    }
                 } else {
-                    // Movie with no saved progress → auto-play the best cached source
-                    // directly. triggerRDStream auto-picks the top-ranked stream and
-                    // keeps the "Choose Manually" list as a fallback.
-                    window.triggerRDStream(movie.title || movie.name, movie.id, 'movie', null, null, { poster: movie.poster, year: movie.year });
+                    // Movie → auto-play the best fresh cached source via Comet/RD
+                    const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
+                    if (prog && !prog.completed && prog.positionSec > 0) {
+                        window.showToast(t.resumingStream || 'Resuming stream...', 'info');
+                    }
+                    window.triggerRDStream(
+                        movie.title || movie.name,
+                        movie.id,
+                        'movie',
+                        null,
+                        null,
+                        { poster: movie.poster, year: movie.year }
+                    );
                 }
             } catch (e) {
                 console.error("Error resuming library item:", e);
@@ -298,6 +302,7 @@ window.renderLibrary = async function (useCache = false) {
         card.setAttribute('data-id', String(movie.id));
         if (typeof window.applyWatchStatusCues === 'function') window.applyWatchStatusCues(card, movie);
         window.attachPremiumHoverCard(card, movie);
+        if (typeof window.attachCardTouchInteractions === 'function') window.attachCardTouchInteractions(card, movie);
         grid.appendChild(card);
     });
 };

@@ -29,6 +29,20 @@ function parseLangToken(token) {
     return { lang: 'und', label: 'Original' };
 }
 
+// Convert SubRip (.srt) to WebVTT (.vtt) format
+function srtToVtt(srtText) {
+    if (!srtText) return 'WEBVTT\n\n';
+    let vtt = srtText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    vtt = vtt.replace(/^\uFEFF/, '');
+    // Convert 00:00:20,000 --> 00:00:24,400 to 00:00:20.000 --> 00:00:24.400
+    vtt = vtt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+    vtt = vtt.replace(/(\d{2}:\d{2}),(\d{3})/g, '00:$1.$2');
+    if (!vtt.trim().startsWith('WEBVTT')) {
+        vtt = 'WEBVTT\n\n' + vtt;
+    }
+    return vtt;
+}
+
 // Find sidecar subtitles ("<base>.srt", "<base>.en.srt", …) next to a video.
 function findLocalSidecars(videoPath) {
     try {
@@ -43,10 +57,27 @@ function findLocalSidecars(videoPath) {
             if (stem === base || stem.startsWith(base + '.')) {
                 const token = stem === base ? '' : stem.slice(base.length + 1);
                 const { lang, label } = parseLangToken(token);
+                let targetPath = path.join(dir, name);
+
+                // If sidecar is .srt, ensure a .vtt copy exists beside it for HTML5 <track>
+                if (ext === '.srt') {
+                    const vttName = name.replace(/\.srt$/i, '.vtt');
+                    const vttPath = path.join(dir, vttName);
+                    if (!fs.existsSync(vttPath)) {
+                        try {
+                            const srtContent = fs.readFileSync(targetPath, 'utf8');
+                            fs.writeFileSync(vttPath, srtToVtt(srtContent), 'utf8');
+                            targetPath = vttPath;
+                        } catch (_) {}
+                    } else {
+                        targetPath = vttPath;
+                    }
+                }
+
                 results.push({
                     label,
                     lang,
-                    path: path.join(dir, name),
+                    path: targetPath,
                     isLocal: true,
                     isOpenSubtitles: false
                 });
@@ -61,17 +92,19 @@ function findLocalSidecars(videoPath) {
 
 // ── OpenSubtitles v5 API helpers ───────────────────────────────────────
 
-function osRequest(endpoint, apiKey, method = 'GET', body = null) {
+function osRequest(endpoint, apiKey, method = 'GET', body = null, redirects = 0) {
     return new Promise((resolve, reject) => {
+        if (redirects > 3) return reject(new Error('Too many redirects'));
         const headers = {
             'Api-Key': apiKey,
             'User-Agent': 'VaultStreaming v1.0',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         };
+        const requestPath = endpoint.startsWith(OS_API_PATH) ? endpoint : (OS_API_PATH + endpoint);
         const opts = {
             hostname: OS_API_BASE,
-            path: OS_API_PATH + endpoint,
+            path: requestPath,
             method,
             headers,
         };
@@ -81,6 +114,9 @@ function osRequest(endpoint, apiKey, method = 'GET', body = null) {
             opts.body = payload;
         }
         const req = https.request(opts, (res) => {
+            if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+                return resolve(osRequest(res.headers.location, apiKey, method, body, redirects + 1));
+            }
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
             res.on('end', () => {
@@ -212,7 +248,19 @@ function registerSubtitlesIpc(ipcMain, _settingsPath, loadSettings) {
                 }).on('error', reject);
             });
 
-            return { success: true, path: outPath };
+            // Convert to WebVTT so HTML5 <track> in browsers/WebKit renders cues natively
+            let finalTrackPath = outPath;
+            try {
+                const srtContent = fs.readFileSync(outPath, 'utf8');
+                const vttContent = srtToVtt(srtContent);
+                const vttPath = outPath.replace(/\.srt$/i, '.vtt');
+                fs.writeFileSync(vttPath, vttContent, 'utf8');
+                finalTrackPath = vttPath;
+            } catch (convErr) {
+                console.warn('[subtitles] WebVTT generation warning:', convErr.message);
+            }
+
+            return { success: true, path: finalTrackPath, srtPath: outPath };
         } catch (e) {
             return { success: false, error: `Failed to save subtitle: ${e.message}` };
         }

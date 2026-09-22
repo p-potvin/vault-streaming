@@ -44,13 +44,14 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
     // used here matched ordinary release titles (NORDiC, ADDiCT, HDR) and filed
     // those results under the wrong service.
     try {
-        recordResolve(streams.map((s) => ({ name: s.name, cached: !!s.url })));
+        const isStreamCached = (s) => !!s.url && ((s.name && s.name.includes('⚡')) || (s.description && s.description.includes('⚡')));
+        recordResolve(streams.map((s) => ({ name: s.name, cached: isStreamCached(s) })));
         const counts = {};
         for (const s of streams) {
             const provider = detectDebridProvider(s.name);
             counts[provider] = (counts[provider] || 0) + 1;
         }
-        console.log('[Comet] provider breakdown:', counts, `cached: ${streams.filter((s) => s.url).length}`);
+        console.log('[Comet] provider breakdown:', counts, `cached: ${streams.filter(isStreamCached).length}`);
     } catch (e) {
         console.warn('[Comet] provider breakdown failed:', e.message);
     }
@@ -70,7 +71,7 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
             const magnet = hash
                 ? `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(cleanTitle)}&tr=udp://tracker.coppersurfer.tk:6969/announce&tr=udp://tracker.opentrackr.org:1337/announce`
                 : '';
-            const hasRdUrl = !!s.url;
+            const isCached = !!s.url && ((s.name && s.name.includes('⚡')) || (s.description && s.description.includes('⚡')));
             return {
                 quality,
                 // Raw Comet name, kept unprefixed so the debrid marker stays at
@@ -78,9 +79,9 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
                 // for display and is not safe to attribute from.
                 name: nameStr,
                 // Comet's own name already carries the provider marker (e.g. [TB⚡],
-                // [AD], [RD+]) now that we fan out to AllDebrid/TorBox/RD, so just
-                // flag cached generically here rather than hardcoding [RD+].
-                type: (hasRdUrl ? '⚡ ' : '') + 'Comet ' + nameStr.split('\n')[0].trim(),
+                // [AD], [RD⚡], [RD⬇️]) now that we fan out to AllDebrid/TorBox/RD.
+                // Prepend ⚡ only if genuinely cached; otherwise show download symbol.
+                type: (isCached ? '⚡ ' : (nameStr.includes('⬇️') ? '⬇️ ' : '')) + 'Comet ' + nameStr.split('\n')[0].trim(),
                 size,
                 seeds,
                 peers: '—',
@@ -88,14 +89,16 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
                 magnet,
                 desc: descStr.split('\n')[0] || nameStr,
                 url: s.url || null,
-                cached: hasRdUrl
+                cached: isCached
             };
     });
 }
 
 function registerSearchHandlers(ipcMain) {
-    ipcMain.handle('search-torrents', async (event, { movieTitle, tmdbId, mediaType, season, episode }) => {
+    ipcMain.handle('search-torrents', async (event, arg) => {
         try {
+            const opts = typeof arg === 'string' ? { movieTitle: arg } : (arg || {});
+            const { movieTitle = '', tmdbId, mediaType, season, episode } = opts;
             let imdbId = null;
             const itemMediaType = mediaType || 'movie';
 

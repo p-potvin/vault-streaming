@@ -14,6 +14,7 @@
     function qualityToHeight(q) {
         if (!q) return 0;
         const k = String(q).toLowerCase();
+        if (k.includes('source') || k.includes('remux') || k.includes('max')) return 99999;
         for (const [needle, h] of Q_HEIGHT) if (k.includes(needle)) return h;
         return 0;
     }

@@ -68,10 +68,8 @@ function registerMediaIpc(ipcMain) {
             } catch (e) {}
         }
 
-        const pythonPath = process.platform === 'win32'
-            ? path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe')
-            : path.join(__dirname, '..', '..', '.venv', 'bin', 'python');
-        const scriptPath = path.join(__dirname, '..', '..', 'python-scripts', 'rtx_vsr_stream.py');
+        const pythonPath = utils.getRobustPythonExe();
+        const scriptPath = utils.resolveScriptPath('rtx_vsr_stream.py');
 
         if (!fs.existsSync(pythonPath)) {
             console.error('[media.ipc:upscale] Python interpreter not found:', pythonPath);
@@ -94,7 +92,8 @@ function registerMediaIpc(ipcMain) {
             ];
 
             console.log(`[media.ipc:upscale] Spawning: ${pythonPath} ${args.join(' ')}`);
-            const proc = child_process.spawn(pythonPath, args, { windowsHide: true });
+            const env = utils.getPythonEnv();
+            const proc = child_process.spawn(pythonPath, args, { env, windowsHide: true });
 
             let errorData = '';
             let stdoutBuffer = '';
@@ -149,34 +148,6 @@ function registerMediaIpc(ipcMain) {
         });
     });
 
-    // Revert Enhancements
-    ipcMain.handle('revert-enhancements', async (_event, filePath) => {
-        if (typeof filePath !== 'string' || !fs.existsSync(filePath)) {
-            return { success: false, error: 'File not found' };
-        }
-        const dir = path.dirname(filePath);
-        const ext = path.extname(filePath);
-        const baseName = path.basename(filePath, ext);
-        const enhancedFile = path.join(dir, '.thumbs', `${baseName}_enhanced${ext}`);
-        const metaPath = filePath + '.meta.json';
-
-        try {
-            if (fs.existsSync(enhancedFile)) {
-                fs.unlinkSync(enhancedFile);
-            }
-            if (fs.existsSync(metaPath)) {
-                try {
-                    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-                    meta.enhancements = { audio: false, video: false, subtitles: [], translation: [] };
-                    delete meta.enhancedPath;
-                    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
-                } catch (e) {}
-            }
-            return { success: true };
-        } catch (err) {
-            return { success: false, error: err.message };
-        }
-    });
 
     // Get File Properties
     ipcMain.handle('get-file-properties', async (_event, filePath) => {
@@ -289,10 +260,8 @@ function registerMediaIpc(ipcMain) {
             return { success: false, error: 'File not found' };
         }
 
-        const pythonPath = process.platform === 'win32'
-            ? path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe')
-            : path.join(__dirname, '..', '..', '.venv', 'bin', 'python');
-        const scriptPath = path.join(__dirname, '..', '..', 'python-scripts', 'rtx_vsr_stream.py');
+        const pythonPath = utils.getRobustPythonExe();
+        const scriptPath = utils.resolveScriptPath('rtx_vsr_stream.py');
 
         const args = [
             scriptPath,
@@ -308,10 +277,11 @@ function registerMediaIpc(ipcMain) {
         console.log(`[media.ipc:upscale-stream] Spawning: ${pythonPath} ${args.join(' ')}`);
 
         try {
+            const env = utils.getPythonEnv({ PYTHONUNBUFFERED: '1' });
             const proc = child_process.spawn(pythonPath, args, {
                 windowsHide: true,
                 // Ensure binary stdout is not mangled
-                env: { ...process.env, PYTHONUNBUFFERED: '1' },
+                env,
             });
             upscaleStreamProcess = proc;
 

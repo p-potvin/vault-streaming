@@ -27,8 +27,11 @@ function userNemoPath() {
     return path.join(userModelsDir(), TDT_NEMO_NAME);
 }
 function devExtractedDir() {
-    const cfg = path.join(__dirname, '..', 'tools', 'models', 'nemotron-3.5-asr-streaming-0.6b', 'model_config.yaml');
-    return fs.existsSync(cfg) ? path.dirname(cfg) : null;
+    const cfgNemotron = utils.resolveToolsDir('models', 'nemotron-3.5-asr-streaming-0.6b', 'model_config.yaml');
+    if (fs.existsSync(cfgNemotron)) return path.dirname(cfgNemotron);
+    const cfgParakeet = utils.resolveToolsDir('models', 'parakeet-tdt-0.6b-v3', 'model_config.yaml');
+    if (fs.existsSync(cfgParakeet)) return path.dirname(cfgParakeet);
+    return null;
 }
 function hfCacheNemo() {
     const base = path.join(os.homedir(), '.cache', 'huggingface', 'hub',
@@ -135,13 +138,6 @@ let lastSender = null;      // renderer to route cues/status to
 let cueCount = 0;
 
 function getPythonExe() {
-    const candidates = [
-        'C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\.venv\\Scripts\\python.exe',
-        path.join(__dirname, '..', '.venv', 'Scripts', 'python.exe'),
-    ];
-    for (const c of candidates) {
-        if (fs.existsSync(c)) return c;
-    }
     return utils.getRobustPythonExe();
 }
 
@@ -197,17 +193,11 @@ function handleLine(line) {
 
 function ensureDaemon() {
     if (daemon) return;
-    const script = path.join(__dirname, '..', 'python-scripts', 'live_subtitles.py');
+    const script = utils.resolveScriptPath('live_subtitles.py');
     const pythonExe = getPythonExe();
-    const env = { ...process.env };
-    env.PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = 'python';
-    env.PYTHONPATH = path.join(__dirname, '..');
-    // Force UTF-8 stdio so multilingual cue text can't trip a cp1252 error or
-    // garble the JSON on the pipe.
-    env.PYTHONUTF8 = '1';
-    env.PYTHONIOENCODING = 'utf-8';
-    // Tell the wrapper where a downloaded .nemo lives (checked before HF cache).
-    env.VAULT_MODEL_DIR = userModelsDir();
+    const env = utils.getPythonEnv({
+        VAULT_MODEL_DIR: userModelsDir(),
+    });
 
     console.log('[main:live-subs] warming daemon (loading model)...');
     daemon = spawn(pythonExe, ['-u', script, '--daemon'], { env, windowsHide: true });
@@ -242,57 +232,76 @@ function sendCmd(obj) {
     return false;
 }
 
+const aiSubtitles = require('./ai-subtitles');
+
 function registerLiveSubtitlesHandlers(ipcMain) {
-    // Called ~3s after the UI loads. Only preloads if the model is already on
-    // disk — we don't kick off a 2.5 GB download on every launch, only when the
-    // user actually invokes live subtitles (see start).
     ipcMain.handle('warm-live-subtitles', async (event) => {
         lastSender = event.sender;
-        if (modelPresent()) { ensureDaemon(); armIdleShutdown(); }
-        return { success: true, ready: daemonReady, modelPresent: modelPresent() };
+        return { success: true, ready: true, modelPresent: true };
     });
 
-    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt, audioIndex } = {}) => {
-        // Vault Streaming plays remote (Comet/RD) URLs, so http(s) sources are
-        // allowed here (ffmpeg reads them). SRT is opt-in and only meaningful for
-        // a local file — see the python daemon.
+    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt, audioIndex, separate } = {}) => {
         if (!videoPath) {
             return { success: false, error: 'No playback source for live subtitles.' };
         }
         lastSender = event.sender;
+
+        // Check settings for permanent subtitle storage
+        let savePermanently = false;
         try {
-            await ensureModel();
-        } catch (e) {
-            return { success: false, error: 'Model download failed: ' + e.message };
-        }
-        cueCount = 0;
-        cancelIdleShutdown();
-        const parsedBoost = Number.parseFloat(volumeBoost);
-        const ok = sendCmd({
-            cmd: 'start',
+            const settingsFile = path.join(app.getPath('userData'), 'vault-settings.json');
+            if (fs.existsSync(settingsFile)) {
+                const s = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+                savePermanently = !!s.saveAiSubtitles;
+            }
+        } catch (_) {}
+
+        forward('live-subtitle-status', { status: 'started', videoPath });
+
+        // Dispatch asynchronous vw better-subtitles job
+        aiSubtitles.runBetterSubtitles({
             videoPath,
-            langs: Array.isArray(langs) && langs.length ? langs : ['en'],
-            volumeBoost: Number.isFinite(parsedBoost) ? Math.min(2.5, Math.max(1, parsedBoost)) : 1.0,
-            start: Math.max(0, Number.parseFloat(startTime) || 0),
-            translateTo: translateTo || null,
-            writeSrt: !!writeSrt,
-            // Which audio track ASR should listen to — matches what the player
-            // is actually playing (see the audio-track picker).
-            audioIndex: Number.isInteger(audioIndex) && audioIndex >= 0 ? audioIndex : 0,
+            savePermanently,
+            translateTo: translateTo || (Array.isArray(langs) ? langs[0] : null),
+            onProgress: (statusData) => {
+                forward('live-subtitle-status', { videoPath, ...statusData });
+            },
+            onCue: (cue) => {
+                forward('live-subtitle-cue', { videoPath, ...cue });
+            }
+        }).then(result => {
+            console.log('[live-subs] vw better-subtitles finished:', result);
+            forward('live-subtitle-status', {
+                final: true,
+                status: 'SUCCESS',
+                videoPath,
+                cues: result.cuesCount,
+                path: result.path,
+                srtPath: result.srtPath
+            });
+        }).catch(err => {
+            console.error('[live-subs] vw better-subtitles error:', err);
+            forward('live-subtitle-status', {
+                final: true,
+                status: 'FAILED',
+                videoPath,
+                error: err.message
+            });
         });
-        return { success: ok, ready: daemonReady };
+
+        return { success: true, ready: true };
     });
 
     ipcMain.handle('stop-live-subtitles', async () => {
-        const ok = sendCmd({ cmd: 'stop' });
-        armIdleShutdown();
-        return { success: ok };
+        try { aiSubtitles.cleanupAllAiSubtitles(); } catch (_) {}
+        return { success: true };
     });
 }
 
-// Cleanly shut the daemon down on app quit.
+// Cleanly shut down subtitle processes and purge temp files on app quit
 function shutdownLiveSubtitles() {
     cancelIdleShutdown();
+    try { aiSubtitles.cleanupAllAiSubtitles(); } catch (_) {}
     if (daemon) {
         try { daemon.stdin.write(JSON.stringify({ cmd: 'quit' }) + '\n'); } catch (e) { /* noop */ }
         try { daemon.kill(); } catch (e) { /* noop */ }

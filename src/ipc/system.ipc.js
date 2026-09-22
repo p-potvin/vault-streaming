@@ -44,7 +44,7 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
                 const hasVideo = selected.some(s => s.type === 'video');
                 const hasEncrypted = selected.some(s => s.path && s.path.toLowerCase().endsWith('.enc'));
                 const hasNonEncrypted = selected.some(s => s.path && !s.path.toLowerCase().endsWith('.enc'));
-                const hasEnhanced = selected.some(s => s.enhancedPath || (s.enhancements && (s.enhancements.audio || s.enhancements.video || s.enhancements.subtitles || s.enhancements.translation)));
+                const hasEnhanced = selected.some(s => s.enhancedPath || (s.enhancements && (s.enhancements.audio || s.enhancements.video || (s.enhancements.subtitles && s.enhancements.subtitles.length > 0) || (s.enhancements.translation && s.enhancements.translation.length > 0))));
 
                 const aiSubmenu = [];
                 if (hasVideo) {
@@ -57,7 +57,17 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
                     if (hasEnhanced) {
                         aiSubmenu.push(
                             { type: 'separator' },
-                            { label: '    Revert Enhancements', click: () => once('revert-enhancements') }
+                            {
+                                label: 'Revert Enhancements',
+                                submenu: [
+                                    { label: 'Revert Audio Enhancements', click: () => once('revert-enhancement:audio') },
+                                    { label: 'Revert Video Enhancements', click: () => once('revert-enhancement:video') },
+                                    { label: 'Revert Subtitles', click: () => once('revert-enhancement:subtitles') },
+                                    { label: 'Revert Translations', click: () => once('revert-enhancement:translation') },
+                                    { type: 'separator' },
+                                    { label: 'Revert Everything', click: () => once('revert-enhancements') },
+                                ]
+                            }
                         );
                     }
                 }
@@ -94,24 +104,39 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
                 );
             } else if (item.type === 'video' || item.type === 'image' || item.type === 'other' || item.type === 'encrypted') {
                 const isEnc = typeof item.path === 'string' && item.path.toLowerCase().endsWith('.enc');
-                const hasEnhanced = item.enhancedPath;
                 const hasAudioEnh = item.enhancements && item.enhancements.audio;
                 const hasVideoEnh = item.enhancements && item.enhancements.video;
                 const hasSubs = item.enhancements && item.enhancements.subtitles && item.enhancements.subtitles.length > 0;
                 const hasTrans = item.enhancements && item.enhancements.translation && item.enhancements.translation.length > 0;
+                const hasAnyEnhancement = item.enhancedPath || hasAudioEnh || hasVideoEnh || hasSubs || hasTrans;
 
                 const aiSubmenu = [];
                 if (item.type === 'video' || (item.type === 'encrypted' && !isEnc)) {
+                    const subLabel = hasSubs ? `Generate Subtitles (${item.enhancements.subtitles.join(', ').toUpperCase()})` : 'Generate Subtitles';
+                    const transLabel = hasTrans ? `Translate this video (${item.enhancements.translation.join(', ').toUpperCase()})` : 'Translate this video';
+
                     aiSubmenu.push(
                         { label: 'Enhance Audio 🪄', type: 'checkbox', checked: !!hasAudioEnh, click: () => once('normalize-audio') },
-                        { label: 'Generate Subtitles', type: 'checkbox', checked: !!hasSubs, click: () => once('generate-subtitles-prompt') },
-                        { label: 'Translate this video', type: 'checkbox', checked: !!hasTrans, click: () => once('translate-video-prompt') },
+                        { label: subLabel, type: 'checkbox', checked: !!hasSubs, click: () => once('generate-subtitles-prompt') },
+                        { label: transLabel, type: 'checkbox', checked: !!hasTrans, click: () => once('translate-video-prompt') },
                         { label: 'Enhance Video 🪄', type: 'checkbox', checked: !!hasVideoEnh, click: () => once('enhance-video-prompt') }
                     );
-                    if (hasEnhanced) {
+
+                    if (hasAnyEnhancement) {
+                        const revertItems = [];
+                        if (hasAudioEnh) revertItems.push({ label: 'Audio Enhancement', click: () => once('revert-enhancement:audio') });
+                        if (hasVideoEnh) revertItems.push({ label: 'Video Enhancement', click: () => once('revert-enhancement:video') });
+                        if (hasSubs) revertItems.push({ label: 'Subtitles', click: () => once('revert-enhancement:subtitles') });
+                        if (hasTrans) revertItems.push({ label: 'Translations', click: () => once('revert-enhancement:translation') });
+                        if (revertItems.length > 0) revertItems.push({ type: 'separator' });
+                        revertItems.push({ label: 'Everything', click: () => once('revert-enhancements') });
+
                         aiSubmenu.push(
                             { type: 'separator' },
-                            { label: '    Revert Enhancements', click: () => once('revert-enhancements') }
+                            {
+                                label: 'Revert Enhancements',
+                                submenu: revertItems
+                            }
                         );
                     }
                 }
@@ -174,12 +199,40 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
                 ];
             } else if (item.type === 'videoPlayer') {
                 const isLocal = !item.isStreaming;
+                const hasAudioEnh = item.enhancements && item.enhancements.audio;
+                const hasVideoEnh = item.enhancements && item.enhancements.video;
+                const hasSubs = item.enhancements && item.enhancements.subtitles && item.enhancements.subtitles.length > 0;
+                const hasTrans = item.enhancements && item.enhancements.translation && item.enhancements.translation.length > 0;
+                const hasAnyEnhancement = item.enhancedPath || hasAudioEnh || hasVideoEnh || hasSubs || hasTrans;
+
+                const subLabel = hasSubs ? `Generate Subtitles (${item.enhancements.subtitles.join(', ').toUpperCase()})` : 'Generate Subtitles';
+                const transLabel = hasTrans ? `Translate this video (${item.enhancements.translation.join(', ').toUpperCase()})` : 'Translate this video';
+
                 const aiSubmenu = isLocal ? [
-                    { label: 'Enhance Audio 🪄', click: () => once('normalize-audio') },
-                    { label: 'Generate Subtitles', click: () => once('generate-subtitles-prompt') },
-                    { label: 'Translate this video', click: () => once('translate-video-prompt') },
-                    { label: 'Enhance Video 🪄', click: () => once('enhance-video-prompt') }
+                    { label: 'Enhance Audio 🪄', type: 'checkbox', checked: !!hasAudioEnh, click: () => once('normalize-audio') },
+                    { label: subLabel, type: 'checkbox', checked: !!hasSubs, click: () => once('generate-subtitles-prompt') },
+                    { label: transLabel, type: 'checkbox', checked: !!hasTrans, click: () => once('translate-video-prompt') },
+                    { label: 'Enhance Video 🪄', type: 'checkbox', checked: !!hasVideoEnh, click: () => once('enhance-video-prompt') }
                 ] : [];
+
+                if (isLocal && hasAnyEnhancement) {
+                    const revertItems = [];
+                    if (hasAudioEnh) revertItems.push({ label: 'Audio Enhancement', click: () => once('revert-enhancement:audio') });
+                    if (hasVideoEnh) revertItems.push({ label: 'Video Enhancement', click: () => once('revert-enhancement:video') });
+                    if (hasSubs) revertItems.push({ label: 'Subtitles', click: () => once('revert-enhancement:subtitles') });
+                    if (hasTrans) revertItems.push({ label: 'Translations', click: () => once('revert-enhancement:translation') });
+                    if (revertItems.length > 0) revertItems.push({ type: 'separator' });
+                    revertItems.push({ label: 'Everything', click: () => once('revert-enhancements') });
+
+                    aiSubmenu.push(
+                        { type: 'separator' },
+                        {
+                            label: 'Revert Enhancements',
+                            submenu: revertItems
+                        }
+                    );
+                }
+
                 templ = [
                     { label: item.isPlaying ? 'Pause' : 'Play', click: () => once('play-pause') },
                     { label: item.isMuted ? 'Unmute' : 'Mute', click: () => once('mute') },

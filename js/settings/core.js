@@ -34,6 +34,15 @@ function initSettingsListeners() {
         const backdrop = el('settings-backdrop');
         if (backdrop) backdrop.style.display = isOpening ? 'block' : 'none';
         if (isOpening) {
+            // Adapt settings UI for iOS web container vs desktop
+            const isIOS = /iPhone|iPad|iPod|VaultStreaming-iOS/i.test(navigator.userAgent) || (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vaultStreamingBridge) || window.location.search.includes('platform=ios');
+            if (isIOS) {
+                document.querySelectorAll('.settings-vsr-group').forEach(node => { node.style.display = 'none'; });
+                const trayRow = document.getElementById('settings-minimize-to-tray')?.closest('.settings-toggle-row');
+                if (trayRow) trayRow.style.display = 'none';
+                document.querySelectorAll('.settings-folder-input').forEach(node => { node.closest('div')?.style?.setProperty('display', 'none'); });
+            }
+
             pillTagLoad(window.appSettings.globExclusions || []);
             if (el('settings-default-folder')) el('settings-default-folder').value = window.appSettings.defaultFolder || '';
             el('settings-default-lang').value = window.appSettings.lang || window.appSettings.defaultLang || 'en';
@@ -47,6 +56,8 @@ function initSettingsListeners() {
             if (el('settings-auto-cache-trailers')) el('settings-auto-cache-trailers').checked = window.appSettings.autoCacheTrailers === true;
             el('settings-minimize-to-tray').checked = window.appSettings.minimizeToTray === true;
             if (el('settings-dev-mode')) el('settings-dev-mode').checked = window.appSettings.devMode === true;
+            if (el('settings-ai-separate')) el('settings-ai-separate').checked = window.appSettings.aiSeparate !== false;
+            if (el('settings-save-ai-subtitles')) el('settings-save-ai-subtitles').checked = window.appSettings.saveAiSubtitles === true;
             if (el('settings-subs-include-es')) el('settings-subs-include-es').checked = window.appSettings.subsIncludeSpanish === true;
             if (el('settings-opensubtitles-key')) {
                 el('settings-opensubtitles-key').value = window.appSettings.openSubtitlesKey || '';
@@ -160,6 +171,7 @@ function initSettingsListeners() {
         if (el('settings-mute-trailers')) window.appSettings.muteTrailers = el('settings-mute-trailers').checked;
         window.appSettings.minimizeToTray = el('settings-minimize-to-tray').checked;
         if (el('settings-dev-mode')) window.appSettings.devMode = el('settings-dev-mode').checked;
+        if (el('settings-ai-separate')) window.appSettings.aiSeparate = el('settings-ai-separate').checked;
         if (el('settings-subs-include-es')) window.appSettings.subsIncludeSpanish = el('settings-subs-include-es').checked;
         if (el('settings-opensubtitles-key')) {
             window.appSettings.openSubtitlesKey = el('settings-opensubtitles-key').value.trim();
@@ -194,6 +206,7 @@ function initSettingsListeners() {
         if (el('debrid-proxy-enable')) window.appSettings.debridProxyEnable = el('debrid-proxy-enable').checked;
         if (el('debrid-proxy-address-input')) window.appSettings.debridProxyAddress = el('debrid-proxy-address-input').value.trim();
         if (el('settings-auto-cache-trailers')) window.appSettings.autoCacheTrailers = el('settings-auto-cache-trailers').checked;
+        if (el('settings-save-ai-subtitles')) window.appSettings.saveAiSubtitles = el('settings-save-ai-subtitles').checked;
         await window.electronAPI.saveSettings(window.appSettings);
         showToast(window.currentLang === 'fr' ? 'Paramètres enregistrés' : 'Settings saved', 'success');
         el('settings-panel').style.display = 'none';

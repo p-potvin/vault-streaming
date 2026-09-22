@@ -12,7 +12,9 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const child_process = require('child_process');
 const express = require('express');
+const utils = require('../src/utils');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -89,6 +91,7 @@ const { registerClipIpc } = require('../src/ipc/clip.ipc');
 const { registerTrailerCacheIpc } = require('../src/ipc/trailer-cache.ipc');
 const { registerAudioTracksIpc } = require('../src/ipc/audio-tracks.ipc');
 const { registerDebridStatsIpc } = require('../src/telemetry/debrid-stats');
+const { registerNormalizationHandlers } = require('../src/normalization');
 const tmdbHandlers = require('../src/tmdb');
 const realDebridHandlers = require('../src/realdebrid');
 const watchHistoryHandlers = require('../src/watch-history');
@@ -103,6 +106,7 @@ registerClipIpc(ipcMain);
 registerTrailerCacheIpc(ipcMain);
 registerAudioTracksIpc(ipcMain);
 registerDebridStatsIpc(ipcMain);
+registerNormalizationHandlers(ipcMain);
 tmdbHandlers.registerTmdbHandlers(ipcMain);
 realDebridHandlers.registerRealDebridHandlers(ipcMain);
 watchHistoryHandlers.registerWatchHistoryHandlers(ipcMain, electronShim.app);
@@ -231,7 +235,13 @@ app.get('/api/events', (req, res) => {
 function allowedRoots() {
     const roots = (loadSettings().folders || []).map(f => f && f.path).filter(Boolean);
     const extra = (process.env.VW_WEB_MEDIA_ROOTS || '').split(/[;,]/).map(s => s.trim()).filter(Boolean);
-    return [...roots, ...extra].map(r => path.resolve(r));
+    const subRoots = [
+        path.join(USER_DATA, 'subtitles'),
+        path.join(os.homedir(), 'Videos', 'Subtitles'),
+        path.join(os.tmpdir(), 'vault-streaming'),
+        os.tmpdir()
+    ];
+    return [...roots, ...extra, ...subRoots].map(r => path.resolve(r));
 }
 
 function isInsideAllowedRoot(target) {
@@ -250,6 +260,48 @@ const MIME = {
     '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml',
     '.vtt': 'text/vtt', '.srt': 'application/x-subrip', '.ass': 'text/plain',
 };
+
+// ── Direct-Stream Transmuxer for iOS / Apple Devices ──────────────────────────
+// Repackages MKV streams with DTS/TrueHD audio into fragmented MP4 over HTTP
+// with -c:v copy (zero video re-encoding, near-zero CPU load).
+app.get('/api/stream/remux', (req, res) => {
+    const streamUrl = req.query.url;
+    if (!streamUrl) return res.status(400).send('Missing url parameter');
+
+    const startTime = parseFloat(req.query.startTime || 0);
+    const ffmpegPath = utils.getFFmpegPath ? utils.getFFmpegPath() : 'ffmpeg';
+
+    const args = [];
+    if (startTime > 0) {
+        args.push('-ss', String(startTime));
+    }
+    args.push(
+        '-i', streamUrl,
+        '-map', '0:v:0',
+        '-map', '0:a:0?',
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '256k',
+        '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+        '-f', 'mp4',
+        'pipe:1'
+    );
+
+    res.writeHead(200, {
+        'Content-Type': 'video/mp4',
+        'Transfer-Encoding': 'chunked',
+        'Accept-Ranges': 'none',
+        'Cache-Control': 'no-cache'
+    });
+
+    const proc = child_process.spawn(ffmpegPath, args, { windowsHide: true });
+    proc.stdout.pipe(res);
+    proc.stderr.on('data', () => {});
+
+    req.on('close', () => {
+        try { proc.kill('SIGKILL'); } catch (_) { try { proc.kill(); } catch (__) {} }
+    });
+});
 
 app.get('/api/media', (req, res) => {
     const target = req.query.path;
@@ -272,6 +324,7 @@ app.get('/api/media', (req, res) => {
 
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Content-Type', type);
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
     if (req.method === 'HEAD') {
         res.setHeader('Content-Length', stat.size);
@@ -342,12 +395,29 @@ function firstLanAddress() {
     return 'localhost';
 }
 
+function cleanupVwTempFiles() {
+    try {
+        const tmp = os.tmpdir();
+        const entries = fs.readdirSync(tmp);
+        for (const entry of entries) {
+            if (entry.startsWith('vw-') || entry.startsWith('vault-streaming')) {
+                const full = path.join(tmp, entry);
+                try {
+                    fs.rmSync(full, { recursive: true, force: true });
+                } catch (_) {}
+            }
+        }
+    } catch (_) {}
+}
+
 function shutdown() {
     console.log('\n[web] Shutting down…');
     try { liveSubtitlesHandlers.shutdownLiveSubtitles(); } catch (_) { }
     try { watchHistoryHandlers.flushNow(); } catch (_) { }
+    try { cleanupVwTempFiles(); } catch (_) { }
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+process.on('exit', () => { try { cleanupVwTempFiles(); } catch (_) {} });

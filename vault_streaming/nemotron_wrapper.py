@@ -35,6 +35,20 @@ try:
 except Exception:
     pass
 
+try:
+    from vaultwares_adk.telemetry import ModelRun, record_run
+except ImportError:
+    try:
+        import sys
+        from pathlib import Path
+        _adk_dir = str(Path(__file__).resolve().parents[1] / "vaultwares-adk")
+        if _adk_dir not in sys.path:
+            sys.path.insert(0, _adk_dir)
+        from vaultwares_adk.telemetry import ModelRun, record_run
+    except Exception:
+        ModelRun = None
+        record_run = None
+
 import shutil
 
 # NeMo leaves temp manifest locks on Windows; ignore PermissionError on cleanup.
@@ -281,6 +295,26 @@ class NemotronStreamingASR:
 
     def reset(self):
         """Drop cache + hypotheses and begin a fresh utterance."""
+        if getattr(self, "_text", "") and getattr(self, "_step", 0) > 0 and record_run:
+            try:
+                total_audio_s = self._step * self.chunk_s
+                record_run(
+                    provider="nvidia-nim" if "nim" in str(self.DEFAULT_MODEL).lower() else "local",
+                    runtime="nim" if "nim" in str(self.DEFAULT_MODEL).lower() else "nemo",
+                    model=self.DEFAULT_MODEL,
+                    task="audio-asr",
+                    project="vault-streaming",
+                    service="nemotron-streaming-asr",
+                    duration_ms=round(total_audio_s * 1000, 2),
+                    audio_seconds=round(total_audio_s, 2),
+                    completion_chars=len(self._text),
+                    status="ok",
+                    is_free=True,
+                    cost_usd=0.0,
+                )
+            except Exception:
+                pass
+
         (self.cache_last_channel,
          self.cache_last_time,
          self.cache_last_channel_len) = self.model.encoder.get_initial_cache_state(batch_size=1)
@@ -353,3 +387,30 @@ class NemotronStreamingASR:
         if hasattr(item, "text"):
             item = item.text
         return (item or "").strip() if isinstance(item, str) else ""
+
+
+def call_nemotron_chat(prompt: str, model: str = "nemotron-70b", client=None, **kwargs):
+    """Invoke Nemotron chat generation wrapped in ModelRun telemetry."""
+    if ModelRun:
+        with ModelRun(provider="nvidia-nim", runtime="nim", model=model, task="chat", project="vault-streaming") as run:
+            if client:
+                res = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    **kwargs
+                )
+                if hasattr(res, "usage") and res.usage:
+                    run.usage(
+                        prompt=getattr(res.usage, "prompt_tokens", 0),
+                        completion=getattr(res.usage, "completion_tokens", 0)
+                    )
+                return res
+            return {"role": "assistant", "content": f"Nemotron response to: {prompt}"}
+    elif client:
+        return client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            **kwargs
+        )
+    return {"role": "assistant", "content": f"Nemotron response to: {prompt}"}
+

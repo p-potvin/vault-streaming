@@ -30,7 +30,7 @@ function getPreferredLang() {
 }
 
 // Quality hierarchy: higher index = better quality
-const QUALITY_RANK = { '2160p': 4, '4k': 4, '1080p': 3, '720p': 2, '480p': 1, 'sd': 0 };
+const QUALITY_RANK = { 'source': 5, 'remux': 5, '2160p': 4, '4k': 4, '1080p': 3, '720p': 2, '480p': 1, 'sd': 0 };
 
 // Bad release types — strict word boundaries so "DTS" audio is NOT matched as "ts" telesync,
 // and "camera/campaign/webcam" don't trigger the "cam" rule.
@@ -68,6 +68,7 @@ function _parseSize(sizeStr) {
 }
 
 function _detectQualityRank(text) {
+    if (/\bremux\b/.test(text)) return 5;
     if (/\b(2160p?|4k|uhd)\b/.test(text)) return 4;
     if (/\b1080p?\b/.test(text)) return 3;
     if (/\b720p?\b/.test(text)) return 2;
@@ -115,10 +116,12 @@ function scoreTorrent(torrent, preferredLang) {
     }
 
     // ── Reject bad release types (HEAVY penalty) ────────────────────────────
-    if (BAD_RELEASE_RE.test(text)) score -= 10000;
+    // Uses -100000 (matching vault-tv) so the +10000 cache bonus can never offset
+    // a CAM/telesync release and allow it to outrank a clean stream.
+    if (BAD_RELEASE_RE.test(text)) score -= 100000;
 
     // ── Reject 3D / half-SBS "duplicated screen" prints ─────────────────────
-    if (THREE_D_RE.test(text)) score -= 5000;
+    if (THREE_D_RE.test(text)) score -= 50000;
 
     // ── Reject promo material (teaser/trailer/sample/featurette) ────────────
     if (PROMO_RE.test(text)) score -= 20000;
@@ -216,3 +219,19 @@ function rankTorrents(torrents) {
     const lang = getPreferredLang();
     return [...torrents].sort((a, b) => scoreTorrent(b, lang) - scoreTorrent(a, lang));
 }
+
+/**
+ * True for a release that must never be selected automatically: cam/telesync
+ * captures, 3D side-by-side prints, and promo material.
+ * Ported from vault-tv's ranking.ts.
+ */
+function isRejectedForAutoPlay(torrent) {
+    if (!torrent) return false;
+    const text = `${torrent.quality || ''} ${torrent.desc || ''} ${torrent.type || ''} ${torrent.name || ''} ${torrent.title || ''}`.toLowerCase();
+    return BAD_RELEASE_RE.test(text) || THREE_D_RE.test(text) || PROMO_RE.test(text);
+}
+
+window.isRejectedForAutoPlay = isRejectedForAutoPlay;
+window.scoreTorrent = scoreTorrent;
+window.rankTorrents = rankTorrents;
+

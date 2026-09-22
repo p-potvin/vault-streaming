@@ -729,3 +729,40 @@ body.tab-streaming-active #tmdb-container {
   height: 24px;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
 }
+
+/* ===== Mobile-First Responsive Layout & Touch Targets ===== */
+@media (max-width: 650px) {
+  .main-area {
+    padding: 12px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  }
+
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 20px 12px;
+  }
+
+  .file-card {
+    border-radius: 16px;
+    padding: 10px;
+  }
+
+  /* Modals on mobile: bottom sheets */
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal-content, .settings-modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 90vh;
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+  }
+
+  /* Touch targets minimum size */
+  button, .clickable-pill, .control-btn {
+    min-height: 40px;
+  }
+}

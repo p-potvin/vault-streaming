@@ -1,0 +1,409 @@
+/* css/mobile.css — Native iOS Mobile Experience, Layout Overhaul & Touch Actions.
+ * Eliminates horizontal overflow, provides full-width mobile search bar,
+ * 2-column card grid, iOS bottom tab navigation, and quick action sheet.
+ */
+
+@media (max-width: 768px), (pointer: coarse) {
+  html, body {
+    overflow-x: hidden !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    position: relative !important;
+    -webkit-text-size-adjust: 100%;
+    touch-action: pan-y;
+  }
+
+  #app-container, .main-layout, .content-area, .tmdb-container {
+    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Titlebar: eliminate 140px desktop padding and integrate safe area */
+  .titlebar {
+    padding-right: 14px !important;
+    padding-left: 14px !important;
+    padding-top: max(env(safe-area-inset-top, 0px), 8px) !important;
+    height: auto !important;
+    min-height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    background: rgba(14, 11, 22, 0.96) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+  }
+
+  .window-controls {
+    display: none !important;
+  }
+
+  /* Mobile Toolbar: Stack into Search + Filter Strip */
+  .streaming-toolbar {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+    width: 100% !important;
+    min-height: unset !important;
+    box-sizing: border-box !important;
+    background: rgba(18, 14, 28, 0.95) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .streaming-toolbar-right {
+    width: 100% !important;
+    margin-left: 0 !important;
+    display: flex !important;
+    gap: 8px !important;
+    align-items: center !important;
+  }
+
+  .tmdb-search-wrapper {
+    flex: 1 1 auto !important;
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+
+  .tmdb-search-input {
+    width: 100% !important;
+    height: 38px !important;
+    font-size: 14px !important;
+    padding: 0 32px 0 36px !important;
+    border-radius: 10px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #fff !important;
+    box-sizing: border-box !important;
+    -webkit-appearance: none !important;
+  }
+  .tmdb-search-input:focus {
+    border-color: var(--vault-accent) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    outline: none !important;
+  }
+
+  .mobile-search-icon {
+    position: absolute !important;
+    left: 10px !important;
+    width: 16px !important;
+    height: 16px !important;
+    color: var(--vault-slate) !important;
+    pointer-events: none !important;
+  }
+
+  .mobile-search-clear {
+    position: absolute !important;
+    right: 8px !important;
+    width: 20px !important;
+    height: 20px !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 50% !important;
+    border: none !important;
+    color: #fff !important;
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+  }
+
+  .tmdb-search-btn {
+    height: 38px !important;
+    padding: 0 12px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .tmdb-advanced-toggle {
+    height: 38px !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+    border-radius: 10px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Horizontally scrollable filter pills strip */
+  .mobile-filter-strip {
+    display: flex !important;
+    gap: 8px !important;
+    align-items: center !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    width: 100% !important;
+    padding: 2px 0 4px 0 !important;
+    box-sizing: border-box !important;
+  }
+  .mobile-filter-strip::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .media-type-switch {
+    display: inline-flex !important;
+    flex-shrink: 0 !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    padding: 2px !important;
+  }
+  .media-type-btn {
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+    border-radius: 6px !important;
+  }
+
+  .streaming-providers {
+    display: inline-flex !important;
+    flex-shrink: 0 !important;
+    gap: 6px !important;
+    padding: 0 !important;
+  }
+  .provider-btn {
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+    border-radius: 8px !important;
+  }
+
+  /* 2-Column Responsive Poster Grid */
+  .tmdb-grid, #library-grid, #history-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    padding: 12px 14px calc(76px + env(safe-area-inset-bottom, 0px)) 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .tmdb-grid .file-card, #library-grid .file-card, #history-grid .file-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    touch-action: manipulation !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  }
+
+  .tmdb-grid .file-card:active, .card-touch-active {
+    transform: scale(0.96) !important;
+    box-shadow: 0 0 16px rgba(176, 124, 255, 0.4) !important;
+  }
+
+  .tmdb-movie-card .thumbnail-container {
+    height: 220px !important;
+    border-radius: 10px 10px 0 0 !important;
+  }
+
+  /* Hide desktop sub-nav bar on mobile */
+  #sub-nav-streaming {
+    display: none !important;
+  }
+
+  /* iOS Bottom Sheet for Media Details */
+  #streaming-details-modal {
+    align-items: flex-end !important;
+    padding: 0 !important;
+    background: rgba(0, 0, 0, 0.75) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  #streaming-details-modal .modal-content,
+  #streaming-details-modal .streaming-details-card {
+    width: 100% !important;
+    max-width: 100vw !important;
+    border-radius: 22px 22px 0 0 !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+    margin: 0 !important;
+    padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px)) 16px !important;
+    box-sizing: border-box !important;
+    animation: slideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  @keyframes slideUpSheet {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .sheet-drag-handle {
+    display: block !important;
+    width: 36px !important;
+    height: 5px !important;
+    background: rgba(255, 255, 255, 0.3) !important;
+    border-radius: 3px !important;
+    margin: 0 auto 14px auto !important;
+  }
+
+  /* Video player controls touch adjustments */
+  .player-controls-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px) !important;
+  }
+}
+
+/* iOS Bottom Navigation Tab Bar */
+#mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(18, 14, 28, 0.94);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10005;
+  align-items: center;
+  justify-content: space-around;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 768px), (pointer: coarse) {
+  #mobile-bottom-nav {
+    display: flex !important;
+  }
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+  color: var(--vault-slate);
+  font-size: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  gap: 3px;
+  transition: color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-item.active {
+  color: var(--vault-gold);
+}
+
+.mobile-nav-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* iOS Quick Action Sheet */
+.ios-quick-action-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10020;
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn 0.2s ease;
+}
+
+.ios-quick-action-sheet {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px)) 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ios-quick-action-group {
+  background: rgba(28, 22, 40, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ios-quick-action-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ios-quick-action-header img {
+  width: 42px;
+  height: 60px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.ios-quick-action-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-quick-action-meta {
+  font-size: 11px;
+  color: var(--vault-slate);
+  margin-top: 2px;
+}
+
+.ios-quick-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.ios-quick-action-btn:last-child {
+  border-bottom: none;
+}
+.ios-quick-action-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+.ios-quick-action-btn.primary {
+  color: var(--vault-gold);
+  font-weight: 700;
+}
+.ios-quick-action-cancel {
+  background: rgba(28, 22, 40, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 14px;
+  color: #ff5555;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}

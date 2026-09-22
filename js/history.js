@@ -41,45 +41,18 @@ window.renderWatchHistoryTab = async function() {
             // Click to resume play or show details
             card.addEventListener('click', async () => {
                 try {
-                    // Check if it has a streaming URL to resume
-                    if (item.streamUrl && !item.completed && item.positionSec > 0) {
-                        window.activeStreamingMedia = {
-                            mediaType: item.mediaType,
-                            tmdbId: item.tmdbId,
-                            title: item.title,
-                            season: item.season,
-                            episode: item.episode,
-                            poster: item.poster,
-                            year: item.year,
-                            streamUrl: item.streamUrl,
-                            streamTitle: item.streamTitle || item.title,
-                            quality: item.quality,
-                            selectedSubtitleTrackIdx: item.selectedSubtitleTrackIdx,
-                            selectedSubtitleLabel: item.selectedSubtitleLabel,
-                            selectedSubtitleLang: item.selectedSubtitleLang
-                        };
-                        window.playStream(item.streamUrl, item.streamTitle || item.title);
-                        window.showToast(t.resumingStream || 'Resuming stream...', 'success');
-
-                        // The cached debrid URL can expire. If it fails to load,
-                        // fall back to a fresh Comet search for the same title.
-                        const _vp = document.getElementById('video-player');
-                        if (_vp) {
-                            const _clear = () => {
-                                _vp.removeEventListener('error', _onErr);
-                                _vp.removeEventListener('loadeddata', _clear);
-                            };
-                            const _onErr = () => {
-                                _clear();
-                                window.showToast(tr('toastCachedExpired', 'Cached stream expired — finding a fresh source…'), 'warning');
-                                if (typeof window.triggerRDStream === 'function') {
-                                    window.triggerRDStream(item.title, item.tmdbId, item.mediaType || 'movie',
-                                        item.season || null, item.episode || null,
-                                        { poster: item.poster, year: item.year });
-                                }
-                            };
-                            _vp.addEventListener('error', _onErr, { once: true });
-                            _vp.addEventListener('loadeddata', _clear, { once: true });
+                    // Check if it has watch progress to resume
+                    if (!item.completed && item.positionSec > 0) {
+                        window.showToast(t.resumingStream || 'Resuming stream...', 'info');
+                        if (typeof window.triggerRDStream === 'function') {
+                            window.triggerRDStream(
+                                item.title,
+                                item.tmdbId,
+                                item.mediaType || 'movie',
+                                item.season || null,
+                                item.episode || null,
+                                { poster: item.poster, year: item.year }
+                            );
                         }
                     } else {
                         // Fallback to media details

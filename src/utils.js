@@ -291,56 +291,179 @@ class PriorityQueue {
     }
 }
 
+function resolveUnpackedPath(...segments) {
+    const fs = require('fs');
+    const path = require('path');
+    let baseDir = __dirname;
+    const isAsar = baseDir.includes('app.asar');
+    if (isAsar) {
+        if (process.resourcesPath) {
+            const candidate = path.join(process.resourcesPath, 'app.asar.unpacked', ...segments);
+            if (fs.existsSync(candidate)) return candidate;
+        }
+        const candidate = path.join(baseDir, '..', ...segments).replace('app.asar', 'app.asar.unpacked');
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    const devPath = path.join(baseDir, '..', ...segments);
+    if (fs.existsSync(devPath)) return devPath;
+    return devPath;
+}
+
+function resolveScriptPath(scriptName) {
+    const fs = require('fs');
+    const path = require('path');
+    if (typeof scriptName === 'string' && path.isAbsolute(scriptName) && fs.existsSync(scriptName)) {
+        return scriptName;
+    }
+    return resolveUnpackedPath('python-scripts', scriptName);
+}
+
+function resolveToolsDir(...segments) {
+    return resolveUnpackedPath('tools', ...segments);
+}
+
+function resolveToolPath(...segments) {
+    const fs = require('fs');
+    const path = require('path');
+    const primary = resolveToolsDir(...segments);
+    if (fs.existsSync(primary)) return primary;
+
+    // Check process.resourcesPath
+    if (process.resourcesPath) {
+        const prod = path.join(process.resourcesPath, 'app.asar.unpacked', 'tools', ...segments);
+        if (fs.existsSync(prod)) return prod;
+        const resPath = path.join(process.resourcesPath, 'tools', ...segments);
+        if (fs.existsSync(resPath)) return resPath;
+    }
+
+    // Check dev fallback
+    const dev = path.join(__dirname, '..', 'tools', ...segments);
+    if (fs.existsSync(dev)) return dev;
+
+    return primary;
+}
+
 function getRobustPythonExe() {
     const fs = require('fs');
     const path = require('path');
+    const os = require('os');
 
-    let pythonExe = 'python';
-    const searchBases = [];
-
-    let baseDir = __dirname;
-
-    // 1. THIS project's own venv wins. It is the one built for the app (Python
-    //    3.12 + CUDA torch/torchvision + NeMo). Previously the external
-    //    vault-explorer repo was searched first, which meant the app could keep
-    //    using a stale interpreter even after a local venv was created.
-    searchBases.push(path.join(baseDir, '..', '.venv'));
-    searchBases.push(path.join(baseDir, '..', 'venv'));
-
-    // 2. Legacy vault-explorer venv — kept only as a fallback for machines that
-    //    still rely on it (this project's Python package was renamed out of it).
-    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\.venv');
-    searchBases.push(path.join(baseDir, '..', '..', 'vault-explorer', '.venv'));
-    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\venv');
-    searchBases.push(path.join(baseDir, '..', '..', '.venv'));
-
-    if (baseDir.includes('app.asar')) {
-        const cleanBase = baseDir.substring(0, baseDir.indexOf('app.asar'));
-        searchBases.push(path.join(cleanBase, '..', 'vault-explorer', '.venv'));
-        searchBases.push(path.join(cleanBase, '.venv'));
-        searchBases.push(path.join(cleanBase, 'venv'));
-        searchBases.push(path.join(cleanBase, '..', '.venv'));
-        searchBases.push(path.join(cleanBase, '..', 'venv'));
-        searchBases.push(path.join(cleanBase, '..', '..', '.venv'));
-        searchBases.push(path.join(cleanBase, '..', '..', 'venv'));
+    if (process.env.VW_PYTHON_EXE && fs.existsSync(process.env.VW_PYTHON_EXE)) {
+        return process.env.VW_PYTHON_EXE;
+    }
+    if (process.env.PYTHON_PATH && fs.existsSync(process.env.PYTHON_PATH)) {
+        return process.env.PYTHON_PATH;
     }
 
-    // 4. Search and return the first match
+    const searchBases = [];
+
+    // 1. THIS project's own venv wins (Python 3.12 + CUDA torch/torchvision + NeMo).
+    searchBases.push(path.join(__dirname, '..', '.venv'));
+    searchBases.push(path.join(__dirname, '..', 'venv'));
+    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-streaming\\.venv');
+
+    // 2. Relative to process.resourcesPath or execPath in packaged apps
+    if (process.resourcesPath) {
+        searchBases.push(path.join(process.resourcesPath, 'app.asar.unpacked', '.venv'));
+        searchBases.push(path.join(process.resourcesPath, '.venv'));
+        searchBases.push(path.join(process.resourcesPath, '..', '.venv'));
+        searchBases.push(path.join(process.resourcesPath, '..', '..', 'vault-streaming', '.venv'));
+        searchBases.push(path.join(process.resourcesPath, '..', '..', 'vault-explorer', '.venv'));
+    }
+    if (process.execPath) {
+        const execDir = path.dirname(process.execPath);
+        searchBases.push(path.join(execDir, '.venv'));
+        searchBases.push(path.join(execDir, 'resources', '.venv'));
+        searchBases.push(path.join(execDir, '..', '.venv'));
+    }
+
+    // 3. Sibling structure & clean base
+    let baseDir = __dirname;
+    if (baseDir.includes('app.asar')) {
+        const cleanBase = baseDir.substring(0, baseDir.indexOf('app.asar'));
+        searchBases.push(path.join(cleanBase, 'app.asar.unpacked', '.venv'));
+        searchBases.push(path.join(cleanBase, '.venv'));
+        searchBases.push(path.join(cleanBase, '..', 'vault-streaming', '.venv'));
+        searchBases.push(path.join(cleanBase, '..', 'vault-explorer', '.venv'));
+        searchBases.push(path.join(cleanBase, '..', '.venv'));
+    }
+
+    // 4. Fallback to vault-explorer or system installs
+    searchBases.push('C:\\Users\\Administrator\\Desktop\\Github Repos\\vault-explorer\\.venv');
+    searchBases.push(path.join(baseDir, '..', '..', 'vault-explorer', '.venv'));
+
+    const homeDir = os.homedir();
+    searchBases.push(path.join(homeDir, 'AppData', 'Local', 'Programs', 'Python', 'Python312'));
+    searchBases.push(path.join(homeDir, 'AppData', 'Local', 'Python', 'bin'));
+    searchBases.push('C:\\Python312');
+    searchBases.push('C:\\Program Files\\Python312');
+
     for (const vPath of searchBases) {
+        if (!vPath) continue;
         if (process.platform === 'win32') {
-            const winPath = path.join(vPath, 'Scripts', 'python.exe');
-            if (fs.existsSync(winPath)) {
-                return winPath;
-            }
+            const winVenv = path.join(vPath, 'Scripts', 'python.exe');
+            if (fs.existsSync(winVenv)) return winVenv;
+            const directWin = path.join(vPath, 'python.exe');
+            if (fs.existsSync(directWin)) return directWin;
         } else {
-            const unixPath = path.join(vPath, 'bin', 'python');
-            if (fs.existsSync(unixPath)) {
-                return unixPath;
-            }
+            const unixVenv = path.join(vPath, 'bin', 'python');
+            if (fs.existsSync(unixVenv)) return unixVenv;
+            const directUnix = path.join(vPath, 'python');
+            if (fs.existsSync(directUnix)) return directUnix;
         }
     }
 
-    return pythonExe;
+    return 'python';
+}
+
+function getPythonEnv(extraEnv = {}) {
+    const path = require('path');
+    const os = require('os');
+    const pythonScriptsDir = resolveUnpackedPath('python-scripts');
+    const appUnpackedDir = path.resolve(pythonScriptsDir, '..');
+    const toolsDir = resolveToolsDir();
+    const ffmpegPath = getFFmpegPath();
+    const ffmpegDir = path.dirname(ffmpegPath);
+
+    const env = { ...process.env, ...extraEnv };
+
+    // Build robust PYTHONPATH ensuring both python-scripts and root packages (like vault_streaming) are accessible
+    const pyPaths = [
+        pythonScriptsDir,
+        appUnpackedDir,
+        env.PYTHONPATH
+    ].filter(Boolean);
+    env.PYTHONPATH = pyPaths.join(path.delimiter);
+
+    // Build robust PATH including tools and ffmpeg
+    const paths = [
+        toolsDir,
+        ffmpegDir,
+        env.PATH
+    ].filter(Boolean);
+    env.PATH = paths.join(path.delimiter);
+
+    // Ensure UTF-8 & Protobuf compatibility
+    env.PYTHONUTF8 = '1';
+    env.PYTHONIOENCODING = 'utf-8';
+    env.PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = 'python';
+
+    // Model directories
+    let userData = null;
+    try {
+        const { app } = require('electron');
+        if (app && typeof app.getPath === 'function') {
+            userData = app.getPath('userData');
+        }
+    } catch (_) { }
+    if (!userData) {
+        userData = path.join(os.homedir(), 'AppData', 'Roaming', 'vault-streaming');
+    }
+
+    env.VAULT_MODEL_DIR = path.join(userData, 'models');
+    env.VW_MODEL_STORE = path.join(toolsDir, 'models');
+
+    return env;
 }
 
 function getFFmpegPath() {
@@ -366,6 +489,7 @@ function getFFmpegPath() {
         path.join(process.cwd(), 'bin', 'ffmpeg.exe'),
         path.join(__dirname, '..', 'ffmpeg.exe'),
         path.join(__dirname, '..', 'bin', 'ffmpeg.exe'),
+        resolveToolsDir('ffmpeg.exe')
     ];
 
     for (const p of searchPaths) {
@@ -410,7 +534,12 @@ module.exports = {
     checkAudioStream,
     formatBytes,
     PriorityQueue,
+    resolveUnpackedPath,
+    resolveScriptPath,
+    resolveToolsDir,
+    resolveToolPath,
     getRobustPythonExe,
+    getPythonEnv,
     getFFmpegPath,
     getSystemMemoryInfo,
     cleanupTemp,

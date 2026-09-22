@@ -50,6 +50,11 @@ const HOVER_OPEN_DELAY = 450;
 const HOVER_TRIGGER_ZONE = 1.0; // whole card — hovering anywhere on it arms the preview
 
 window.attachPremiumHoverCard = function(card, movie) {
+    const isTouch = window.matchMedia('(pointer: coarse)').matches || 
+                    /iPhone|iPad|iPod|Android|VaultStreaming-iOS/i.test(navigator.userAgent) ||
+                    window.innerWidth <= 768;
+    if (isTouch) return;
+
     const inTriggerZone = (e) => {
         const r = card.getBoundingClientRect();
         return (e.clientY - r.top) <= r.height * HOVER_TRIGGER_ZONE;
