@@ -1,177 +1,264 @@
 import SwiftUI
 
+/// Main application entry point for Vault Streaming on iOS.
+/// Implements a 100% native SwiftUI navigation hierarchy adhering to Apple HIG,
+/// featuring a native TabBar, Biometric Face ID Lock overlay, sheet-based Details
+/// (preventing double-popup collision), and full-screen AVPlayer video playback.
 public struct ContentView: View {
-    @State private var serverURL: URL = AppConfig.serverURL
-    @State private var isLoading: Bool = true
-    @State private var navigationError: String? = nil
-    @State private var canGoBack: Bool = false
-    @State private var canGoForward: Bool = false
-    
-    @State private var reloadToken: Int = 0
-    @State private var goBackToken: Int = 0
-    @State private var goForwardToken: Int = 0
-    
+    @State private var selectedTab: Int = 0
+    @State private var selectedMedia: MediaItem? = nil
     @State private var activeStream: StreamPlaybackItem? = nil
-    @State private var progressUpdate: ProgressUpdate? = nil
     
+    @State private var watchlistedItems: [MediaItem] = []
     @State private var isLocked: Bool = AppConfig.isBiometricLockEnabled
-    @State private var showSettings: Bool = false
-    @State private var customURLInput: String = AppConfig.serverURL.absoluteString
-    @State private var biometricToggle: Bool = AppConfig.isBiometricLockEnabled
+    
+    private let watchlistStorageKey = "vw_ios_watchlist_items"
     
     public init() {}
     
     public var body: some View {
         ZStack {
-            // Main Web Streaming Container
-            VStack(spacing: 0) {
-                // Top Progress Bar
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(LinearProgressViewStyle(tint: Color(red: 176/255.0, green: 124/255.0, blue: 255/255.0)))
-                        .frame(height: 2)
-                }
-                
-                // Offline / Tailscale Connection Banner
-                if let error = navigationError {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "network.slash")
-                                .foregroundColor(.orange)
-                            Text(error)
-                                .font(.footnote)
-                                .foregroundColor(.primary)
-                                .multilineTextAlignment(.leading)
-                            Spacer()
-                            Button("Retry") {
-                                navigationError = nil
-                                reloadToken += 1
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color(red: 176/255.0, green: 124/255.0, blue: 255/255.0))
-                            .controlSize(.small)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color(UIColor.secondarySystemBackground))
-                    }
-                    .transition(.move(edge: .top))
-                }
-                
-                // Embedded WebKit View
-                WebViewWrapper(
-                    url: serverURL,
-                    isLoading: $isLoading,
-                    navigationError: $navigationError,
-                    canGoBack: $canGoBack,
-                    canGoForward: $canGoForward,
-                    activeStream: $activeStream,
-                    progressUpdate: $progressUpdate,
-                    reloadToken: reloadToken,
-                    goBackToken: goBackToken,
-                    goForwardToken: goForwardToken
+            // Main Native App Tab Navigation
+            TabView(selection: $selectedTab) {
+                DiscoverView(
+                    onSelectMedia: { item in selectedMedia = item },
+                    onPlayMedia: { item in playTopStreamForMedia(item) },
+                    watchlistIds: Set(watchlistedItems.map { $0.id }),
+                    onToggleWatchlist: { item in toggleWatchlist(item) }
                 )
+                .tabItem {
+                    Label("Discover", systemImage: "film")
+                }
+                .tag(0)
                 
-                // Bottom Utility Toolbar
-                HStack(spacing: 24) {
-                    Button(action: { goBackToken += 1 }) {
-                        Image(systemName: "chevron.backward")
-                    }
-                    .disabled(!canGoBack)
-                    
-                    Button(action: { goForwardToken += 1 }) {
-                        Image(systemName: "chevron.forward")
-                    }
-                    .disabled(!canGoForward)
-                    
-                    Spacer()
-                    
-                    Button(action: { reloadToken += 1 }) {
-                        Image(systemName: isLoading ? "xmark" : "arrow.clockwise")
-                    }
-                    
-                    Button(action: { showSettings = true }) {
-                        Image(systemName: "gearshape")
-                    }
+                SearchView(
+                    onSelectMedia: { item in selectedMedia = item },
+                    onPlayMedia: { item in playTopStreamForMedia(item) },
+                    watchlistIds: Set(watchlistedItems.map { $0.id }),
+                    onToggleWatchlist: { item in toggleWatchlist(item) }
+                )
+                .tabItem {
+                    Label("Search", systemImage: "magnifyingglass")
                 }
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(Color(red: 176/255.0, green: 124/255.0, blue: 255/255.0))
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Color(red: 11/255.0, green: 8/255.0, blue: 19/255.0))
+                .tag(1)
+                
+                LibraryView(
+                    watchlistedItems: watchlistedItems,
+                    onSelectMedia: { item in selectedMedia = item },
+                    onPlayMedia: { item in playTopStreamForMedia(item) },
+                    onToggleWatchlist: { item in toggleWatchlist(item) }
+                )
+                .tabItem {
+                    Label("Library", systemImage: "bookmark")
+                }
+                .tag(2)
+                
+                HistoryView(
+                    onResumeProgress: { record in resumeHistoryPlayback(record) }
+                )
+                .tabItem {
+                    Label("History", systemImage: "clock")
+                }
+                .tag(3)
+                
+                SettingsView()
+                    .tabItem {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .tag(4)
             }
+            .tint(Theme.accent)
             
-            // Biometric Face ID Lock Screen Overlay
+            // Biometric Face ID / Touch ID Lock Screen
             if isLocked {
-                ZStack {
-                    Color(red: 11/255.0, green: 8/255.0, blue: 19/255.0)
-                        .ignoresSafeArea()
-                    
-                    VStack(spacing: 20) {
-                        Image(systemName: "play.tv.fill")
-                            .font(.system(size: 64))
-                            .foregroundColor(Color(red: 176/255.0, green: 124/255.0, blue: 255/255.0))
-                        
-                        Text("Vault Streaming")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        Text("Library locked")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Button(action: triggerUnlock) {
-                            HStack {
-                                Image(systemName: biometricIconName)
-                                Text("Unlock App")
-                            }
-                            .font(.headline)
-                            .padding()
-                            .frame(maxWidth: 220)
-                            .background(Color(red: 176/255.0, green: 124/255.0, blue: 255/255.0))
-                            .foregroundColor(.black)
-                            .cornerRadius(12)
-                        }
-                        .padding(.top, 10)
-                    }
-                    .padding()
-                }
-                .transition(.opacity)
+                biometricLockOverlay
             }
         }
         .onAppear {
+            loadWatchlist()
             if isLocked {
                 triggerUnlock()
             }
         }
-        .sheet(isPresented: $showSettings) {
-            settingsSheet
+        // Native Bottom Sheet for Movie/TV Details (Single popup, zero hover-card collision)
+        .sheet(item: $selectedMedia) { item in
+            MovieDetailsSheet(
+                item: item,
+                isWatchlisted: watchlistedItems.contains(where: { $0.id == item.id }),
+                onPlayStream: { stream in
+                    selectedMedia = nil
+                    playStream(stream, for: item)
+                },
+                onToggleWatchlist: {
+                    toggleWatchlist(item)
+                },
+                onDismiss: {
+                    selectedMedia = nil
+                }
+            )
         }
+        // Native AVPlayer Full-Screen Video Playback
         .fullScreenCover(item: $activeStream) { stream in
             NativePlayerView(
                 item: stream,
-                serverURL: serverURL,
+                serverURL: AppConfig.serverURL,
                 onDismiss: { position, duration, completed in
-                    self.progressUpdate = ProgressUpdate(position: position, duration: duration, completed: completed)
-                    self.activeStream = nil
+                    handlePlaybackDismiss(stream: stream, position: position, duration: duration, completed: completed)
+                    activeStream = nil
                 }
             )
             .ignoresSafeArea()
         }
     }
     
-    private var biometricIconName: String {
-        switch BiometricAuth.shared.biometricType {
-        case .faceID:
-            return "faceid"
-        case .touchID:
-            return "touchid"
-        case .opticID:
-            return "opticid"
-        case .none:
-            return "lock.open.fill"
+    // MARK: - Playback Handling
+    
+    private func playTopStreamForMedia(_ item: MediaItem) {
+        Task {
+            do {
+                let yearInt = Int(item.releaseYear)
+                let streams = try await StreamingBackend.shared.fetchStreams(
+                    mediaType: item.effectiveMediaType,
+                    tmdbId: item.id,
+                    title: item.displayTitle,
+                    year: yearInt
+                )
+                if let topStream = streams.first {
+                    await MainActor.run {
+                        playStream(topStream, for: item)
+                    }
+                } else {
+                    // Open details if no direct top stream
+                    await MainActor.run {
+                        selectedMedia = item
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    selectedMedia = item
+                }
+            }
         }
+    }
+    
+    private func playStream(_ stream: TorrentStream, for item: MediaItem) {
+        guard let urlStr = stream.url, let streamURL = URL(string: urlStr) else { return }
+        let playbackItem = StreamPlaybackItem(
+            url: streamURL,
+            title: item.displayTitle,
+            posterUrl: item.posterURL?.absoluteString,
+            startPosition: 0,
+            mediaType: item.effectiveMediaType
+        )
+        activeStream = playbackItem
+    }
+    
+    private func resumeHistoryPlayback(_ record: WatchProgressRecord) {
+        Task {
+            do {
+                let streams = try await StreamingBackend.shared.fetchStreams(
+                    mediaType: record.mediaType,
+                    tmdbId: record.tmdbId,
+                    title: record.title,
+                    season: record.season,
+                    episode: record.episode
+                )
+                guard let topStream = streams.first, let urlStr = topStream.url, let streamURL = URL(string: urlStr) else { return }
+                await MainActor.run {
+                    activeStream = StreamPlaybackItem(
+                        url: streamURL,
+                        title: record.title,
+                        posterUrl: record.posterUrl,
+                        startPosition: record.position,
+                        mediaType: record.mediaType,
+                        season: record.season,
+                        episode: record.episode
+                    )
+                }
+            } catch {
+                print("[ContentView] Could not resume playback: \(error)")
+            }
+        }
+    }
+    
+    private func handlePlaybackDismiss(stream: StreamPlaybackItem, position: Double, duration: Double, completed: Bool) {
+        Task {
+            await StreamingBackend.shared.recordProgress(
+                mediaType: stream.mediaType ?? "movie",
+                tmdbId: 0, // TMDB ID if stored in metadata
+                title: stream.title,
+                position: position,
+                duration: duration,
+                completed: completed,
+                posterUrl: stream.posterUrl,
+                season: stream.season,
+                episode: stream.episode
+            )
+        }
+    }
+    
+    // MARK: - Watchlist Persistence
+    
+    private func toggleWatchlist(_ item: MediaItem) {
+        if let idx = watchlistedItems.firstIndex(where: { $0.id == item.id }) {
+            watchlistedItems.remove(at: idx)
+        } else {
+            watchlistedItems.append(item)
+        }
+        saveWatchlist()
+    }
+    
+    private func saveWatchlist() {
+        if let data = try? JSONEncoder().encode(watchlistedItems) {
+            UserDefaults.standard.set(data, forKey: watchlistStorageKey)
+        }
+    }
+    
+    private func loadWatchlist() {
+        if let data = UserDefaults.standard.data(forKey: watchlistStorageKey),
+           let items = try? JSONDecoder().decode([MediaItem].self, from: data) {
+            watchlistedItems = items
+        }
+    }
+    
+    // MARK: - Biometric Security
+    
+    private var biometricLockOverlay: some View {
+        ZStack {
+            Theme.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: 20) {
+                Image(systemName: "film.stack.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(Theme.accent)
+                
+                Text("Vault Streaming")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Text("Library protected by Face ID")
+                    .font(.subheadline)
+                    .foregroundColor(Theme.textSecondary)
+                
+                Button(action: triggerUnlock) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "faceid")
+                        Text("Unlock with Face ID")
+                    }
+                    .font(.headline)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 14)
+                    .background(Theme.accentGradient)
+                    .foregroundColor(.black)
+                    .cornerRadius(Theme.radiusMedium)
+                }
+                .padding(.top, 12)
+            }
+            .padding()
+        }
+        .transition(.opacity)
     }
     
     private func triggerUnlock() {
@@ -181,80 +268,6 @@ public struct ContentView: View {
                     self.isLocked = false
                 }
             }
-        }
-    }
-    
-    private var settingsSheet: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Streaming Server Endpoint")) {
-                    TextField("Server URL", text: $customURLInput)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .keyboardType(.URL)
-                    
-                    Button("Reset to Streaming Web (streaming.vaultwares.ca)") {
-                        customURLInput = AppConfig.defaultServerURL
-                    }
-                    .font(.footnote)
-                    .foregroundColor(Color(red: 176/255.0, green: 124/255.0, blue: 255/255.0))
-                    
-                    Button("Set to Desktop PC (100.71.101.21:8722)") {
-                        customURLInput = AppConfig.defaultWorkstationURL
-                    }
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                }
-                
-                Section(header: Text("Security")) {
-                    Toggle("Face ID / Biometric Lock", isOn: $biometricToggle)
-                        .onChange(of: biometricToggle) { newValue in
-                            AppConfig.isBiometricLockEnabled = newValue
-                        }
-                }
-                
-                Section(header: Text("About")) {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text(AppConfig.appVersion)
-                            .foregroundColor(.secondary)
-                    }
-                    HStack {
-                        Text("Network Target")
-                        Spacer()
-                        Text("Tailnet-First")
-                            .foregroundColor(.secondary)
-                    }
-                    HStack {
-                        Text("Default Backend")
-                        Spacer()
-                        Text("Comet (OVH :5173)")
-                            .foregroundColor(.secondary)
-                    }
-                    HStack {
-                        Text("Transcode Dispatch")
-                        Spacer()
-                        Text("OVH API -> PC")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .navigationTitle("Settings")
-            .navigationBarItems(
-                leading: Button("Cancel") {
-                    showSettings = false
-                },
-                trailing: Button("Save") {
-                    if let newURL = URL(string: customURLInput) {
-                        AppConfig.setServerURL(customURLInput)
-                        self.serverURL = newURL
-                        self.reloadToken += 1
-                    }
-                    showSettings = false
-                }
-                .foregroundColor(Color(red: 176/255.0, green: 124/255.0, blue: 255/255.0))
-            )
         }
     }
 }
