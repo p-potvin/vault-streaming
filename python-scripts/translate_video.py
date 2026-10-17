@@ -111,7 +111,8 @@ def process_one(video_path, args, _output_path):
             raise RuntimeError("No speech was recognised in this file")
 
     report_progress(45, f"Translating {len(segments)} cues to {target_code.upper()}...")
-    translator = Translator(target_language)
+    engine = getattr(args, "translate_engine", None) or os.environ.get("VW_TRANSLATE_ENGINE", "hf")
+    translator = Translator(target_language, source=source_language, engine=engine)
     translated = translator.translate_segments(
         segments, on_progress=ScaledProgress(45, 40, f"Translating to {target_code.upper()}"))
 
@@ -129,7 +130,8 @@ def process_one(video_path, args, _output_path):
     state.mark(video_path, ACTION,
                languages=[target_code],
                params={"from": source_language, "to": target_code,
-                       "reusedSubtitles": bool(srt_path), "degraded": translator.degraded},
+                       "reusedSubtitles": bool(srt_path), "degraded": translator.degraded,
+                       "engine": engine},
                outputs=written)
 
     report_progress(100, f"Translation to {target_code.upper()} complete")
@@ -143,6 +145,9 @@ def main():
                         help="Target language code, e.g. fr, es, ja (qc maps to fr)")
     parser.add_argument("--from", "--source-language", dest="source_language", default="en",
                         help="Spoken language of the source audio (default: en)")
+    parser.add_argument("--translate-engine", default=os.environ.get("VW_TRANSLATE_ENGINE", "hf"),
+                        choices=["hf", "command-a", "google"],
+                        help="Translation engine (default: hf / command-a)")
     args = parser.parse_args()
     try:
         return cli.run(args, ACTION, process_one, needs_output=False,

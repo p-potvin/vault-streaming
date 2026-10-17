@@ -114,6 +114,8 @@ async function runBetterSubtitles({
     videoPath,
     savePermanently = false,
     translateTo = null,
+    translateFrom = 'en',
+    translateEngine = 'hf',
     onProgress = () => {},
     onCue = () => {}
 }) {
@@ -143,10 +145,10 @@ async function runBetterSubtitles({
         '-NoSeparate'
     ];
 
-    // Translation flag handling
-    const needsTranslation = translateTo && (translateTo.startsWith('fr') || translateTo.startsWith('qc'));
-    if (needsTranslation) {
-        args.push('-TranslateTo', 'fr', '-TranslateFrom', 'en');
+    // Translation flag handling: supports any language pair via HF / command-a (111B) and translategemma
+    if (translateTo && translateTo !== 'none' && translateTo !== 'original' && translateTo !== 'und') {
+        const lang = translateTo.startsWith('qc') ? 'fr' : translateTo;
+        args.push('-TranslateTo', lang, '-TranslateFrom', translateFrom || 'en', '-TranslateEngine', translateEngine || 'hf');
     }
 
     console.log('[ai-subtitles] spawning powershell with args:', args.join(' '));

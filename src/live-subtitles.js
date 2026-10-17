@@ -240,7 +240,7 @@ function registerLiveSubtitlesHandlers(ipcMain) {
         return { success: true, ready: true, modelPresent: true };
     });
 
-    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, writeSrt, audioIndex, separate } = {}) => {
+    ipcMain.handle('start-live-subtitles', async (event, { videoPath, langs, volumeBoost, startTime, translateTo, translateFrom = 'en', translateEngine = 'hf', writeSrt, audioIndex, separate } = {}) => {
         if (!videoPath) {
             return { success: false, error: 'No playback source for live subtitles.' };
         }
@@ -263,6 +263,8 @@ function registerLiveSubtitlesHandlers(ipcMain) {
             videoPath,
             savePermanently,
             translateTo: translateTo || (Array.isArray(langs) ? langs[0] : null),
+            translateFrom,
+            translateEngine,
             onProgress: (statusData) => {
                 forward('live-subtitle-status', { videoPath, ...statusData });
             },
