@@ -16,9 +16,9 @@
 # (a CPU build — ASR would never have used the RTX 3060) and a broken torchvision.
 
 # ── ASR engine ────────────────────────────────────────────────────────────────
-nemo_toolkit[asr]==2.5.0
+nemo_toolkit[asr]==2.6.2
 lhotse==1.33.0
-datasets==4.8.5
+datasets==5.0.1
 
 # ── Audio I/O ─────────────────────────────────────────────────────────────────
 soundfile==0.13.1
