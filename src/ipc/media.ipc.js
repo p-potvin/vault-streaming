@@ -49,7 +49,6 @@ function registerMediaIpc(ipcMain) {
         const baseName = path.basename(filePath, ext);
         const thumbsDir = path.join(dir, '.thumbs');
         const outputPath = path.join(thumbsDir, `${baseName}_enhanced${ext}`);
-        const metaPath = filePath + '.meta.json';
 
         // Ensure .thumbs directory exists
         if (!fs.existsSync(thumbsDir)) {
@@ -59,15 +58,13 @@ function registerMediaIpc(ipcMain) {
         // Remove any stale temp file from a previous interrupted run.
         cleanupTemp(outputPath + '.tmp');
 
-        // Skip redundant enhancement: check sidecar metadata
-        if (fs.existsSync(metaPath) && fs.existsSync(outputPath)) {
-            try {
-                const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-                if (meta.enhancements && meta.enhancements.video === true) {
-                    console.log('[media.ipc:upscale] Skipping redundant enhancement (already in .thumbs):', filePath);
-                    return { success: true, path: outputPath, skipped: true };
-                }
-            } catch (e) {}
+        // Skip redundant enhancement: the sidecar (any of its names) says the video pass already ran
+        if (fs.existsSync(outputPath)) {
+            const meta = sidecarRecord.read(filePath).record;
+            if (meta.enhancements && meta.enhancements.video === true) {
+                console.log('[media.ipc:upscale] Skipping redundant enhancement (already in .thumbs):', filePath);
+                return { success: true, path: outputPath, skipped: true };
+            }
         }
 
         const pythonPath = utils.getRobustPythonExe();

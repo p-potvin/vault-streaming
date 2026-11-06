@@ -1,4 +1,11 @@
-"""Enhancement state tracking via the ``<video>.meta.json`` sidecar.
+"""Enhancement state tracking in the video's sidecar.
+
+The sidecar is the shared v2 record (vault-raggae app/files/records/record.py, vault-explorer and vault-streaming
+src/sidecar-record.js): ``<file.ext>.json``, or whichever of the four historical names it already has
+(``<file.ext>.meta.json``, ``<stem>.json``, ``<stem>.meta.json``; a stem name only when no other media file shares
+the stem). This module owns three keys of it, ``enhancements``, ``enhancementDetails`` and ``enhancedPath``; ``save``
+re-reads the file and replaces only those, so a ``vw.id``, history, tags or probe fields other tools keep there
+survive. A new sidecar gets the v2 envelope (``schema``, ``vw``, ``master``).
 
 Every action records what it did to the ``.enhanced/`` copy here, so the context
 menu can show which enhancements are already applied and offer a per-action
@@ -30,6 +37,7 @@ lives alongside them under ``enhancementDetails`` so nothing old breaks::
 import json
 import os
 import time
+from datetime import datetime, timezone
 
 ACTIONS = ("audio", "video", "subtitles", "translation")
 
@@ -39,8 +47,41 @@ LIST_ACTIONS = ("subtitles", "translation")
 TIMESTAMP_FORMAT = "%a, %d %b %Y %H:%M"
 
 
+#: The keys this module writes; everything else in the sidecar belongs to other tools.
+OWNED_KEYS = ("enhancements", "enhancementDetails", "enhancedPath")
+
+MEDIA_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".avif", ".tiff",
+    ".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi", ".flv", ".wmv",
+    ".mp3", ".wav", ".flac", ".m4a", ".aac", ".opus", ".ogg",
+}
+_VIDEO = {".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi", ".flv", ".wmv", ".mpg", ".mpeg", ".m2ts", ".3gp"}
+_AUDIO = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".opus", ".ogg", ".wma", ".aiff", ".ape"}
+
+
 def sidecar_path(video_path):
-    return video_path + '.meta.json'
+    """The video's existing sidecar under any of its four names, else the canonical ``<file.ext>.json``."""
+    for cand in (video_path + '.json', video_path + '.meta.json'):
+        if os.path.isfile(cand):
+            return cand
+    stem, ext = os.path.splitext(video_path)
+    stems = [p for p in (stem + '.json', stem + '.meta.json') if os.path.isfile(p)]
+    if stems and not any(os.path.exists(stem + e) for e in MEDIA_EXTENSIONS if e != ext.lower()):
+        return stems[0]
+    return video_path + '.json'
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _read(path):
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
 
 
 def _blank():
@@ -58,16 +99,7 @@ def load(video_path):
     Missing or corrupt sidecars yield a blank record rather than raising — a
     damaged sidecar should degrade the menu's accuracy, never block processing.
     """
-    meta = {}
-    path = sidecar_path(video_path)
-    if os.path.exists(path):
-        try:
-            with open(path, 'r', encoding='utf-8') as fh:
-                loaded = json.load(fh)
-            if isinstance(loaded, dict):
-                meta = loaded
-        except Exception:
-            meta = {}
+    meta = _read(sidecar_path(video_path))
 
     enh = meta.get('enhancements')
     if not isinstance(enh, dict):
@@ -89,13 +121,44 @@ def load(video_path):
 
 
 def save(video_path, meta):
+    """Write this module's keys of *meta* into the sidecar as it is on disk now (a key missing from *meta*, such as
+    ``enhancedPath`` after a full revert, is removed); atomic. True when written."""
     path = sidecar_path(video_path)
+    record = _read(path)
+    for key in OWNED_KEYS:
+        if key in meta and meta[key] is not None:
+            record[key] = meta[key]
+        else:
+            record.pop(key, None)
+    record.setdefault('schema', 2)
+    vw = record.setdefault('vw', {})
+    ext = os.path.splitext(video_path)[1].lower()
+    vw.setdefault('kind', 'video' if ext in _VIDEO else 'audio' if ext in _AUDIO else 'other')
+    vw.setdefault('created', _now_iso())
+    vw['updated'] = _now_iso()
+    master = record.setdefault('master', {})
+    master['basename'] = os.path.basename(video_path)
+    master['ext'] = ext
     try:
-        with open(path, 'w', encoding='utf-8') as fh:
-            json.dump(meta, fh, indent=2, ensure_ascii=False)
+        st = os.stat(video_path)
+        master['size'] = st.st_size
+        master['mtime'] = st.st_mtime
+    except OSError:
+        pass
+    for key in ('name', 'path', 'size', 'created', 'modified', 'type'):   # derived from the file, never stored
+        record.pop(key, None)
+    tmp = f"{path}.tmp_{os.getpid()}"
+    try:
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            json.dump(record, fh, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
         return True
     except Exception as err:
         print(f"[state] Failed to write sidecar {path}: {err}")
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
         return False
 
 
