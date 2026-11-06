@@ -113,6 +113,56 @@ async function runTests() {
         fs.rmSync(tempDir, { recursive: true, force: true });
     }
 
+    // Test 6: Verify Local-First Search Waterfall in tmdb.js
+    console.log('\n[Test 6] Local-First Search Waterfall (search-tmdb)...');
+    const handlers = {};
+    const mockIpcMain = {
+        handle: (channel, fn) => { handlers[channel] = fn; }
+    };
+    const { registerTmdbHandlers } = require('../src/tmdb');
+    registerTmdbHandlers(mockIpcMain);
+
+    assert(typeof handlers['search-tmdb'] === 'function', 'search-tmdb handler must be registered');
+    const localFirstSearch = await handlers['search-tmdb'](null, { query: 'Matrix' });
+    assert.strictEqual(localFirstSearch.success, true, 'search-tmdb should succeed');
+    assert.strictEqual(localFirstSearch.source, 'raggae', 'search-tmdb must return source: raggae when local catalog matches');
+    assert(Array.isArray(localFirstSearch.results) && localFirstSearch.results.length > 0, 'Local catalog should return results');
+    console.log(`✓ Local-first search returned ${localFirstSearch.results.length} items from local catalog (source: ${localFirstSearch.source})`);
+
+    // Test 7: Verify Local-First Details Waterfall in tmdb.js
+    console.log('\n[Test 7] Local-First Details Waterfall (get-omdb-details)...');
+    assert(typeof handlers['get-omdb-details'] === 'function', 'get-omdb-details handler must be registered');
+    const localFirstDetails = await handlers['get-omdb-details'](null, { title: 'Inception 2010' });
+    assert.strictEqual(localFirstDetails.success, true, 'get-omdb-details should succeed');
+    assert.strictEqual(localFirstDetails.source, 'raggae', 'get-omdb-details must return source: raggae when local catalog matches');
+    assert.strictEqual(localFirstDetails.data.title, 'Inception', 'Resolved title should be Inception');
+    assert.strictEqual(localFirstDetails.data.year, '2010', 'Resolved year should be 2010');
+    console.log(`✓ Local-first details resolved from local catalog: ${localFirstDetails.data.title} (${localFirstDetails.data.year}) [source: ${localFirstDetails.source}]`);
+
+    // Test 8: Verify Permanent Ingest Rule (Outside API response -> Local Catalog)
+    console.log('\n[Test 8] Permanent Catalog Ingest Rule...');
+    const testOutsideMovie = {
+        title: 'Interstellar Voyage 2026',
+        year: 2026,
+        category: 'movie',
+        overview: 'An epic exploratory deep space voyage.',
+        rating: 8.8,
+        genres: ['Sci-Fi', 'Adventure'],
+        external_ids: { imdb: 'tt8888888', tmdb: 999111 },
+        source: 'tmdb'
+    };
+    const ingestRes = await raggae.ingest(testOutsideMovie);
+    assert(ingestRes, 'Ingest response should not be null');
+    assert.strictEqual(ingestRes.saved, true, 'Ingest should return saved: true');
+    console.log(`✓ Ingested "${testOutsideMovie.title}" into catalog (ID: ${ingestRes.items[0]?.catalog_id})`);
+
+    // Verify persistence: subsequent resolve must find it locally
+    const resolveIngested = await raggae.resolve({ name: 'Interstellar Voyage 2026', categoryHint: 'movie' });
+    assert(resolveIngested && resolveIngested.item, 'Resolved item should be found in local catalog');
+    assert.strictEqual(resolveIngested.item.title, 'Interstellar Voyage 2026', 'Resolved title should match');
+    assert.strictEqual(resolveIngested.item.year, 2026, 'Resolved year should match');
+    console.log(`✓ Verified persistence: item is now instantly resolved locally from catalog!`);
+
     console.log('\n========================================');
     console.log('ALL VAULT-STREAMING INTEGRATION TESTS PASSED!');
     console.log('========================================');

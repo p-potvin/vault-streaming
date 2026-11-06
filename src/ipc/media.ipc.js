@@ -329,6 +329,14 @@ function registerMediaIpc(ipcMain) {
         return await raggae.health();
     });
 
+    ipcMain.handle('raggae-ingest', async (_event, items) => {
+        try {
+            return await raggae.ingest(items);
+        } catch (err) {
+            return { error: err.message };
+        }
+    });
+
     // Streaming Upscale (Real-time AI upscaling with MediaSource)
     let upscaleStreamProcess = null;
     let upscaleStreamEvent = null;

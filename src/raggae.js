@@ -151,6 +151,32 @@ async function search(query, options = {}) {
 }
 
 /**
+ * Permanently ingest or enrich outside API items into the vault-raggae catalog.
+ * POST /v1/catalog/ingest
+ * @param {Object|Array<Object>} items
+ */
+async function ingest(items) {
+    if (isOffline() || !items) return null;
+    try {
+        const payload = Array.isArray(items) ? { items } : (items.items ? items : { items: [items] });
+        const res = await fetchWithTimeout(`${RAGGAE_URL}/v1/catalog/ingest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            console.warn(`[raggae:ingest] Failed with HTTP ${res.status}`);
+            return null;
+        }
+        markOnline();
+        return await res.json();
+    } catch (err) {
+        markOffline(err);
+        return null;
+    }
+}
+
+/**
  * Construct resized catalog image URL from vault-raggae image service.
  * GET /v1/img?path=<posterPath>&w=<width>
  * @param {string} posterPath
@@ -170,6 +196,7 @@ module.exports = {
     resolve,
     byPath,
     search,
+    ingest,
     getPosterUrl,
     isOffline,
     markOnline,
