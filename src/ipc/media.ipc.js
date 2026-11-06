@@ -5,6 +5,8 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const child_process = require('child_process');
 const utils = require('../utils');
+const raggae = require('../raggae');
+const sidecarRecord = require('../sidecar-record');
 const { cleanupTemp, promoteTempFile } = utils;
 
 function getFullProbeMetadata(filePath) {
@@ -149,96 +151,137 @@ function registerMediaIpc(ipcMain) {
     });
 
 
-    // Get File Properties
+    // Get File Properties. The sidecar follows the shared v2 record (vault-raggae app/files/records/record.py,
+    // vault-explorer src/sidecar-record.js): found under any of its four names (src/sidecar-names.js, a stem name only
+    // when no other media file shares the stem), the ffprobe fields read from its root, written back only through
+    // sidecarRecord.update (this app's keys only, the rest of the record as it is on disk, atomic, canonical
+    // <file.ext>.json for a new one). name / path / size / dates come from the file itself, never from the sidecar.
+    const PROBE_KEYS = ['duration', 'bitrate', 'width', 'height', 'codec', 'fps', 'hasVideo',
+        'audioCodec', 'channels', 'sampleRate', 'hasAudio'];
+    const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.ts', '.wmv', '.m4v'];
+
     ipcMain.handle('get-file-properties', async (_event, filePath) => {
         if (typeof filePath !== 'string' || !fs.existsSync(filePath)) {
             return { success: false, error: 'File not found' };
         }
-        const metaPath = filePath + '.meta.json';
         try {
             const stats = fs.statSync(filePath);
             const ext = path.extname(filePath).toLowerCase();
-
-            // 1. Check if sidecar metadata already exists
-            if (fs.existsSync(metaPath)) {
-                try {
-                    const cached = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-                    // Refresh size and mod times
-                    cached.size = stats.size;
-                    cached.modified = stats.mtime;
-                    return { success: true, properties: cached };
-                } catch (cacheErr) {
-                    console.error('[media.ipc:properties] Cache read error, re-probing:', cacheErr.message);
-                }
-            }
-
-            // 2. Fetch fresh properties
-            const baseProps = {
+            const record = sidecarRecord.read(filePath).record;
+            const props = {
                 name: path.basename(filePath),
                 path: filePath,
                 size: stats.size,
                 created: stats.birthtime,
                 modified: stats.mtime,
                 type: ext,
-                width: null,
-                height: null,
-                duration: null,
-                codec: null,
-                bitrate: null,
-                audioCodec: null,
-                channels: null,
-                sampleRate: null,
-                fps: null,
-                hasAudio: false,
-                hasVideo: false,
-                enhancements: { audio: false, video: false, subtitles: [], translation: [] }
+                width: null, height: null, duration: null, codec: null, bitrate: null, fps: null,
+                audioCodec: null, channels: null, sampleRate: null, hasAudio: false, hasVideo: false,
+                enhancements: { audio: false, video: false, subtitles: [], translation: [] },
             };
+            for (const k of PROBE_KEYS) {
+                if (record[k] !== undefined && record[k] !== null) props[k] = record[k];
+            }
+            if (record.enhancements && typeof record.enhancements === 'object') {
+                props.enhancements = { ...props.enhancements, ...record.enhancements };
+            }
 
-            if (['.mp4', '.mkv', '.avi', '.mov', '.webm', '.ts', '.wmv'].includes(ext)) {
+            // Probe when the sidecar has no probe yet (a record vault-raggae wrote has only its envelope)
+            if (VIDEO_EXTS.includes(ext) && record.hasVideo === undefined && !record.duration) {
                 const probeData = await getFullProbeMetadata(filePath);
                 if (probeData) {
+                    const probed = {};
                     if (probeData.format) {
-                        baseProps.duration = parseFloat(probeData.format.duration) || null;
-                        baseProps.bitrate = parseInt(probeData.format.bit_rate) || null;
+                        probed.duration = parseFloat(probeData.format.duration) || null;
+                        probed.bitrate = parseInt(probeData.format.bit_rate) || null;
                     }
                     if (Array.isArray(probeData.streams)) {
-                        const videoStream = probeData.streams.find(s => s.codec_type === 'video');
-                        baseProps.hasVideo = !!videoStream;
-                        if (videoStream) {
-                            baseProps.width = videoStream.width || null;
-                            baseProps.height = videoStream.height || null;
-                            baseProps.codec = videoStream.codec_name || null;
-                            if (videoStream.r_frame_rate) {
-                                const parts = videoStream.r_frame_rate.split('/');
-                                if (parts.length === 2 && parseFloat(parts[1]) > 0) {
-                                    baseProps.fps = Math.round((parseFloat(parts[0]) / parseFloat(parts[1])) * 100) / 100;
-                                } else {
-                                    baseProps.fps = parseFloat(videoStream.r_frame_rate) || null;
-                                }
+                        const v = probeData.streams.find(s => s.codec_type === 'video');
+                        probed.hasVideo = !!v;
+                        if (v) {
+                            probed.width = v.width || null;
+                            probed.height = v.height || null;
+                            probed.codec = v.codec_name || null;
+                            if (v.r_frame_rate) {
+                                const parts = v.r_frame_rate.split('/');
+                                probed.fps = parts.length === 2 && parseFloat(parts[1]) > 0
+                                    ? Math.round((parseFloat(parts[0]) / parseFloat(parts[1])) * 100) / 100
+                                    : (parseFloat(v.r_frame_rate) || null);
                             }
                         }
-                        const audioStream = probeData.streams.find(s => s.codec_type === 'audio');
-                        baseProps.hasAudio = !!audioStream;
-                        if (audioStream) {
-                            baseProps.audioCodec = audioStream.codec_name || null;
-                            baseProps.channels = audioStream.channels || null;
-                            baseProps.sampleRate = parseInt(audioStream.sample_rate) || null;
+                        const a = probeData.streams.find(s => s.codec_type === 'audio');
+                        probed.hasAudio = !!a;
+                        if (a) {
+                            probed.audioCodec = a.codec_name || null;
+                            probed.channels = a.channels || null;
+                            probed.sampleRate = parseInt(a.sample_rate) || null;
                         }
                     }
-
-                    // Save sidecar metadata
-                    try {
-                        fs.writeFileSync(metaPath, JSON.stringify(baseProps, null, 2), 'utf8');
-                        console.log('[media.ipc:properties] Saved sidecar metadata:', metaPath);
-                    } catch (saveErr) {
-                        console.error('[media.ipc:properties] Failed to save sidecar metadata:', saveErr.message);
-                    }
+                    Object.assign(props, probed);
+                    sidecarRecord.update(filePath, probed);       // owned keys only; never fatal
                 }
             }
 
-            return { success: true, properties: baseProps };
+            // What vault-raggae's media index knows (id, fingerprints, the matched scene / catalog file). Its file
+            // facts sit under `catalog_file`; they only fill what the sidecar and the probe left empty.
+            const indexed = await raggae.byPath(filePath);
+            if (indexed) {
+                props.raggae = {
+                    vwId: indexed.vw_id || null,
+                    fingerprints: indexed.fingerprints || {},
+                    scene: indexed.scene || null,
+                    identities: indexed.identities || [],
+                };
+                const cf = indexed.catalog_file || {};
+                for (const [k, src] of [['duration', 'duration'], ['width', 'width'], ['height', 'height'],
+                    ['codec', 'vcodec'], ['audioCodec', 'acodec'], ['fps', 'fps'], ['bitrate', 'bitrate']]) {
+                    if ((props[k] === null || props[k] === undefined) && cf[src]) props[k] = cf[src];
+                }
+            }
+
+            return { success: true, properties: props };
         } catch (e) {
             return { success: false, error: e.message };
+        }
+    });
+
+    // vault-raggae gateway IPC handlers
+    ipcMain.handle('raggae-resolve', async (_event, data) => {
+        try {
+            return await raggae.resolve(data);
+        } catch (err) {
+            return { error: err.message };
+        }
+    });
+
+    ipcMain.handle('raggae-by-path', async (_event, filePath) => {
+        try {
+            return await raggae.byPath(filePath);
+        } catch (err) {
+            return null;
+        }
+    });
+
+    ipcMain.handle('raggae-search', async (_event, data) => {
+        try {
+            const opts = data && typeof data === 'object' ? data : {};
+            const query = typeof data === 'string' ? data : (opts.query || opts.q || '');
+            // films and series only unless a category is asked for (the catalog also holds music, books, scenes)
+            return opts.category ? await raggae.search(query, opts) : await raggae.searchTitles(query, opts);
+        } catch (err) {
+            return [];
+        }
+    });
+
+    ipcMain.handle('raggae-health', async () => {
+        return await raggae.health();
+    });
+
+    ipcMain.handle('raggae-ingest', async (_event, items) => {
+        try {
+            return await raggae.ingest(items);
+        } catch (err) {
+            return { error: err.message };
         }
     });
 

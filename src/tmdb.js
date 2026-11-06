@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const raggae = require('./raggae');
 
 // Helper function to fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
@@ -157,36 +158,350 @@ async function geoWatchRegion() {
     console.warn('[TMDB] no geo provider answered; falling back to', DEFAULT_WATCH_REGION);
     return _geoRegion;
 }
+ 
+// ── Search & Details Waterfall: Local Catalog -> TMDB -> OMDb ───────────────
+// The local catalog (vault-raggae, 1.1 M films and 0.4 M series from IMDb) is asked first. TMDB is still asked
+// when the local answer is thin (fewer than LOCAL_ENOUGH hits, or none with LOCAL_POPULAR votes), and its results
+// fill in after the local ones. Outside details are written back to the catalog (raggae.ingest): new titles are
+// added, known ones only get their empty fields filled. Search hits from TMDB are not ingested: they carry no IMDb
+// id, so they would come back as `tmdb:` duplicates of the IMDb items the catalog already has.
+
+// The OMDb key comes from .env (OMDB_API_KEY); without it the OMDb leg is skipped.
+const OMDB_API_KEY = process.env.OMDB_API_KEY || envConfig.OMDB_API_KEY || '';
+const OMDB_BASE = 'https://www.omdbapi.com/';
+const LOCAL_ENOUGH = 8;
+const LOCAL_POPULAR = 1000;
+const PLACEHOLDER_POSTER = 'public/poster_placeholder.svg';
+
+/** A URL as it may be logged: API keys and tokens replaced. */
+function redact(url) {
+    return String(url).replace(/([?&](?:apikey|api_key|token)=)[^&]+/gi, '$1***');
+}
+
+function tmdbHeaders() {
+    return { accept: 'application/json', Authorization: `Bearer ${TMDB_BEARER_TOKEN}` };
+}
+
+/** A local catalog item as the renderer's card / modal expect it. `id` is the TMDB id when the catalog knows it,
+ *  else the bare IMDb id (tt…), which the TMDB handlers below map to a TMDB id on demand. */
+function catalogToCard(item) {
+    const ext = item.external_ids || {};
+    const imdb = ext.imdb || (String(item.catalog_id || '').startsWith('imdb:') ? item.catalog_id.slice(5) : null);
+    const credits = Array.isArray(item.cast_or_credits) ? item.cast_or_credits : [];
+    return {
+        id: ext.tmdb || imdb || item.catalog_id,
+        imdb_id: imdb,
+        catalog_id: item.catalog_id,
+        media_type: item.category === 'tv' ? 'tv' : 'movie',
+        title: item.title || item.original_title || 'Untitled',
+        year: item.year ? String(item.year) : '—',
+        rating: item.rating ? String(item.rating) : '—',
+        genres: Array.isArray(item.genres) ? item.genres.slice(0, 3).join(', ') : (item.genres || 'General'),
+        poster: raggae.posterFor(item) || PLACEHOLDER_POSTER,
+        overview: item.overview || (credits.length ? credits.slice(0, 3).join(', ') : 'No description available.'),
+        votes: item.votes || 0,
+        source: 'raggae'
+    };
+}
+
+async function searchLocalCatalog(query, options = {}) {
+    if (!query) return [];
+    const hits = await raggae.searchTitles(query, { limit: options.limit || 20 });
+    return hits.map(catalogToCard);
+}
+
+/** Local hits are enough on their own when there are several and at least one well-known title among them. */
+function localIsEnough(cards) {
+    return cards.length >= LOCAL_ENOUGH || cards.some(c => (c.votes || 0) >= LOCAL_POPULAR);
+}
+
+/** Outside results after the local ones, without titles the local list already has (same IMDb id, or same title
+ *  and year). */
+function mergeAfterLocal(local, outside) {
+    const key = c => `${raggae._norm(c.title)}|${c.year}`;
+    const ids = new Set(local.map(c => c.imdb_id).filter(Boolean));
+    const keys = new Set(local.map(key));
+    return [...local, ...outside.filter(c => !(c.imdb_id && ids.has(c.imdb_id)) && !keys.has(key(c)))];
+}
+
+const tmdbIdCache = new Map();
+
+/** The TMDB id for an id the renderer holds: a TMDB id as is; an IMDb id (tt…, imdb:tt…) through TMDB /find,
+ *  remembered, and written back to the catalog item so the next local search carries it. Null when unknown. */
+async function toTmdbId(id, mediaType = 'movie') {
+    if (id === null || id === undefined || id === '') return null;
+    if (/^\d+$/.test(String(id))) return Number(id);
+    const imdb = String(id).replace(/^imdb:/, '');
+    if (!/^tt\d+$/.test(imdb) || !TMDB_BEARER_TOKEN) return null;
+    const cacheKey = `${mediaType}:${imdb}`;
+    if (tmdbIdCache.has(cacheKey)) return tmdbIdCache.get(cacheKey);
+    try {
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/find/${imdb}?external_source=imdb_id`,
+            { headers: tmdbHeaders() }, 8000);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const hit = (mediaType === 'tv' ? data.tv_results : data.movie_results)?.[0]
+            || data.movie_results?.[0] || data.tv_results?.[0];
+        const tmdbId = hit ? hit.id : null;
+        tmdbIdCache.set(cacheKey, tmdbId);
+        if (tmdbId) {
+            ingestOutside({ category: mediaType === 'tv' ? 'tv' : 'movie', title: hit.title || hit.name,
+                            external_ids: { imdb, tmdb: tmdbId }, source: 'tmdb' });
+        }
+        return tmdbId;
+    } catch (e) {
+        console.warn(`[TMDB] find ${imdb} failed (${e.message})`);
+        return null;
+    }
+}
+
+/** Fire-and-forget write of outside metadata to the catalog (see the note at the top of this section). */
+function ingestOutside(items) {
+    raggae.ingest(items).catch(e => console.warn('[raggae] ingest failed:', e.message));
+}
+
+async function searchTmdbApi(query, page = 1, language = 'en-US') {
+    if (!TMDB_BEARER_TOKEN || !query) return [];
+    try {
+        const urlFor = q => `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=${language}&page=${page}`;
+        let response = await fetchWithTimeout(urlFor(query), { method: 'GET', headers: tmdbHeaders() });
+        if (!response.ok) return [];
+        let data = await response.json();
+
+        // Language modifier cleanup retry if 0 results ("the 2 popes in french")
+        if (!data.results || data.results.length === 0) {
+            const langPattern = /\b(in\s+french|in\s+english|en\s+francais|en\s+français|french|francais|français|vf|vff|vfq|vostfr|subfrench)\b/gi;
+            const cleanedQuery = query.replace(langPattern, '').replace(/\s+/g, ' ').trim();
+            if (cleanedQuery && cleanedQuery.toLowerCase() !== query.toLowerCase()) {
+                console.log(`[TMDB] Retrying search with sanitized query: "${cleanedQuery}" (original was "${query}")`);
+                const retryRes = await fetchWithTimeout(urlFor(cleanedQuery), { method: 'GET', headers: tmdbHeaders() });
+                if (retryRes.ok) data = await retryRes.json();
+            }
+        }
+
+        return (data.results || [])
+            .filter(item => item.media_type !== 'person')
+            .map(item => {
+                const dateStr = item.release_date || item.first_air_date || '';
+                return {
+                    id: item.id,
+                    media_type: item.media_type || 'movie',
+                    title: item.title || item.name || 'Untitled',
+                    year: dateStr ? dateStr.substring(0, 4) : '—',
+                    rating: item.vote_average ? item.vote_average.toFixed(1) : '—',
+                    genres: (item.genre_ids || []).map(id => GENRE_MAP[id]).filter(Boolean).slice(0, 3).join(', ') || 'General',
+                    poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : PLACEHOLDER_POSTER,
+                    overview: item.overview || 'No description available.',
+                    source: 'tmdb'
+                };
+            });
+    } catch (e) {
+        console.warn(`[TMDB] search failed (${e.message})`);
+        return [];
+    }
+}
+
+async function searchOmdbApi(query, page = 1) {
+    if (!query || !OMDB_API_KEY) return [];
+    try {
+        const url = `${OMDB_BASE}?s=${encodeURIComponent(query)}&page=${page}&apikey=${OMDB_API_KEY}`;
+        console.log(`[OMDb] Searching: ${redact(url)}`);
+        const response = await fetchWithTimeout(url, {}, 8000);
+        if (!response.ok) return [];
+        const data = await response.json();
+        if (data.Response === 'False' || !Array.isArray(data.Search)) return [];
+        const results = data.Search.filter(item => item.Type === 'movie' || item.Type === 'series').map(item => ({
+            id: item.imdbID,
+            imdb_id: item.imdbID,
+            media_type: item.Type === 'series' ? 'tv' : 'movie',
+            title: item.Title || 'Untitled',
+            year: item.Year || '—',
+            rating: '—',
+            genres: item.Type ? item.Type.toUpperCase() : 'General',
+            poster: (item.Poster && item.Poster !== 'N/A') ? item.Poster : PLACEHOLDER_POSTER,
+            overview: `IMDb ID: ${item.imdbID}. Use standard RD stream search to look up this title.`,
+            source: 'omdb'
+        }));
+        // OMDb hits carry their IMDb id, so they land on (or create) the right catalog item. Only real facts go in:
+        // not the display placeholders above (the "IMDb ID: …" overview, the MOVIE / SERIES "genre").
+        ingestOutside(results.map(item => ({
+            category: item.media_type,
+            title: item.title,
+            year: parseInt(item.year) || null,
+            poster_url: item.poster !== PLACEHOLDER_POSTER ? item.poster : null,
+            external_ids: { imdb: item.imdb_id },
+            source: 'omdb'
+        })));
+        return results;
+    } catch (e) {
+        console.warn(`[OMDb] search failed (${e.message})`);
+        return [];
+    }
+}
+
+async function fetchOmdbDetails({ imdbId, title, year }) {
+    if (!OMDB_API_KEY) return null;
+    let url = `${OMDB_BASE}?apikey=${OMDB_API_KEY}&plot=full`;
+    if (imdbId) {
+        url += `&i=${encodeURIComponent(imdbId)}`;
+    } else if (title) {
+        url += `&t=${encodeURIComponent(title)}`;
+        if (year) url += `&y=${encodeURIComponent(year)}`;
+    } else {
+        return null;
+    }
+    try {
+        console.log(`[OMDb] Fetching details: ${redact(url)}`);
+        const response = await fetchWithTimeout(url, {}, 8000);
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data.Response === 'False') return null;
+        const poster = data.Poster && data.Poster !== 'N/A' ? data.Poster : PLACEHOLDER_POSTER;
+        const present = v => v && v !== 'N/A';
+        const formatted = {
+            id: data.imdbID || null,
+            imdb_id: data.imdbID || null,
+            title: data.Title || 'Untitled',
+            year: data.Year || '—',
+            rating: data.imdbRating || '—',
+            genres: data.Genre || 'General',
+            poster,
+            overview: data.Plot || 'No plot available.',
+            director: data.Director || '—',
+            writer: data.Writer || '—',
+            actors: data.Actors || '—',
+            awards: data.Awards || '—',
+            runtime: data.Runtime || '—',
+            source: 'omdb'
+        };
+        if (data.imdbID && (data.Type === 'movie' || data.Type === 'series')) {
+            ingestOutside({
+                category: data.Type === 'series' ? 'tv' : 'movie',
+                title: formatted.title,
+                year: parseInt(formatted.year) || null,
+                rating: parseFloat(formatted.rating) || null,
+                runtime_mins: parseInt(data.Runtime) || null,
+                genres: present(data.Genre) ? data.Genre.split(',').map(s => s.trim()) : [],
+                poster_url: poster !== PLACEHOLDER_POSTER ? poster : null,
+                overview: present(data.Plot) ? data.Plot : null,
+                cast_or_credits: [
+                    ...(present(data.Director) ? data.Director.split(',').map(d => `${d.trim()} (director)`) : []),
+                    ...(present(data.Actors) ? data.Actors.split(',').map(a => a.trim()) : [])
+                ],
+                external_ids: { imdb: data.imdbID },
+                source: 'omdb'
+            });
+        }
+        return formatted;
+    } catch (e) {
+        console.warn(`[OMDb] fetch details failed (${e.message})`);
+        return null;
+    }
+}
+
+/** The catalog's "popular" page (most voted films and series), when TMDB trending is not available. */
+async function localPopular(page = 1) {
+    const per = 10;
+    const [movies, shows] = await Promise.all([
+        raggae.browse({ category: 'movie', sort: 'votes', limit: per, offset: (page - 1) * per }),
+        raggae.browse({ category: 'tv', sort: 'votes', limit: per, offset: (page - 1) * per })
+    ]);
+    const out = [];
+    for (let i = 0; i < per; i++) {
+        if (movies[i]) out.push(catalogToCard(movies[i]));
+        if (shows[i]) out.push(catalogToCard(shows[i]));
+    }
+    return out;
+}
+
+/** A local catalog item in the TMDB movie / tv details shape the modal reads, for titles TMDB cannot give. */
+function catalogToTmdbShape(item, mediaType) {
+    const card = catalogToCard(item);
+    const date = item.release_date || (item.year ? String(item.year) : '');
+    const base = {
+        id: card.id,
+        imdb_id: card.imdb_id,
+        overview: item.overview || card.overview,
+        vote_average: item.rating || 0,
+        vote_count: item.votes || 0,
+        genres: (Array.isArray(item.genres) ? item.genres : []).map(name => ({ name })),
+        poster_path: null,
+        poster: card.poster,
+        runtime: item.runtime_mins || null,
+        source: 'raggae',
+        videos: { results: [] }
+    };
+    return mediaType === 'tv'
+        ? { ...base, name: card.title, first_air_date: date, seasons: [] }
+        : { ...base, title: card.title, release_date: date };
+}
+
+/** The catalog item behind a renderer id: `tt…` / `imdb:tt…` -> imdb:tt…, another `x:y` id as is. */
+async function catalogItemFor(id) {
+    const sid = String(id || '');
+    if (/^(imdb:)?tt\d+$/.test(sid)) return raggae.getItem(`imdb:${sid.replace(/^imdb:/, '')}`);
+    if (sid.includes(':')) return raggae.getItem(sid);
+    return null;
+}
+
+const localSearchCache = new Map();
+
+/** Local hits for a query, kept for the following pages of the same search (at most 50 queries). */
+async function localHitsFor(query) {
+    const key = query.toLowerCase();
+    if (localSearchCache.has(key)) return localSearchCache.get(key);
+    const hits = await searchLocalCatalog(query, { limit: 20 });
+    localSearchCache.set(key, hits);
+    if (localSearchCache.size > 50) localSearchCache.delete(localSearchCache.keys().next().value);
+    return hits;
+}
 
 function registerTmdbHandlers(ipcMain) {
     ipcMain.handle('search-tmdb', async (event, arg) => {
         try {
-            if (!TMDB_BEARER_TOKEN) {
-                console.warn('[TMDB] No Bearer Token configured in .env');
-                return { success: false, error: 'No Bearer Token configured in .env' };
-            }
-
             let query = '';
             let page = 1;
             let language = 'en-US';
             if (arg && typeof arg === 'object') {
-                query = arg.query || '';
+                query = (arg.query || '').trim();
                 page = arg.page || 1;
                 language = arg.language || 'en-US';
             } else if (typeof arg === 'string') {
-                query = arg;
+                query = arg.trim();
             }
 
-            let url;
-            if (!query) {
-                // Fetch trending movies and TV shows for the day by default
-                url = `https://api.themoviedb.org/3/trending/all/day?language=${language}&page=${page}`;
-            } else {
-                url = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(query)}&include_adult=false&language=${language}&page=${page}`;
+            // Waterfall for search queries: 1. Local Catalog -> 2. TMDB -> 3. OMDb.
+            // Page 1 is the local hits, with TMDB's after them when the local answer is thin. "Load more" then
+            // pages through TMDB (OMDb when TMDB has nothing), never repeating a title page 1 showed.
+            if (query) {
+                page = Math.max(1, parseInt(page) || 1);
+                const local = await localHitsFor(query);
+                const enough = localIsEnough(local);
+                if (page === 1 && enough) {
+                    console.log(`[Search] ${local.length} local catalog hits for "${query}"`);
+                    return { success: true, source: 'raggae', results: local };
+                }
+                const outsidePage = enough ? page - 1 : page;
+                let outside = await searchTmdbApi(query, outsidePage, language);
+                let source = 'tmdb';
+                if (!outside.length) {
+                    outside = await searchOmdbApi(query, outsidePage);
+                    source = 'omdb';
+                }
+                const merged = mergeAfterLocal(local, outside);
+                const results = page === 1 ? merged : merged.slice(local.length);
+                console.log(`[Search] "${query}" page ${page}: ${page === 1 ? local.length : 0} local + ${results.length - (page === 1 ? local.length : 0)} from ${source}`);
+                return { success: true, source: page === 1 && local.length ? `raggae+${source}` : source, results };
             }
 
-            console.log(`[TMDB] Fetching API: ${url}`);
-            const response = await fetchWithTimeout(url, {
+            // No query: trending discovery (the catalog's most voted titles when TMDB is not configured)
+            if (!TMDB_BEARER_TOKEN) {
+                return { success: true, source: 'raggae', results: await localPopular(page) };
+            }
+
+            const trendingUrl = `https://api.themoviedb.org/3/trending/all/day?language=${language}&page=${page}`;
+            console.log(`[TMDB] Fetching trending API: ${trendingUrl}`);
+            const response = await fetchWithTimeout(trendingUrl, {
                 method: 'GET',
                 headers: {
                     accept: 'application/json',
@@ -195,49 +510,28 @@ function registerTmdbHandlers(ipcMain) {
             });
 
             if (!response.ok) {
+                const localFallback = await localPopular(page);
+                if (localFallback.length > 0) {
+                    return { success: true, source: 'raggae', results: localFallback };
+                }
                 const errText = await response.text();
-                console.error('[TMDB] Fetch failed:', response.status, errText);
                 return { success: false, status: response.status, error: errText };
             }
 
-            let data = await response.json();
-            // If search with language modifier (e.g. "the 2 popes in french") returned 0 results,
-            // sanitize language suffix and retry search automatically.
-            if (query && (!data.results || data.results.length === 0)) {
-                const langPattern = /\b(in\s+french|in\s+english|en\s+francais|en\s+français|french|francais|français|vf|vff|vfq|vostfr|subfrench)\b/gi;
-                const cleanedQuery = query.replace(langPattern, '').replace(/\s+/g, ' ').trim();
-                if (cleanedQuery && cleanedQuery.toLowerCase() !== query.toLowerCase()) {
-                    console.log(`[TMDB] Retrying search with sanitized query: "${cleanedQuery}" (original was "${query}")`);
-                    const retryUrl = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(cleanedQuery)}&include_adult=false&language=${language}&page=${page}`;
-                    const retryRes = await fetchWithTimeout(retryUrl, {
-                        method: 'GET',
-                        headers: {
-                            accept: 'application/json',
-                            Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
-                        }
-                    });
-                    if (retryRes.ok) {
-                        data = await retryRes.json();
-                    }
-                }
-            }
-
+            const data = await response.json();
             const results = (data.results || []).map(item => {
                 const title = item.title || item.name || 'Untitled';
                 const dateStr = item.release_date || item.first_air_date || '';
                 const year = dateStr ? dateStr.substring(0, 4) : '—';
                 const rating = item.vote_average ? item.vote_average.toFixed(1) : '—';
-                
-                // Map genre IDs
                 const genres = (item.genre_ids || [])
                     .map(id => GENRE_MAP[id])
                     .filter(Boolean)
                     .slice(0, 3)
                     .join(', ') || 'General';
-
                 const poster = item.poster_path 
                     ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-                    : 'public/poster_placeholder.svg'; // Fallback to our premium asset
+                    : 'public/poster_placeholder.svg';
 
                 return {
                     id: item.id,
@@ -247,13 +541,14 @@ function registerTmdbHandlers(ipcMain) {
                     rating,
                     genres,
                     poster,
-                    overview: item.overview || 'No description available.'
+                    overview: item.overview || 'No description available.',
+                    source: 'tmdb'
                 };
             });
 
             return { success: true, results };
         } catch (err) {
-            console.error('[TMDB] Handler Error:', err);
+            console.error('[Search] Handler Error:', err);
             return { success: false, error: err.message };
         }
     });
@@ -267,6 +562,13 @@ function registerTmdbHandlers(ipcMain) {
                 language = arg.language || 'en-US';
             } else {
                 id = arg;
+            }
+
+            // A local catalog hit may carry an IMDb id: map it; a title TMDB cannot give comes from the catalog
+            const tmdbId = await toTmdbId(id, 'movie');
+            if (!tmdbId) {
+                const localItem = await catalogItemFor(id);
+                if (localItem) return { success: true, source: 'raggae', data: catalogToTmdbShape(localItem, 'movie') };
             }
 
             if (!TMDB_BEARER_TOKEN) {
@@ -292,7 +594,7 @@ function registerTmdbHandlers(ipcMain) {
                 };
             }
 
-            const url = `https://api.themoviedb.org/3/movie/${id}?append_to_response=videos&language=${language}`;
+            const url = `https://api.themoviedb.org/3/movie/${tmdbId || id}?append_to_response=videos&language=${language}`;
             const response = await fetchWithTimeout(url, {
                 method: 'GET',
                 headers: {
@@ -308,7 +610,7 @@ function registerTmdbHandlers(ipcMain) {
             if (!data.videos || !data.videos.results || data.videos.results.length === 0) {
                 try {
                     console.log(`[TMDB] No YouTube trailer found in TMDB. Querying Kinocheck fallback for TMDB ID: ${id}`);
-                    const kcUrl = `https://api.kinocheck.de/movies?tmdb_id=${id}`;
+                    const kcUrl = `https://api.kinocheck.de/movies?tmdb_id=${tmdbId || id}`;
                     const kcRes = await fetchWithTimeout(kcUrl);
                     if (kcRes.ok) {
                         const kcData = await kcRes.json();
@@ -326,6 +628,25 @@ function registerTmdbHandlers(ipcMain) {
                 } catch (kcErr) {
                     console.error('[TMDB] Kinocheck fallback fetch failed:', kcErr);
                 }
+            }
+
+            // Outside details into the catalog: keyed on the IMDb id, so a known title is only filled in
+            if (data && data.title) {
+                ingestOutside({
+                    category: 'movie',
+                    title: data.title,
+                    original_title: data.original_title || null,
+                    year: data.release_date ? parseInt(data.release_date.substring(0, 4)) : null,
+                    release_date: data.release_date || null,
+                    runtime_mins: data.runtime || null,
+                    rating: data.vote_average ? parseFloat(data.vote_average.toFixed(1)) : null,
+                    votes: data.vote_count || null,
+                    genres: Array.isArray(data.genres) ? data.genres.map(g => g.name).filter(Boolean) : [],
+                    poster_url: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null,
+                    overview: data.overview || null,
+                    external_ids: { tmdb: data.id, imdb: data.imdb_id || null },
+                    source: 'tmdb'
+                });
             }
 
             return { success: true, data };
@@ -357,6 +678,12 @@ function registerTmdbHandlers(ipcMain) {
                 id = arg;
             }
 
+            const tmdbId = await toTmdbId(id, 'tv');
+            if (!tmdbId) {
+                const localItem = await catalogItemFor(id);
+                if (localItem) return { success: true, source: 'raggae', data: catalogToTmdbShape(localItem, 'tv') };
+            }
+
             if (!TMDB_BEARER_TOKEN) {
                 return {
                     success: true,
@@ -375,7 +702,7 @@ function registerTmdbHandlers(ipcMain) {
                 };
             }
 
-            const url = `https://api.themoviedb.org/3/tv/${id}?language=${language}`;
+            const url = `https://api.themoviedb.org/3/tv/${tmdbId || id}?language=${language}&append_to_response=external_ids`;
             const response = await fetchWithTimeout(url, {
                 method: 'GET',
                 headers: {
@@ -386,6 +713,25 @@ function registerTmdbHandlers(ipcMain) {
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
+
+            // Outside details into the catalog, keyed on the IMDb id when TMDB knows it
+            if (data && (data.name || data.title)) {
+                ingestOutside({
+                    category: 'tv',
+                    title: data.name || data.title,
+                    original_title: data.original_name || null,
+                    year: data.first_air_date ? parseInt(data.first_air_date.substring(0, 4)) : null,
+                    release_date: data.first_air_date || null,
+                    rating: data.vote_average ? parseFloat(data.vote_average.toFixed(1)) : null,
+                    votes: data.vote_count || null,
+                    genres: Array.isArray(data.genres) ? data.genres.map(g => g.name).filter(Boolean) : [],
+                    poster_url: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null,
+                    overview: data.overview || null,
+                    external_ids: { tmdb: data.id, imdb: (data.external_ids && data.external_ids.imdb_id) || null },
+                    source: 'tmdb'
+                });
+            }
+
             return { success: true, data };
         } catch (e) {
             console.error('[TMDB] get-tmdb-tv failed, returning offline fallback:', e);
@@ -418,6 +764,8 @@ function registerTmdbHandlers(ipcMain) {
             } else {
                 id = arg;
             }
+
+            id = (await toTmdbId(id, 'tv')) || id;
 
             if (!TMDB_BEARER_TOKEN) {
                 return {
@@ -474,13 +822,15 @@ function registerTmdbHandlers(ipcMain) {
     });
 
     // ── KinoCheck Premium API Handler ────────────────────────────────────────
-    ipcMain.handle('get-kinocheck-trailer', async (event, { tmdbId, mediaType, language }) => {
+    ipcMain.handle('get-kinocheck-trailer', async (event, { tmdbId: requestedId, mediaType, language }) => {
+        let tmdbId = requestedId;
         try {
             if (!KINOCHECK_API_KEY) {
                 console.warn('[KinoCheck] No API key loaded.');
                 return { success: false, error: 'No API key loaded.' };
             }
             const type = mediaType === 'tv' ? 'shows' : 'movies';
+            tmdbId = (await toTmdbId(tmdbId, mediaType === 'tv' ? 'tv' : 'movie')) || tmdbId;
             // KinoCheck takes a bare language code. Was pinned to English, so a
             // French UI still got English trailers.
             const kcLang = String(language || 'en').slice(0, 2).toLowerCase() === 'fr' ? 'fr' : 'en';
@@ -676,44 +1026,11 @@ function registerTmdbHandlers(ipcMain) {
         }
     });
 
-    // ── OMDb API Support ──────────────────────────────────────────────────────
-    const OMDB_API_KEY = '219a7856';
-
+    // ── OMDb API Support & Details Waterfall ─────────────────────────────────
     ipcMain.handle('search-omdb', async (event, { query, page = 1 }) => {
         try {
-            if (!query) return { success: true, results: [] };
-            
-            const url = `http://www.omdbapi.com/?s=${encodeURIComponent(query)}&page=${page}&apikey=${OMDB_API_KEY}`;
-            console.log(`[OMDb] Searching: ${url}`);
-            
-            const response = await fetchWithTimeout(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
-            if (data.Response === 'False') {
-                return { success: true, results: [], totalResults: 0 };
-            }
-            
-            const results = (data.Search || []).map(item => {
-                let poster = 'public/poster_placeholder.svg';
-                if (item.Poster && item.Poster !== 'N/A') {
-                    poster = item.Poster;
-                }
-                
-                return {
-                    id: item.imdbID,
-                    imdb_id: item.imdbID,
-                    media_type: item.Type === 'series' ? 'tv' : 'movie',
-                    title: item.Title || 'Untitled',
-                    year: item.Year || '—',
-                    rating: '—',
-                    genres: item.Type ? item.Type.toUpperCase() : 'General',
-                    poster: poster,
-                    overview: `IMDb ID: ${item.imdbID}. Use standard RD stream search to look up this title.`
-                };
-            });
-            
-            return { success: true, results, totalResults: parseInt(data.totalResults) || results.length };
+            const results = await searchOmdbApi(query, page);
+            return { success: true, results, totalResults: results.length };
         } catch (err) {
             console.error('[OMDb] Search error:', err);
             return { success: false, error: err.message };
@@ -722,54 +1039,106 @@ function registerTmdbHandlers(ipcMain) {
 
     ipcMain.handle('get-omdb-details', async (event, { imdbId, title, year }) => {
         try {
-            let url = `http://www.omdbapi.com/?apikey=${OMDB_API_KEY}&plot=full`;
-            if (imdbId) {
-                url += `&i=${imdbId}`;
-            } else if (title) {
-                url += `&t=${encodeURIComponent(title)}`;
-                if (year) url += `&y=${year}`;
-            } else {
+            const queryText = title || imdbId;
+            if (!queryText) {
                 return { success: false, error: 'Either imdbId or title must be provided' };
             }
-            
-            console.log(`[OMDb] Fetching details: ${url}`);
-            const response = await fetchWithTimeout(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
-            if (data.Response === 'False') {
-                throw new Error(data.Error || 'Movie not found in OMDb');
+
+            // STEP 1: Local catalog. An IMDb id names exactly one item; a bare title is resolved with its year,
+            // and only a film or series counts (resolve also knows music, books and scenes).
+            let item = imdbId ? await raggae.getItem(`imdb:${String(imdbId).replace(/^imdb:/, '')}`) : null;
+            if (!item && !imdbId && title) {
+                const resolved = await raggae.resolve({ name: year ? `${title} ${year}` : title });
+                const cand = resolved && resolved.item;
+                if (cand && (cand.category === 'movie' || cand.category === 'tv')) item = cand;
             }
-            
-            let poster = 'public/poster_placeholder.svg';
-            if (data.Poster && data.Poster !== 'N/A') {
-                poster = data.Poster;
+            if (item) {
+                const card = catalogToCard(item);
+                const credits = Array.isArray(item.cast_or_credits) ? item.cast_or_credits : [];
+                const isDirector = c => /\(director\)|^director:/i.test(c);
+                console.log(`[Details] From the local catalog: ${card.title} (${card.year})`);
+                return {
+                    success: true,
+                    source: 'raggae',
+                    data: {
+                        ...card,
+                        imdb_id: card.imdb_id || imdbId || null,
+                        overview: item.overview || 'No plot available.',
+                        director: credits.filter(isDirector).map(c => c.replace(/\s*\(director\)|^director:\s*/i, '')).join(', ') || '—',
+                        writer: '—',
+                        actors: credits.filter(c => !isDirector(c) && !/\((writer|producer|composer)\)/i.test(c)).slice(0, 5).join(', ') || '—',
+                        awards: '—',
+                        runtime: item.runtime_mins ? `${item.runtime_mins} min` : '—'
+                    }
+                };
             }
-            
-            const formatted = {
-                id: data.imdbID || null,
-                imdb_id: data.imdbID || null,
-                title: data.Title || 'Untitled',
-                year: data.Year || '—',
-                rating: data.imdbRating || '—',
-                genres: data.Genre || 'General',
-                poster: poster,
-                overview: data.Plot || 'No plot available.',
-                director: data.Director || '—',
-                writer: data.Writer || '—',
-                actors: data.Actors || '—',
-                awards: data.Awards || '—',
-                runtime: data.Runtime || '—'
-            };
-            
-            return { success: true, data: formatted };
+
+            // STEP 2: TMDB second
+            if (TMDB_BEARER_TOKEN) {
+                try {
+                    let tmdbHit = null;
+                    if (imdbId) {
+                        const findUrl = `https://api.themoviedb.org/3/find/${imdbId}?external_source=imdb_id`;
+                        const res = await fetchWithTimeout(findUrl, {
+                            headers: { accept: 'application/json', Authorization: `Bearer ${TMDB_BEARER_TOKEN}` }
+                        }, 5000);
+                        if (res.ok) {
+                            const findData = await res.json();
+                            tmdbHit = (findData.movie_results && findData.movie_results[0]) || (findData.tv_results && findData.tv_results[0]);
+                        }
+                    }
+                    if (!tmdbHit && title) {
+                        const sUrl = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(title)}&include_adult=false`;
+                        const res = await fetchWithTimeout(sUrl, {
+                            headers: { accept: 'application/json', Authorization: `Bearer ${TMDB_BEARER_TOKEN}` }
+                        }, 5000);
+                        if (res.ok) {
+                            const sData = await res.json();
+                            if (sData.results && sData.results.length > 0) tmdbHit = sData.results[0];
+                        }
+                    }
+                    if (tmdbHit) {
+                        return {
+                            success: true,
+                            source: 'tmdb',
+                            data: {
+                                id: tmdbHit.id,
+                                imdb_id: imdbId || null,
+                                title: tmdbHit.title || tmdbHit.name || 'Untitled',
+                                year: (tmdbHit.release_date || tmdbHit.first_air_date || '—').substring(0, 4),
+                                rating: tmdbHit.vote_average ? tmdbHit.vote_average.toFixed(1) : '—',
+                                genres: (tmdbHit.genre_ids || []).map(id => GENRE_MAP[id]).filter(Boolean).slice(0, 3).join(', ') || 'General',
+                                poster: tmdbHit.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbHit.poster_path}` : 'public/poster_placeholder.svg',
+                                overview: tmdbHit.overview || 'No description available.',
+                                director: '—',
+                                writer: '—',
+                                actors: '—',
+                                awards: '—',
+                                runtime: '—'
+                            }
+                        };
+                    }
+                } catch (tmdbErr) {
+                    console.warn('[Details] TMDB lookup error:', tmdbErr.message);
+                }
+            }
+
+            // STEP 3: OMDb third
+            const omdbData = await fetchOmdbDetails({ imdbId, title, year });
+            if (omdbData) {
+                return { success: true, source: 'omdb', data: omdbData };
+            }
+
+            return { success: false, error: 'Media details not found across Local Catalog, TMDB, or OMDb' };
         } catch (err) {
-            console.error('[OMDb] Get details error:', err);
+            console.error('[Details] Error getting details:', err);
             return { success: false, error: err.message };
         }
     });
 }
 
 module.exports = {
-    registerTmdbHandlers
+    registerTmdbHandlers,
+    // for tests/test_raggae_integration.js
+    _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, localSearchCache, tmdbIdCache }
 };
