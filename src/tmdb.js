@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const raggae = require('./raggae');
 
 // Helper function to fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
@@ -161,11 +162,6 @@ async function geoWatchRegion() {
 function registerTmdbHandlers(ipcMain) {
     ipcMain.handle('search-tmdb', async (event, arg) => {
         try {
-            if (!TMDB_BEARER_TOKEN) {
-                console.warn('[TMDB] No Bearer Token configured in .env');
-                return { success: false, error: 'No Bearer Token configured in .env' };
-            }
-
             let query = '';
             let page = 1;
             let language = 'en-US';
@@ -175,6 +171,29 @@ function registerTmdbHandlers(ipcMain) {
                 language = arg.language || 'en-US';
             } else if (typeof arg === 'string') {
                 query = arg;
+            }
+
+            if (!TMDB_BEARER_TOKEN) {
+                console.warn('[TMDB] No Bearer Token configured in .env, falling back to vault-raggae catalog...');
+                const raggaeData = await raggae.search(query || 'Inception', { limit: 20 });
+                const raggaeResults = Array.isArray(raggaeData.results) ? raggaeData.results : (Array.isArray(raggaeData) ? raggaeData : []);
+                if (raggaeResults.length > 0) {
+                    return {
+                        success: true,
+                        source: 'raggae',
+                        results: raggaeResults.map(item => ({
+                            id: item.external_ids?.tmdb || item.catalog_id || item.id,
+                            media_type: item.category === 'tv' ? 'tv' : 'movie',
+                            title: item.title || item.original_title || 'Untitled',
+                            year: item.year ? String(item.year) : '—',
+                            rating: item.rating ? String(item.rating) : '—',
+                            genres: Array.isArray(item.genres) ? item.genres.join(', ') : 'General',
+                            poster: item.poster_url || raggae.getPosterUrl(item.poster_local_path) || 'public/poster_placeholder.svg',
+                            overview: item.overview || (item.cast_or_credits && item.cast_or_credits.length ? item.cast_or_credits.slice(0, 3).join(', ') : '') || `Catalog: ${item.catalog_id}`
+                        }))
+                    };
+                }
+                return { success: false, error: 'No Bearer Token configured in .env' };
             }
 
             let url;
@@ -197,6 +216,27 @@ function registerTmdbHandlers(ipcMain) {
             if (!response.ok) {
                 const errText = await response.text();
                 console.error('[TMDB] Fetch failed:', response.status, errText);
+                if (query) {
+                    console.log(`[TMDB] Attempting vault-raggae fallback for "${query}" after TMDB error...`);
+                    const raggaeData = await raggae.search(query, { limit: 20 });
+                    const raggaeResults = Array.isArray(raggaeData.results) ? raggaeData.results : (Array.isArray(raggaeData) ? raggaeData : []);
+                    if (raggaeResults.length > 0) {
+                        return {
+                            success: true,
+                            source: 'raggae',
+                            results: raggaeResults.map(item => ({
+                                id: item.external_ids?.tmdb || item.catalog_id || item.id,
+                                media_type: item.category === 'tv' ? 'tv' : 'movie',
+                                title: item.title || item.original_title || 'Untitled',
+                                year: item.year ? String(item.year) : '—',
+                                rating: item.rating ? String(item.rating) : '—',
+                                genres: Array.isArray(item.genres) ? item.genres.join(', ') : 'General',
+                                poster: item.poster_url || raggae.getPosterUrl(item.poster_local_path) || 'public/poster_placeholder.svg',
+                                overview: item.overview || (item.cast_or_credits && item.cast_or_credits.length ? item.cast_or_credits.slice(0, 3).join(', ') : '') || `Catalog: ${item.catalog_id}`
+                            }))
+                        };
+                    }
+                }
                 return { success: false, status: response.status, error: errText };
             }
 
@@ -764,7 +804,39 @@ function registerTmdbHandlers(ipcMain) {
             
             return { success: true, data: formatted };
         } catch (err) {
-            console.error('[OMDb] Get details error:', err);
+            console.error('[OMDb] Get details error:', err.message);
+            // Attempt vault-raggae catalog resolve as resilient fallback
+            try {
+                const queryText = title || imdbId;
+                if (queryText) {
+                    console.log(`[raggae] Attempting fallback resolution for "${queryText}"...`);
+                    const resolved = await raggae.resolve({ name: queryText, categoryHint: 'movie' });
+                    if (resolved && resolved.item) {
+                        const item = resolved.item;
+                        return {
+                            success: true,
+                            source: 'raggae',
+                            data: {
+                                id: item.external_ids?.imdb || item.catalog_id,
+                                imdb_id: item.external_ids?.imdb || null,
+                                title: item.title || 'Untitled',
+                                year: item.year ? String(item.year) : '—',
+                                rating: item.rating ? String(item.rating) : '—',
+                                genres: Array.isArray(item.genres) ? item.genres.join(', ') : 'General',
+                                poster: item.poster_url || raggae.getPosterUrl(item.poster_local_path) || 'public/poster_placeholder.svg',
+                                overview: item.overview || `Catalog: ${item.catalog_id}`,
+                                director: (item.cast_or_credits && item.cast_or_credits.find(c => c.toLowerCase().includes('director'))) || '—',
+                                writer: '—',
+                                actors: (item.cast_or_credits && item.cast_or_credits.filter(c => !c.toLowerCase().includes('director')).slice(0, 5).join(', ')) || '—',
+                                awards: '—',
+                                runtime: item.runtime_mins ? `${item.runtime_mins} min` : '—'
+                            }
+                        };
+                    }
+                }
+            } catch (raggaeErr) {
+                console.error('[raggae] Fallback resolution failed:', raggaeErr.message);
+            }
             return { success: false, error: err.message };
         }
     });

@@ -71,6 +71,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   searchOMDb: (query, page = 1) => ipcRenderer.invoke('search-omdb', { query, page }),
   getOMDbDetails: (data) => ipcRenderer.invoke('get-omdb-details', data),
+
+  // vault-raggae catalog resolution & media index
+  raggaeResolve: (data) => ipcRenderer.invoke('raggae-resolve', data),
+  raggaeByPath: (filePath) => ipcRenderer.invoke('raggae-by-path', filePath),
+  raggaeSearch: (data) => ipcRenderer.invoke('raggae-search', data),
+  raggaeHealth: () => ipcRenderer.invoke('raggae-health'),
   searchTorrents: (movieTitle) => ipcRenderer.invoke('search-torrents', movieTitle),
   streamRDTorrent: (data) => ipcRenderer.invoke('rd-stream-torrent', data),
   getTorrentStatus: (torrentId) => ipcRenderer.invoke('rd-torrent-status', torrentId),

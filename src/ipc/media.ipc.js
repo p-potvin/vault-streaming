@@ -5,6 +5,7 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const child_process = require('child_process');
 const utils = require('../utils');
+const raggae = require('../raggae');
 const { cleanupTemp, promoteTempFile } = utils;
 
 function getFullProbeMetadata(filePath) {
@@ -149,31 +150,48 @@ function registerMediaIpc(ipcMain) {
     });
 
 
-    // Get File Properties
+    // Get File Properties — supports canonical <file.ext>.json, <stem>.json, .meta.json sidecars & vault-raggae media index
     ipcMain.handle('get-file-properties', async (_event, filePath) => {
         if (typeof filePath !== 'string' || !fs.existsSync(filePath)) {
             return { success: false, error: 'File not found' };
         }
-        const metaPath = filePath + '.meta.json';
         try {
             const stats = fs.statSync(filePath);
             const ext = path.extname(filePath).toLowerCase();
+            const dir = path.dirname(filePath);
+            const baseName = path.basename(filePath, ext);
 
-            // 1. Check if sidecar metadata already exists
-            if (fs.existsSync(metaPath)) {
-                try {
-                    const cached = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-                    // Refresh size and mod times
-                    cached.size = stats.size;
-                    cached.modified = stats.mtime;
-                    return { success: true, properties: cached };
-                } catch (cacheErr) {
-                    console.error('[media.ipc:properties] Cache read error, re-probing:', cacheErr.message);
+            // Candidate sidecar paths in priority order (vault-raggae v2 contract):
+            // 1. <file.ext>.json (canonical)
+            // 2. <stem>.json (stem fallback)
+            // 3. <file.ext>.meta.json (legacy vault-streaming)
+            const sidecarCandidates = [
+                filePath + '.json',
+                path.join(dir, `${baseName}.json`),
+                filePath + '.meta.json'
+            ];
+
+            let cachedSidecar = null;
+            let foundSidecarPath = null;
+            let isV2Record = false;
+
+            for (const cand of sidecarCandidates) {
+                if (fs.existsSync(cand)) {
+                    try {
+                        const parsed = JSON.parse(fs.readFileSync(cand, 'utf8'));
+                        cachedSidecar = parsed;
+                        foundSidecarPath = cand;
+                        if (parsed && (parsed.record_version === 2 || parsed.media_version === 2 || parsed.file)) {
+                            isV2Record = true;
+                        }
+                        break;
+                    } catch (cacheErr) {
+                        console.error('[media.ipc:properties] Cache read error for', cand, cacheErr.message);
+                    }
                 }
             }
 
-            // 2. Fetch fresh properties
-            const baseProps = {
+            let baseProps = {
                 name: path.basename(filePath),
                 path: filePath,
                 size: stats.size,
@@ -194,52 +212,121 @@ function registerMediaIpc(ipcMain) {
                 enhancements: { audio: false, video: false, subtitles: [], translation: [] }
             };
 
-            if (['.mp4', '.mkv', '.avi', '.mov', '.webm', '.ts', '.wmv'].includes(ext)) {
-                const probeData = await getFullProbeMetadata(filePath);
-                if (probeData) {
-                    if (probeData.format) {
-                        baseProps.duration = parseFloat(probeData.format.duration) || null;
-                        baseProps.bitrate = parseInt(probeData.format.bit_rate) || null;
+            if (cachedSidecar) {
+                if (isV2Record) {
+                    const vf = cachedSidecar.file || {};
+                    const vvid = vf.video || {};
+                    const vaud = vf.audio || {};
+                    baseProps.duration = vvid.duration || cachedSidecar.duration || null;
+                    baseProps.width = vvid.width || null;
+                    baseProps.height = vvid.height || null;
+                    baseProps.codec = vvid.codec || null;
+                    baseProps.bitrate = vvid.bit_rate || null;
+                    baseProps.fps = vvid.fps || null;
+                    baseProps.hasVideo = !!(vvid.width || vvid.codec);
+                    baseProps.audioCodec = vaud.codec || null;
+                    baseProps.channels = vaud.channels || null;
+                    baseProps.sampleRate = vaud.sample_rate || null;
+                    baseProps.hasAudio = !!(vaud.channels || vaud.codec);
+                    if (cachedSidecar.enhancements) {
+                        baseProps.enhancements = { ...baseProps.enhancements, ...cachedSidecar.enhancements };
                     }
-                    if (Array.isArray(probeData.streams)) {
-                        const videoStream = probeData.streams.find(s => s.codec_type === 'video');
-                        baseProps.hasVideo = !!videoStream;
-                        if (videoStream) {
-                            baseProps.width = videoStream.width || null;
-                            baseProps.height = videoStream.height || null;
-                            baseProps.codec = videoStream.codec_name || null;
-                            if (videoStream.r_frame_rate) {
-                                const parts = videoStream.r_frame_rate.split('/');
-                                if (parts.length === 2 && parseFloat(parts[1]) > 0) {
-                                    baseProps.fps = Math.round((parseFloat(parts[0]) / parseFloat(parts[1])) * 100) / 100;
-                                } else {
-                                    baseProps.fps = parseFloat(videoStream.r_frame_rate) || null;
+                } else {
+                    baseProps = { ...baseProps, ...cachedSidecar, size: stats.size, modified: stats.mtime };
+                }
+            }
+
+            // Probe with ffprobe if video/audio properties are still missing
+            if (['.mp4', '.mkv', '.avi', '.mov', '.webm', '.ts', '.wmv'].includes(ext)) {
+                if (!baseProps.duration && !baseProps.width) {
+                    const probeData = await getFullProbeMetadata(filePath);
+                    if (probeData) {
+                        if (probeData.format) {
+                            baseProps.duration = parseFloat(probeData.format.duration) || null;
+                            baseProps.bitrate = parseInt(probeData.format.bit_rate) || null;
+                        }
+                        if (Array.isArray(probeData.streams)) {
+                            const videoStream = probeData.streams.find(s => s.codec_type === 'video');
+                            baseProps.hasVideo = !!videoStream;
+                            if (videoStream) {
+                                baseProps.width = videoStream.width || null;
+                                baseProps.height = videoStream.height || null;
+                                baseProps.codec = videoStream.codec_name || null;
+                                if (videoStream.r_frame_rate) {
+                                    const parts = videoStream.r_frame_rate.split('/');
+                                    if (parts.length === 2 && parseFloat(parts[1]) > 0) {
+                                        baseProps.fps = Math.round((parseFloat(parts[0]) / parseFloat(parts[1])) * 100) / 100;
+                                    } else {
+                                        baseProps.fps = parseFloat(videoStream.r_frame_rate) || null;
+                                    }
                                 }
                             }
+                            const audioStream = probeData.streams.find(s => s.codec_type === 'audio');
+                            baseProps.hasAudio = !!audioStream;
+                            if (audioStream) {
+                                baseProps.audioCodec = audioStream.codec_name || null;
+                                baseProps.channels = audioStream.channels || null;
+                                baseProps.sampleRate = parseInt(audioStream.sample_rate) || null;
+                            }
                         }
-                        const audioStream = probeData.streams.find(s => s.codec_type === 'audio');
-                        baseProps.hasAudio = !!audioStream;
-                        if (audioStream) {
-                            baseProps.audioCodec = audioStream.codec_name || null;
-                            baseProps.channels = audioStream.channels || null;
-                            baseProps.sampleRate = parseInt(audioStream.sample_rate) || null;
-                        }
-                    }
 
-                    // Save sidecar metadata
-                    try {
-                        fs.writeFileSync(metaPath, JSON.stringify(baseProps, null, 2), 'utf8');
-                        console.log('[media.ipc:properties] Saved sidecar metadata:', metaPath);
-                    } catch (saveErr) {
-                        console.error('[media.ipc:properties] Failed to save sidecar metadata:', saveErr.message);
+                        // Save legacy metadata only when no v2 sidecar exists
+                        if (!isV2Record) {
+                            const metaPath = foundSidecarPath || (filePath + '.meta.json');
+                            try {
+                                fs.writeFileSync(metaPath, JSON.stringify(baseProps, null, 2), 'utf8');
+                                console.log('[media.ipc:properties] Saved sidecar metadata:', metaPath);
+                            } catch (saveErr) {
+                                console.error('[media.ipc:properties] Failed to save sidecar metadata:', saveErr.message);
+                            }
+                        }
                     }
                 }
+            }
+
+            // Query vault-raggae for media index record (id, fingerprints, scenes, identities)
+            const raggaeData = await raggae.byPath(filePath);
+            if (raggaeData) {
+                baseProps.raggae = raggaeData;
+                if (!baseProps.duration && raggaeData.duration) baseProps.duration = raggaeData.duration;
+                if (!baseProps.width && raggaeData.width) baseProps.width = raggaeData.width;
+                if (!baseProps.height && raggaeData.height) baseProps.height = raggaeData.height;
             }
 
             return { success: true, properties: baseProps };
         } catch (e) {
             return { success: false, error: e.message };
         }
+    });
+
+    // vault-raggae gateway IPC handlers
+    ipcMain.handle('raggae-resolve', async (_event, data) => {
+        try {
+            return await raggae.resolve(data);
+        } catch (err) {
+            return { error: err.message };
+        }
+    });
+
+    ipcMain.handle('raggae-by-path', async (_event, filePath) => {
+        try {
+            return await raggae.byPath(filePath);
+        } catch (err) {
+            return null;
+        }
+    });
+
+    ipcMain.handle('raggae-search', async (_event, data) => {
+        try {
+            const query = typeof data === 'string' ? data : (data.query || data.q || '');
+            return await raggae.search(query, data || {});
+        } catch (err) {
+            return [];
+        }
+    });
+
+    ipcMain.handle('raggae-health', async () => {
+        return await raggae.health();
     });
 
     // Streaming Upscale (Real-time AI upscaling with MediaSource)
