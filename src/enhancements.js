@@ -6,10 +6,12 @@
  * "Generate Subtitles" ran Demucs and a full GPU re-encode before it reached the
  * transcription step. Now each action starts only its own work.
  *
- * The `<video>.meta.json` sidecar is the single source of truth for what has
- * been applied to the enhanced copy. The Python scripts write it; this module
- * reads it so the context menu can show accurate checkboxes, and clears entries
- * on revert.
+ * The video's sidecar is the single source of truth for what has been applied
+ * to the enhanced copy: the shared v2 record (`<file.ext>.json`, or whichever of
+ * the four names it already has; src/sidecar-record.js), keys `enhancements`,
+ * `enhancementDetails`, `enhancedPath`. The Python scripts write it
+ * (python-scripts/vw_media/state.py, same rules); this module reads it so the
+ * context menu can show accurate checkboxes, and clears entries on revert.
  */
 
 const path = require('path');
@@ -17,6 +19,7 @@ const fs = require('fs');
 const readline = require('readline');
 const { spawn } = require('child_process');
 const utils = require('./utils');
+const sidecarRecord = require('./sidecar-record');
 
 /** Every user-facing enhancement, and the script that performs it. */
 const ACTIONS = {
@@ -42,9 +45,6 @@ function scriptPath(script) {
     return utils.resolveScriptPath(script);
 }
 
-function sidecarPath(videoPath) {
-    return `${videoPath}.meta.json`;
-}
 
 function blankEnhancements() {
     return { audio: false, video: false, subtitles: [], translation: [] };
@@ -52,13 +52,7 @@ function blankEnhancements() {
 
 /** Read a sidecar, normalising its shape. Never throws. */
 function readSidecar(videoPath) {
-    let meta = {};
-    try {
-        meta = JSON.parse(fs.readFileSync(sidecarPath(videoPath), 'utf8'));
-    } catch (_) {
-        meta = {};
-    }
-    if (!meta || typeof meta !== 'object') meta = {};
+    const meta = sidecarRecord.read(videoPath).record;
 
     const source = (meta.enhancements && typeof meta.enhancements === 'object') ? meta.enhancements : {};
     const enhancements = blankEnhancements();
@@ -76,14 +70,12 @@ function readSidecar(videoPath) {
     return meta;
 }
 
+/** Saves this app's keys of `meta` into the v2 record, keeping the rest of the sidecar as it is on disk. A key
+ *  removed from `meta` (revert drops `enhancedPath`) is removed from the sidecar too. */
 function writeSidecar(videoPath, meta) {
-    try {
-        fs.writeFileSync(sidecarPath(videoPath), JSON.stringify(meta, null, 2), 'utf8');
-        return true;
-    } catch (err) {
-        console.error('[enhancements] Failed to write sidecar:', err.message);
-        return false;
-    }
+    const fields = { ...meta };
+    if (!('enhancedPath' in meta)) fields.enhancedPath = undefined;
+    return sidecarRecord.update(videoPath, fields) !== null;
 }
 
 /**
