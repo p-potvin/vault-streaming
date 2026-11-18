@@ -120,7 +120,13 @@ async function tmdb(route) {
 async function candidates(category, minVotes) {
     const out = [];
     for (let offset = 0; ; offset += 500) {
-        const rows = await raggae.browse({ category, sort: 'votes', limit: 500, offset, minVotes, nullOnError: true });
+        // deep offsets are slow on the gateway (offset 29,500 passed 30 s while it was storing batches): 120 s a
+        // page and two more tries, 30 s apart
+        let rows = null;
+        for (let attempt = 0; attempt < 3 && rows === null; attempt++) {
+            if (attempt) await new Promise(r => setTimeout(r, 30000));
+            rows = await raggae.browse({ category, sort: 'votes', limit: 500, offset, minVotes, nullOnError: true, timeoutMs: 120000 });
+        }
         // a failed page would silently end the list early: stop the run instead
         if (rows === null) throw new Error(`catalog browse failed (${category}, offset ${offset}); nothing was asked of TMDB`);
         if (!rows.length) break;
