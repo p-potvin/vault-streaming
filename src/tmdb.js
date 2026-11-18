@@ -681,8 +681,10 @@ async function readThroughSeason(id, seasonNumber, language = 'en-US') {
         await readThroughDetails(id, 'tv', language);
         item = await findCatalogItem(id, 'tv');
     }
-    const sd = tmdbBlob(item, language) && tmdbBlob(item, language).season_details;
-    const cached = sd && sd[n];
+    // the requested language's episodes, else the backfill's English ones (scripts/backfill-catalog.js keeps episodes
+    // in en-US only): English episode names rather than another TMDB request
+    const seasonIn = lang => { const b = tmdbBlob(item, lang); return b && b.season_details && b.season_details[n]; };
+    const cached = seasonIn(language) || (language !== 'en-US' ? seasonIn('en-US') : null);
     if (cached && isFresh(cached, SEASON_TTL_MS)) {
         return { success: true, source: 'raggae', data: { ...cached, season_number: Number(n) } };
     }
@@ -1154,5 +1156,5 @@ module.exports = {
     // for tests/test_raggae_integration.js
     _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, localSearchCache, tmdbIdCache,
                   slimDetails, slimSeason, catalogDetails, listItemMatches, GENRE_CODES, genreSpec, isReleased, decadeRange, discoverFromCatalog,
-                  trendingFromCatalog }
+                  trendingFromCatalog, detailsToIngest, tmdbImage }
 };

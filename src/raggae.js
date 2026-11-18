@@ -166,24 +166,27 @@ async function searchTitles(query, { limit = 20 } = {}) {
 }
 
 /** A sorted page of one category (GET /v1/catalog/browse): the "popular" list when TMDB is not available. */
-async function browse({ category = 'movie', sort = 'votes', limit = 20, offset = 0, minVotes, genre, yearMin, yearMax } = {}) {
+async function browse({ category = 'movie', sort = 'votes', limit = 20, offset = 0, minVotes, genre, yearMin, yearMax, nullOnError = false, timeoutMs = 30000 } = {}) {
     let route = `/v1/catalog/browse?category=${category}&sort=${sort}&limit=${limit}&offset=${offset}`;
     if (minVotes) route += `&min_votes=${minVotes}`;
     if (genre) route += `&genre=${encodeURIComponent(genre)}`;
     if (yearMin) route += `&year_min=${yearMin}`;
     if (yearMax) route += `&year_max=${yearMax}`;
-    const data = await call('GET', route, { timeoutMs: 30000, tripOnTimeout: false });
-    return Array.isArray(data && data.items) ? data.items : [];
+    const data = await call('GET', route, { timeoutMs, tripOnTimeout: false });
+    if (Array.isArray(data && data.items)) return data.items;
+    // a failed page is not an empty one: callers that page through everything must be able to tell
+    return nullOnError ? null : [];
 }
 
 /**
  * Outside metadata into the catalog (POST /v1/catalog/ingest). New items are added; a known one (same catalog id,
  * e.g. imdb:tt…) only gets its empty fields filled. Fire and forget: resolves the gateway's answer or null.
  */
-async function ingest(items) {
+async function ingest(items, { timeoutMs, tripOnTimeout = true } = {}) {
     const list = (Array.isArray(items) ? items : [items]).filter(i => i && i.title && i.category);
     if (!list.length) return null;
-    return call('POST', '/v1/catalog/ingest', { body: { items: list.slice(0, 100) } });
+    // a batch carrying TMDB extras (seasons, episodes) can take the gateway well over the default 6 s to store
+    return call('POST', '/v1/catalog/ingest', { body: { items: list.slice(0, 100) }, timeoutMs, tripOnTimeout });
 }
 
 /**
