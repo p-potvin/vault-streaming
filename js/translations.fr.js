@@ -1,4 +1,4 @@
-window.translationsQc = {
+window.translationsFr = {
   browseVault: "Parcourir",
   videos: "Vidéos",
   images: "Images",

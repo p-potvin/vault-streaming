@@ -147,7 +147,8 @@ async function runBetterSubtitles({
 
     // Translation flag handling: supports any language pair via HF / command-a (111B) and translategemma
     if (translateTo && translateTo !== 'none' && translateTo !== 'original' && translateTo !== 'und') {
-        const lang = translateTo.startsWith('qc') ? 'fr' : translateTo;
+        // 'qc' from settings saved by older versions: French (ISO code fr)
+        const lang = translateTo.toLowerCase() === 'qc' ? 'fr' : translateTo;
         args.push('-TranslateTo', lang, '-TranslateFrom', translateFrom || 'en', '-TranslateEngine', translateEngine || 'hf');
     }
 

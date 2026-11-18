@@ -125,6 +125,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Audio-track probe (which audio streams a source carries, and their languages)
   probeAudioTracks: (data) => ipcRenderer.invoke('probe-audio-tracks', data),
+  // speech detection for a track whose language the stream does not report (nemo-speech / Nemotron 3.5)
+  detectAudioLanguage: (data) => ipcRenderer.invoke('detect-audio-language', data),
 
   // Per-debrid-service counters. `getDebridStatsReport()` returns a printable
   // table — run it in the console to decide which service is worth keeping.
