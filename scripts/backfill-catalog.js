@@ -259,7 +259,14 @@ async function main() {
     const flush = async () => {
         if (!pending.length) return;
         const batch = pending.splice(0, pending.length);
-        const res = await raggae.ingest(batch.map(b => b.ingest));
+        // a big batch can take the gateway a while to store: 60 s, a timeout does not mark the gateway down, and
+        // one retry 20 s later (the ingest is fill-only and keyed, so a batch stored twice is harmless)
+        const opts = { timeoutMs: 60000, tripOnTimeout: false };
+        let res = await raggae.ingest(batch.map(b => b.ingest), opts);
+        if (!res || !Array.isArray(res.items)) {
+            await new Promise(r => setTimeout(r, 20000));
+            res = await raggae.ingest(batch.map(b => b.ingest), opts);
+        }
         if (!res || !Array.isArray(res.items)) {
             console.warn(`  ingest of ${batch.length} titles failed; they stay to do`);
             return;

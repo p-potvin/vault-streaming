@@ -182,10 +182,11 @@ async function browse({ category = 'movie', sort = 'votes', limit = 20, offset =
  * Outside metadata into the catalog (POST /v1/catalog/ingest). New items are added; a known one (same catalog id,
  * e.g. imdb:tt…) only gets its empty fields filled. Fire and forget: resolves the gateway's answer or null.
  */
-async function ingest(items) {
+async function ingest(items, { timeoutMs, tripOnTimeout = true } = {}) {
     const list = (Array.isArray(items) ? items : [items]).filter(i => i && i.title && i.category);
     if (!list.length) return null;
-    return call('POST', '/v1/catalog/ingest', { body: { items: list.slice(0, 100) } });
+    // a batch carrying TMDB extras (seasons, episodes) can take the gateway well over the default 6 s to store
+    return call('POST', '/v1/catalog/ingest', { body: { items: list.slice(0, 100) }, timeoutMs, tripOnTimeout });
 }
 
 /**
