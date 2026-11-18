@@ -109,7 +109,6 @@ window.translationsQc = {
   settingSubtitleFontSize: "Taille des sous-titres :",
   settingRememberPlayback: "Retenir la position de lecture :",
   settingMuteTrailers: "Couper le son des bandes-annonces :",
-  settingAutoCacheTrailers: "Mise en cache des bandes-annonces :",
   settingMinimizeToTray: "Réduire dans la barre d'état :",
   settingDevMode: "Mode développeur (journaux détaillés) :",
   settingOpenSubtitlesKey: "Clé API OpenSubtitles :",

@@ -394,86 +394,24 @@ async function loadHoverTrailer(popup, movie, title, year) {
     const spinner = popup.querySelector('.premium-trailer-loading-spinner');
     if (spinner) spinner.style.display = 'block';
 
-    // Resolve a trailer key (cached across hovers).
-    window._trailerKeyCache = window._trailerKeyCache || new Map();
+    // The trailer's YouTube id and local copy in one call (src/trailers.js): outside services and YouTube are asked
+    // only the first time a title is hovered or opened; every later hover plays the file from disk.
     let trailerKey = '';
-    const cacheKey = `${movie.media_type}_${movie.id}`;
-    if (window._trailerKeyCache.has(cacheKey)) {
-        trailerKey = window._trailerKeyCache.get(cacheKey);
-    } else if (movie.id) {
+    let directUrl = '';
+    if (movie.id && window.electronAPI && window.electronAPI.getTrailer) {
         try {
-            if (window.electronAPI && window.electronAPI.getKinoCheckTrailer) {
-                const kc = await window.electronAPI.getKinoCheckTrailer({ tmdbId: movie.id, mediaType: movie.media_type, language: window.tmdbLanguage() });
-                if (kc && kc.success && kc.key) trailerKey = kc.key;
-            }
-            if (!trailerKey && window.electronAPI) {
-                const res = movie.media_type === 'tv'
-                    ? await window.electronAPI.getTMDBTV({ id: movie.id, language: window.tmdbLanguage() })
-                    : await window.electronAPI.getTMDBMovie({ id: movie.id, language: window.tmdbLanguage() });
-                if (res && res.success && res.data) {
-                    const videos = res.data.videos ? res.data.videos.results : [];
-                    const trailer = (Array.isArray(videos) ? videos : []).find(v => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser' || v.type === 'Clip'));
-                    if (trailer) trailerKey = trailer.key;
-                }
-            }
-            if (trailerKey) window._trailerKeyCache.set(cacheKey, trailerKey);
+            const res = await window.electronAPI.getTrailer({ id: movie.id, mediaType: movie.media_type,
+                language: window.tmdbLanguage(), title: movie.title || movie.name || '' });
+            if (res && res.key) trailerKey = res.key;
+            if (res && res.success) directUrl = window.trailerSrc(res);
         } catch (e) {
-            console.error('[HoverCard] Failed to fetch trailer key:', e);
+            console.error('[HoverCard] Trailer lookup failed:', e);
         }
-    }
-
-    // A newer hover superseded us, the user paused, or the popup detached —
-    // abort WITHOUT attaching so no off-screen media can play.
-    if (gen !== window._trailerGen || window.premiumHoverState.paused || !document.contains(iframeContainer)) {
-        if (spinner) spinner.style.display = 'none';
-        return;
     }
 
     // A hover is still valid only if nothing superseded it. Re-checked after each
     // await so a stale resolution can never attach off-screen media.
     const stillValid = () => gen === window._trailerGen && !window.premiumHoverState.paused && document.contains(iframeContainer);
-
-    // ── PRIMARY: yt-dlp direct stream ──
-    // The youtube-nocookie iframe frequently returns embed error 152/4 (owner
-    // disallows off-site playback). yt-dlp resolves the real media URL, which the
-    // main-process header rewrite (Referer/Origin -> youtube.com) lets us play in
-    // a native <video> with NO embed restrictions. This is what actually makes
-    // trailers reliable; the iframe is only a last resort.
-    window._directTrailerUrlCache = window._directTrailerUrlCache || {};
-    let directUrl = trailerKey ? window._directTrailerUrlCache[trailerKey] : '';
-
-    // Prefer a durable cached copy (hosted via pixeldrain/etc.) over the ephemeral
-    // yt-dlp URL — no external call, pure lookup. See src/ipc/trailer-cache.ipc.js.
-    if (!directUrl && trailerKey && window.electronAPI && window.electronAPI.getCachedTrailer) {
-        try {
-            const cached = await window.electronAPI.getCachedTrailer(trailerKey);
-            if (cached && cached.primary_url) {
-                directUrl = cached.primary_url;
-                window._directTrailerUrlCache[trailerKey] = directUrl;
-            }
-        } catch (_) { }
-    }
-
-    if (!directUrl && trailerKey && window.electronAPI && window.electronAPI.extractYouTubeURL) {
-        try {
-            const result = await window.electronAPI.extractYouTubeURL(trailerKey);
-            if (result && result.success && result.url) {
-                directUrl = result.url;
-                window._directTrailerUrlCache[trailerKey] = directUrl;
-            }
-        } catch (e) {
-            console.warn('[HoverCard] yt-dlp extraction failed, will fall back to iframe:', e.message);
-        }
-
-        // Cache miss → warm a durable copy for next time (yt-dlp download + upload,
-        // deduped in main). OPT-IN only: fires solely when autoCacheTrailers is on
-        // and the proxy tunnel is configured, so no host traffic happens unprompted.
-        if (trailerKey && window.electronAPI.cacheTrailer && window.appSettings
-            && window.appSettings.autoCacheTrailers && window.appSettings.debridProxyEnable) {
-            const proxy = window.appSettings.debridProxyAddress || '';
-            window.electronAPI.cacheTrailer({ youtubeId: trailerKey, title: movie.title || movie.name || '', proxy }).catch(() => { });
-        }
-    }
 
     if (!stillValid()) { if (spinner) spinner.style.display = 'none'; return; }
 
@@ -500,7 +438,9 @@ async function loadHoverTrailer(popup, movie, title, year) {
         return;
     }
 
-    // ── FALLBACK: iframe embed (only when yt-dlp is unavailable/failed) ──
+    // ── FALLBACK: iframe embed, only when the download failed (retried after a day). No key = no trailer: the
+    // old YouTube *search* embed queried YouTube on every hover, which the cache exists to stop.
+    if (!trailerKey) { if (spinner) spinner.style.display = 'none'; return; }
     const embedUrl = trailerKey
         ? `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${(window.appSettings&&window.appSettings.muteTrailers)?1:0}&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1`
         : `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(title + ' ' + (year || '') + ' official trailer')}&autoplay=1&mute=${(window.appSettings&&window.appSettings.muteTrailers)?1:0}&controls=0&modestbranding=1&rel=0`;

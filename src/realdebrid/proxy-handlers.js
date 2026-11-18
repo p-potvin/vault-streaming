@@ -2,27 +2,54 @@
 const path = require("path");
 const { RD_TOKEN } = require("./client");
 const { makeProxiedRequest, downloadFileWithProxy, parseProxyString } = require("./proxy");
+const deepbrid = require("../deepbrid/client");
 
-// Ban-prevention gate (Tue, 17 Jun 2026 torrent+debrid policy): the manual Debrid
-// Downloader is the one path Comet cannot cover, so it MUST only ever talk to
-// Real-Debrid through the proxy tunnel — never directly from the account IP.
-// makeProxiedRequest / downloadFileWithProxy silently fall back to a DIRECT
-// request when no proxy is given, so we refuse here before that can happen.
-function requireTunnel(proxy) {
-    if (!proxy || !String(proxy).trim() || !parseProxyString(proxy)) {
-        return { success: false, error: 'Debrid Downloader requires the proxy tunnel to be enabled and configured (direct Real-Debrid access is blocked to avoid an IP ban).' };
-    }
-    return null;
-}
+// The proxy tunnel is optional (operator, Wed 18 Nov 2026: Real-Debrid no longer needs it): when one is configured
+// every call goes through it, else makeProxiedRequest / downloadFileWithProxy request directly. The former
+// tunnel-only gate (Tue 17 Jun 2026 policy) is gone. Streaming itself is unchanged: it still resolves through Comet.
+const viaTunnel = proxy => (proxy && String(proxy).trim() && parseProxyString(proxy)) ? proxy : undefined;
 
 function registerProxyHandlers(ipcMain) {
-    ipcMain.handle('rd-unrestrict-url', async (event, { link, proxy }) => {
+    // Real-Debrid first; when it fails (error, not cached, no token) Deepbrid gets the same link. Both go through
+    // the tunnel when one is set, else directly.
+    ipcMain.handle('rd-unrestrict-url', async (event, { link, proxy } = {}) => {
+        const rd = await realDebridUnrestrict({ link, proxy });
+        if (rd.success || !link || !deepbrid.configured()) return rd;
+        console.warn(`[Debrid] Real-Debrid failed (${rd.error}); trying Deepbrid`);
+        try {
+            const db = link.startsWith('magnet:')
+                ? await deepbrid.unrestrictMagnet(link, proxy)
+                : await deepbrid.unrestrictLink(link, proxy);
+            if (db.success) return { ...db, isMagnet: link.startsWith('magnet:'), fallbackFrom: 'real-debrid' };
+            return { ...rd, error: `${rd.error} — Deepbrid: ${db.error}`, deepbridError: db.error };
+        } catch (e) {
+            console.error('[Deepbrid] fallback failed:', e.message);
+            return { ...rd, error: `${rd.error} — Deepbrid: ${e.message}` };
+        }
+    });
+
+    // Stream fallback when no Comet / Real-Debrid source played (js/streaming/rd-flow.js): one magnet on Deepbrid
+    // (through the tunnel when the renderer passes one).
+    ipcMain.handle('deepbrid-stream', async (event, { magnet, hash, proxy, season, episode } = {}) => {
+        if (!deepbrid.configured()) return { success: false, notConfigured: true, error: 'Deepbrid is not configured' };
+        if (!magnet) return { success: false, error: 'No magnet for this source' };
+        try {
+            const want = season != null && episode != null ? { season, episode } : null;
+            const db = await deepbrid.unrestrictMagnet(magnet, proxy, hash, want);
+            if (!db.success) return db;
+            return { success: true, provider: 'deepbrid', streamUrl: db.download, filename: db.filename, filesize: db.filesize };
+        } catch (e) {
+            console.error('[Deepbrid] stream failed:', e.message);
+            return { success: false, error: e.message };
+        }
+    });
+
+    async function realDebridUnrestrict({ link, proxy }) {
         try {
             if (!RD_TOKEN) {
                 return { success: false, error: 'Real-Debrid API token is not configured in .env' };
             }
-            const gate = requireTunnel(proxy);
-            if (gate) return gate;
+            proxy = viaTunnel(proxy);
 
             if (link.startsWith('magnet:')) {
                 console.log('[Real-Debrid] Processing magnet for unrestrict...');
@@ -150,13 +177,12 @@ function registerProxyHandlers(ipcMain) {
             console.error('[Real-Debrid] Proxy-aware unrestrict error:', e);
             return { success: false, error: e.message };
         }
-    });
+    }
 
     // 4. Secure Proxy Tunnel Stream Downloader
     ipcMain.handle('rd-download-file', async (event, { downloadUrl, filename, proxy }) => {
         try {
-            const gate = requireTunnel(proxy);
-            if (gate) return gate;
+            proxy = viaTunnel(proxy);
             const { app } = require('electron');
             const downloadsDir = app.getPath('downloads');
             const destPath = path.join(downloadsDir, filename);

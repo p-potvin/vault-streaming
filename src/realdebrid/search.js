@@ -1,5 +1,5 @@
 // src/realdebrid/search.js - torrent source discovery (Comet primary, Torrentio/EZTV/YTS fallbacks)
-const { fetchWithTimeout, checkRealDebridCache, TMDB_BEARER_TOKEN, COMET_STREAM_BASE } = require("./client");
+const { fetchWithTimeout, checkRealDebridCache, COMET_STREAM_BASE } = require("./client");
 const { recordResolve, detectDebridProvider } = require("../telemetry/debrid-stats");
 
 async function fetchCometStreams(streamType, idParam, cleanTitle) {
@@ -102,23 +102,28 @@ function registerSearchHandlers(ipcMain) {
             let imdbId = null;
             const itemMediaType = mediaType || 'movie';
 
-            // Resolve IMDB ID if TMDB ID is available
-            if (tmdbId && TMDB_BEARER_TOKEN) {
-                console.log(`[Real-Debrid] Fetching IMDB ID from TMDB for TMDB ID: ${tmdbId} (${itemMediaType})`);
-                try {
-                    const extRes = await fetchWithTimeout(`https://api.themoviedb.org/3/${itemMediaType}/${tmdbId}/external_ids`, {
-                        headers: {
-                            accept: 'application/json',
-                            Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
+            // The IMDb id Comet needs, from the catalog: the item carrying this TMDB id, or (first time) the
+            // catalog's read-through details, which fill it from TMDB once. An IMDb id passed as the id is used as is.
+            if (tmdbId) {
+                const sid = String(tmdbId).replace(/^imdb:/, '');
+                if (/^tt\d+$/.test(sid)) {
+                    imdbId = sid;
+                } else {
+                    const category = itemMediaType === 'tv' || itemMediaType === 'series' ? 'tv' : 'movie';
+                    try {
+                        const { readThroughDetails, findCatalogItem } = require('../tmdb');
+                        const item = await findCatalogItem(tmdbId, category, false);
+                        imdbId = (item && item.external_ids && item.external_ids.imdb)
+                            || (item && String(item.catalog_id || '').startsWith('imdb:') ? item.catalog_id.slice(5) : null);
+                        if (!imdbId) {
+                            const details = await readThroughDetails(tmdbId, category);
+                            imdbId = details && details.data && (details.data.imdb_id
+                                || (details.data.external_ids && details.data.external_ids.imdb_id)) || null;
                         }
-                    });
-                    if (extRes.ok) {
-                        const extData = await extRes.json();
-                        imdbId = extData.imdb_id;
-                        console.log(`[Real-Debrid] Resolved IMDB ID: ${imdbId}`);
+                        console.log(`[Search] IMDb id for ${category} ${tmdbId}: ${imdbId || 'unknown'} (catalog)`);
+                    } catch (err) {
+                        console.error('[Search] IMDb id lookup failed:', err.message);
                     }
-                } catch (err) {
-                    console.error('[Real-Debrid] Failed to fetch external IDs from TMDB:', err);
                 }
             }
 

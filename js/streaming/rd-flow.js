@@ -730,6 +730,31 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             response = successfulResponse;
         }
 
+        // Fallback: nothing played through Real-Debrid / Comet -> the best-ranked source on Deepbrid, once, through
+        // the proxy tunnel when enabled, else directly. Skipped quietly when no Deepbrid key is configured.
+        if ((!response || !response.success) && window.electronAPI.streamDeepbrid) {
+            const pick = torrentsToTry.find(t => t.magnet);
+            const proxy = (window.appSettings && window.appSettings.debridProxyEnable)
+                ? (window.appSettings.debridProxyAddress || '') : '';
+            if (pick) {
+                statusText.innerHTML = window.currentLang === 'fr'
+                    ? 'Aucun flux Real-Debrid lisible. Essai avec Deepbrid…'
+                    : 'No playable Real-Debrid stream. Trying Deepbrid…';
+                const media = window.activeStreamingMedia || {};
+                const db = await window.electronAPI.streamDeepbrid({ magnet: pick.magnet, hash: pick.hash, name: pick.name, proxy,
+                    // a season pack must yield the requested episode, never another one
+                    season: media.mediaType === 'tv' ? media.season : null,
+                    episode: media.mediaType === 'tv' ? media.episode : null });
+                if (window.activeRDFlowId !== currentFlowId) return;
+                if (db && db.success) {
+                    response = { ...db, magnet: pick.magnet, hash: pick.hash };
+                } else if (db && !db.notConfigured) {
+                    console.warn('[Deepbrid] fallback failed:', db.error);
+                    lastError = `${lastError ? lastError + ' — ' : ''}Deepbrid: ${db.error}`;
+                }
+            }
+        }
+
         if (!response || !response.success) {
             loadingStatus.querySelector('.spinner').style.display = 'none';
             let errMsg = 'Failed to load torrent.';
@@ -776,7 +801,11 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             window.activeStreamingMedia.quality = (successfulTorrent || {}).quality || '';
         }
         window.playStream(response.streamUrl, movieTitle);
-        window.showToast(tr('toastRdStreamLoaded', 'Direct high-speed RD stream loaded successfully!'), 'success');
+        if (response.provider === 'deepbrid') {
+            window.showToast(window.currentLang === 'fr' ? 'Flux Deepbrid chargé.' : 'Deepbrid stream loaded.', 'success');
+        } else {
+            window.showToast(tr('toastRdStreamLoaded', 'Direct high-speed RD stream loaded successfully!'), 'success');
+        }
         const prefLang = typeof getPreferredLang === 'function' ? getPreferredLang() : (window.appSettings?.streamLang || 'en');
         if (prefLang === 'fr') {
             const sText = `${(successfulTorrent && successfulTorrent.desc) || ''} ${(successfulTorrent && successfulTorrent.name) || ''}`.toLowerCase();
