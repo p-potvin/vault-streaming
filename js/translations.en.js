@@ -107,7 +107,6 @@ window.translationsEn = {
   settingSubtitleFontSize: "Subtitle Font Size:",
   settingRememberPlayback: "Remember Playback Pos:",
   settingMuteTrailers: "Mute Trailers by Default:",
-  settingAutoCacheTrailers: "Auto-cache Trailers:",
   settingMinimizeToTray: "Minimize to System Tray:",
   settingDevMode: "Dev Mode (verbose toasts/logs):",
   settingOpenSubtitlesKey: "OpenSubtitles API Key:",

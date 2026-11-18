@@ -1,7 +1,9 @@
 // src/raggae.js — Client for the vault-raggae gateway (http://127.0.0.1:8750): the local catalog first.
 //   POST /v1/resolve            a title / file name / path -> the best catalog match
 //   GET  /v1/catalog/search     full-text search (one category at a time)
-//   GET  /v1/catalog/{id}       one item (e.g. imdb:tt0133093)
+//   GET  /v1/catalog/{id}       one item (e.g. imdb:tt0133093); ?raw=true adds raw_enrichment (TMDB extras)
+//   GET  /v1/catalog/xref/tmdb/{movie|tv}/{id}   the item carrying a TMDB id
+//   GET  /v1/catalog/lists/{key} an ordered list (the Discover front page); POST replaces it (loopback only)
 //   GET  /v1/catalog/browse     a sorted page of a category (the offline "popular" list)
 //   POST /v1/catalog/ingest     outside metadata in: new items added, known ones only filled (loopback only)
 //   GET  /v1/media/by-path      the media index's view of a local file
@@ -34,7 +36,7 @@ function markOnline() {
 
 /** One request. Resolves the parsed JSON, or null for an HTTP error (logged, breaker untouched) or when the gateway
  *  is known to be down; a network failure trips the breaker and resolves null. */
-async function call(method, route, { body, timeoutMs = DEFAULT_TIMEOUT_MS, quiet404 = false } = {}) {
+async function call(method, route, { body, timeoutMs = DEFAULT_TIMEOUT_MS, quiet404 = false, tripOnTimeout = true } = {}) {
     if (isOffline()) return null;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -47,6 +49,11 @@ async function call(method, route, { body, timeoutMs = DEFAULT_TIMEOUT_MS, quiet
             signal: controller.signal,
         });
     } catch (err) {
+        // a known-slow call (a filtered browse: 14 s, Wed 18 Nov 2026) timing out says nothing about the gateway
+        if (!tripOnTimeout && err && err.name === 'AbortError') {
+            console.warn(`[raggae] ${method} ${route.split('?')[0]} timed out after ${timeoutMs / 1000} s`);
+            return null;
+        }
         markOffline(err);
         return null;
     } finally {
@@ -90,10 +97,32 @@ async function byPath(filePath) {
     return call('GET', `/v1/media/by-path?path=${encodeURIComponent(filePath)}`, { quiet404: true });
 }
 
-/** One catalog item by id (`imdb:tt…`, `tmdb:movie:…`), or null. */
-async function getItem(catalogId) {
+/** One catalog item by id (`imdb:tt…`, `tmdb:movie:…`), or null. `raw` adds its raw_enrichment (TMDB extras). */
+async function getItem(catalogId, { raw = false } = {}) {
     if (!catalogId) return null;
-    return call('GET', `/v1/catalog/${encodeURIComponent(catalogId).replace(/%3A/gi, ':')}`, { quiet404: true });
+    return call('GET', `/v1/catalog/${encodeURIComponent(catalogId).replace(/%3A/gi, ':')}${raw ? '?raw=true' : ''}`,
+        { quiet404: true });
+}
+
+/** The item carrying an outside id (`byExternal('tmdb', 'movie', 603)`), or null. */
+async function byExternal(source, category, extId, { raw = false } = {}) {
+    if (!source || !category || extId === null || extId === undefined || extId === '') return null;
+    return call('GET', `/v1/catalog/xref/${encodeURIComponent(source)}/${encodeURIComponent(category)}/` +
+        `${encodeURIComponent(String(extId))}${raw ? '?raw=true' : ''}`, { quiet404: true });
+}
+
+/** One ordered list (the Discover front page): { key, total, updated_at, items } or null. */
+async function getList(key, { limit = 100, offset = 0, raw = false } = {}) {
+    if (!key) return null;
+    return call('GET', `/v1/catalog/lists/${encodeURIComponent(key).replace(/%3A/gi, ':')}?limit=${limit}&offset=${offset}` +
+        (raw ? '&raw=true' : ''), { timeoutMs: 15000 });
+}
+
+/** Replace one ordered list (loopback only). Resolves { key, count } or null. */
+async function setList(key, catalogIds) {
+    if (!key || !Array.isArray(catalogIds)) return null;
+    return call('POST', `/v1/catalog/lists/${encodeURIComponent(key).replace(/%3A/gi, ':')}`,
+        { body: { catalog_ids: catalogIds.slice(0, 1000) } });
 }
 
 /**
@@ -137,10 +166,13 @@ async function searchTitles(query, { limit = 20 } = {}) {
 }
 
 /** A sorted page of one category (GET /v1/catalog/browse): the "popular" list when TMDB is not available. */
-async function browse({ category = 'movie', sort = 'votes', limit = 20, offset = 0, minVotes } = {}) {
+async function browse({ category = 'movie', sort = 'votes', limit = 20, offset = 0, minVotes, genre, yearMin, yearMax } = {}) {
     let route = `/v1/catalog/browse?category=${category}&sort=${sort}&limit=${limit}&offset=${offset}`;
     if (minVotes) route += `&min_votes=${minVotes}`;
-    const data = await call('GET', route);
+    if (genre) route += `&genre=${encodeURIComponent(genre)}`;
+    if (yearMin) route += `&year_min=${yearMin}`;
+    if (yearMax) route += `&year_max=${yearMax}`;
+    const data = await call('GET', route, { timeoutMs: 30000, tripOnTimeout: false });
     return Array.isArray(data && data.items) ? data.items : [];
 }
 
@@ -172,6 +204,9 @@ module.exports = {
     resolve,
     byPath,
     getItem,
+    byExternal,
+    getList,
+    setList,
     search,
     searchTitles,
     browse,

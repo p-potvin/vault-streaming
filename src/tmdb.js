@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const raggae = require('./raggae');
+const trailers = require('./trailers');
 
 // Helper function to fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
@@ -70,6 +71,33 @@ try {
     }
 } catch (e) {
     console.error('[KinoCheck] Failed to load API key:', e);
+}
+
+/** KinoCheck's trailer for a TMDB id: { key, title, thumbnail } or null. One request. */
+async function fetchKinoCheckTrailer(tmdbId, category, language) {
+    if (!KINOCHECK_API_KEY || !tmdbId) return null;
+    const type = category === 'tv' ? 'shows' : 'movies';
+    // KinoCheck takes a bare language code (fr or en)
+    const kcLang = String(language || 'en').slice(0, 2).toLowerCase() === 'fr' ? 'fr' : 'en';
+    try {
+        const res = await fetchWithTimeout(`https://api.kinocheck.com/${type}?tmdb_id=${tmdbId}&language=${kcLang}`,
+            { headers: { 'X-Api-Key': KINOCHECK_API_KEY, Accept: 'application/json' } });
+        if (!res.ok) {
+            console.warn(`[KinoCheck] ${type} ${tmdbId} -> HTTP ${res.status}`);
+            return null;
+        }
+        const data = await res.json();
+        const pick = v => v && v.youtube_video_id ? { key: v.youtube_video_id, title: v.title, thumbnail: v.youtube_thumbnail } : null;
+        if (data && data.trailer && data.trailer.youtube_video_id) return pick(data.trailer);
+        if (data && Array.isArray(data.videos)) {
+            return pick(data.videos.find(v => v.categories && v.categories.includes('Trailer') && v.youtube_video_id))
+                || pick(data.videos.find(v => v.youtube_video_id));
+        }
+        return null;
+    } catch (e) {
+        console.warn(`[KinoCheck] ${type} ${tmdbId} failed (${e.message})`);
+        return null;
+    }
 }
 
 // Map TMDB genre IDs to human-readable strings
@@ -444,6 +472,368 @@ async function catalogItemFor(id) {
     return null;
 }
 
+// ── Read-through: the catalog serves every detail; TMDB only fills it ────────
+// A details request is answered from the catalog item (its own fields + raw_enrichment.tmdb[<language>], where TMDB's
+// seasons, videos, backdrop… are kept). Only when the item is missing or its TMDB copy is older than its TTL is TMDB
+// asked, once: the answer is ingested and the catalog's copy is read back and served. When the gateway cannot store
+// it (down, writes off) the TMDB answer is served as is, so the app still works.
+const DETAILS_TTL_MS = { movie: 30 * 24 * 3600 * 1000, tv: 7 * 24 * 3600 * 1000 };
+const SEASON_TTL_MS = 7 * 24 * 3600 * 1000;
+
+function tmdbImage(p, size = 'w500') {
+    return p ? `https://image.tmdb.org/t/p/${size}${p}` : null;
+}
+
+function isFresh(blob, ttlMs) {
+    const t = blob && Date.parse(blob.fetched_at || '');
+    return Number.isFinite(t) && (Date.now() - t) < ttlMs;
+}
+
+function slimVideos(videos) {
+    const list = (videos && Array.isArray(videos.results)) ? videos.results : [];
+    return {
+        results: list.filter(v => v && v.site === 'YouTube' && v.key).slice(0, 12)
+            .map(v => ({ key: v.key, site: v.site, type: v.type, name: v.name, iso_639_1: v.iso_639_1, official: !!v.official }))
+    };
+}
+
+/** What the app keeps of a TMDB movie / tv answer (raw_enrichment.tmdb[<language>]). */
+function slimDetails(d, category) {
+    const common = {
+        id: d.id, overview: d.overview || null, tagline: d.tagline || null, status: d.status || null,
+        vote_average: d.vote_average || 0, vote_count: d.vote_count || 0,
+        genres: Array.isArray(d.genres) ? d.genres.map(g => ({ id: g.id, name: g.name })) : [],
+        poster_path: d.poster_path || null, backdrop_path: d.backdrop_path || null,
+        original_language: d.original_language || null, origin_country: d.origin_country || null,
+        videos: slimVideos(d.videos), fetched_at: new Date().toISOString()
+    };
+    if (category === 'tv') {
+        return {
+            ...common, name: d.name, original_name: d.original_name || null, first_air_date: d.first_air_date || null,
+            last_air_date: d.last_air_date || null, number_of_seasons: d.number_of_seasons || null,
+            number_of_episodes: d.number_of_episodes || null, episode_run_time: d.episode_run_time || [],
+            networks: Array.isArray(d.networks) ? d.networks.map(n => n.name) : [],
+            seasons: Array.isArray(d.seasons) ? d.seasons.map(s => ({
+                season_number: s.season_number, name: s.name, episode_count: s.episode_count,
+                air_date: s.air_date || null, poster_path: s.poster_path || null
+            })) : [],
+            external_ids: { imdb_id: (d.external_ids && d.external_ids.imdb_id) || null }
+        };
+    }
+    return {
+        ...common, title: d.title, original_title: d.original_title || null, release_date: d.release_date || null,
+        runtime: d.runtime || null, imdb_id: d.imdb_id || (d.external_ids && d.external_ids.imdb_id) || null
+    };
+}
+
+function slimSeason(d) {
+    return {
+        name: d.name || null, air_date: d.air_date || null, fetched_at: new Date().toISOString(),
+        episodes: (Array.isArray(d.episodes) ? d.episodes : []).map(e => ({
+            episode_number: e.episode_number, name: e.name, overview: e.overview || null, air_date: e.air_date || null,
+            vote_average: e.vote_average || 0, runtime: e.runtime || null, still_path: e.still_path || null
+        }))
+    };
+}
+
+/** The catalog item behind any id the renderer holds: a TMDB id (number), tt… / imdb:tt…, or a catalog id. */
+async function findCatalogItem(id, category, raw = true) {
+    const sid = String(id === undefined || id === null ? '' : id);
+    if (!sid) return null;
+    if (/^\d+$/.test(sid)) return raggae.byExternal('tmdb', category, sid, { raw });
+    if (/^(imdb:)?tt\d+$/.test(sid)) return raggae.getItem(`imdb:${sid.replace(/^imdb:/, '')}`, { raw });
+    if (sid.includes(':')) return raggae.getItem(sid, { raw });
+    return null;
+}
+
+function tmdbBlob(item, language) {
+    const tmdb = item && item.raw_enrichment && item.raw_enrichment.tmdb;
+    if (!tmdb || typeof tmdb !== 'object') return null;
+    return tmdb[language] || null;
+}
+
+/** A catalog item (+ its TMDB copy in `language`, when there is one) in the TMDB details shape the modal reads. */
+function catalogDetails(item, blob, category) {
+    const card = catalogToCard(item);
+    const ext = item.external_ids || {};
+    const b = blob || {};
+    const date = b.release_date || b.first_air_date || item.release_date || (item.year ? String(item.year) : '');
+    const genres = (Array.isArray(b.genres) && b.genres.length) ? b.genres
+        : (Array.isArray(item.genres) ? item.genres : []).map(name => ({ name }));
+    const base = {
+        ...b,
+        id: ext.tmdb || b.id || card.id,
+        catalog_id: item.catalog_id,
+        imdb_id: card.imdb_id || b.imdb_id || null,
+        // the catalog's own facts first; the localised overview from the TMDB copy when the UI language has one
+        overview: b.overview || item.overview || card.overview,
+        vote_average: item.rating || b.vote_average || 0,
+        vote_count: item.votes || b.vote_count || 0,
+        genres,
+        poster: card.poster,
+        poster_path: b.poster_path || null,
+        backdrop: tmdbImage(b.backdrop_path, 'w1280'),
+        runtime: item.runtime_mins || b.runtime || null,
+        videos: b.videos || { results: [] },
+        source: 'raggae'
+    };
+    delete base.season_details;
+    delete base.fetched_at;
+    return category === 'tv'
+        ? { ...base, name: b.name || card.title, first_air_date: date, seasons: b.seasons || [],
+            external_ids: { imdb_id: base.imdb_id } }
+        : { ...base, title: b.title || card.title, release_date: date };
+}
+
+/** The TMDB details call (one request), or null. */
+async function fetchTmdbDetails(tmdbId, category, language) {
+    if (!TMDB_BEARER_TOKEN || !tmdbId) return null;
+    const lang2 = String(language || 'en').slice(0, 2);
+    const url = `https://api.themoviedb.org/3/${category}/${tmdbId}?append_to_response=videos,external_ids` +
+        `&language=${language}&include_video_language=${lang2},en,null`;
+    try {
+        const res = await fetchWithTimeout(url, { headers: tmdbHeaders() });
+        if (!res.ok) {
+            console.warn(`[TMDB] ${category} ${tmdbId} -> HTTP ${res.status}`);
+            return null;
+        }
+        return await res.json();
+    } catch (e) {
+        console.warn(`[TMDB] ${category} ${tmdbId} failed (${e.message})`);
+        return null;
+    }
+}
+
+/** A TMDB details answer as a catalog ingest item. Plain fields only fill what the catalog lacks. */
+function detailsToIngest(data, slim, category, language, catalogId) {
+    const date = category === 'tv' ? data.first_air_date : data.release_date;
+    const imdb = data.imdb_id || (data.external_ids && data.external_ids.imdb_id) || null;
+    const english = String(language || '').toLowerCase().startsWith('en');
+    return {
+        ...(catalogId ? { catalog_id: catalogId } : {}),
+        category,
+        title: category === 'tv' ? (data.name || data.title) : (data.title || data.name),
+        original_title: (category === 'tv' ? data.original_name : data.original_title) || null,
+        year: date ? parseInt(date.substring(0, 4)) || null : null,
+        release_date: date || null,
+        runtime_mins: data.runtime || (Array.isArray(data.episode_run_time) && data.episode_run_time[0]) || null,
+        rating: data.vote_average ? parseFloat(data.vote_average.toFixed(1)) : null,
+        votes: data.vote_count || null,
+        genres: english && Array.isArray(data.genres) ? data.genres.map(g => g.name).filter(Boolean) : [],
+        poster_url: tmdbImage(data.poster_path),
+        // the catalog's overview is language-neutral English (IMDb); only an English answer fills it
+        overview: english ? (data.overview || null) : null,
+        external_ids: { tmdb: data.id, imdb: imdb },
+        raw_enrichment: { tmdb: { [language]: slim } },
+        source: 'tmdb'
+    };
+}
+
+/** Ingest and read the catalog's copy back (with raw_enrichment). Null when the gateway did not store it. */
+async function ingestAndReadBack(ingestItem) {
+    const res = await raggae.ingest(ingestItem);
+    const cid = res && Array.isArray(res.items) && res.items[0] && res.items[0].catalog_id;
+    return cid ? raggae.getItem(cid, { raw: true }) : null;
+}
+
+/**
+ * Details for a movie or series, read through the catalog. Resolves { success, source, data } or null (unknown
+ * everywhere / TMDB down and nothing local).
+ */
+async function readThroughDetails(id, category, language = 'en-US') {
+    let item = await findCatalogItem(id, category);
+    let blob = tmdbBlob(item, language);
+    if (item && blob && isFresh(blob, DETAILS_TTL_MS[category])) {
+        return { success: true, source: 'raggae', data: catalogDetails(item, blob, category) };
+    }
+
+    // catalog miss (or its TMDB copy is stale): TMDB once, then the catalog's copy
+    const ext = (item && item.external_ids) || {};
+    const tmdbId = /^\d+$/.test(String(id)) ? Number(id) : (ext.tmdb || await toTmdbId(id, category));
+    const data = tmdbId ? await fetchTmdbDetails(tmdbId, category, language) : null;
+    if (!data) {
+        // TMDB unknown / down: whatever the catalog has (a stale copy included)
+        if (item) return { success: true, source: 'raggae', data: catalogDetails(item, blob, category) };
+        return null;
+    }
+    const slim = slimDetails(data, category);
+    const saved = await ingestAndReadBack(detailsToIngest(data, slim, category, language, item && item.catalog_id));
+    if (saved && tmdbBlob(saved, language)) {
+        console.log(`[Catalog] ${category} ${tmdbId}: filled from TMDB, served from the catalog (${saved.catalog_id})`);
+        return { success: true, source: 'raggae', data: catalogDetails(saved, tmdbBlob(saved, language), category) };
+    }
+    console.warn(`[Catalog] ${category} ${tmdbId}: the gateway did not store the TMDB copy; serving it directly`);
+    const direct = { ...slim, poster: tmdbImage(slim.poster_path) || PLACEHOLDER_POSTER, source: 'tmdb' };
+    delete direct.fetched_at;
+    return { success: true, source: 'tmdb', data: direct };
+}
+
+/** One season's episodes, read through the catalog (raw_enrichment.tmdb[<language>].season_details[<n>]). */
+async function readThroughSeason(id, seasonNumber, language = 'en-US') {
+    const n = String(parseInt(seasonNumber, 10));
+    if (n === 'NaN') return null;
+    let item = await findCatalogItem(id, 'tv');
+    if (!item) {
+        // the series itself first: it creates the catalog item the season is kept on
+        await readThroughDetails(id, 'tv', language);
+        item = await findCatalogItem(id, 'tv');
+    }
+    const sd = tmdbBlob(item, language) && tmdbBlob(item, language).season_details;
+    const cached = sd && sd[n];
+    if (cached && isFresh(cached, SEASON_TTL_MS)) {
+        return { success: true, source: 'raggae', data: { ...cached, season_number: Number(n) } };
+    }
+    const tmdbId = /^\d+$/.test(String(id)) ? Number(id) : ((item && item.external_ids && item.external_ids.tmdb) || await toTmdbId(id, 'tv'));
+    if (!tmdbId || !TMDB_BEARER_TOKEN) {
+        return cached ? { success: true, source: 'raggae', data: { ...cached, season_number: Number(n) } } : null;
+    }
+    let data = null;
+    try {
+        const res = await fetchWithTimeout(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${n}?language=${language}`,
+            { headers: tmdbHeaders() });
+        if (res.ok) data = await res.json();
+        else console.warn(`[TMDB] tv ${tmdbId} season ${n} -> HTTP ${res.status}`);
+    } catch (e) {
+        console.warn(`[TMDB] tv ${tmdbId} season ${n} failed (${e.message})`);
+    }
+    if (!data) return cached ? { success: true, source: 'raggae', data: { ...cached, season_number: Number(n) } } : null;
+    const slim = slimSeason(data);
+    if (item) {
+        const saved = await ingestAndReadBack({
+            catalog_id: item.catalog_id, category: 'tv', title: item.title, source: 'tmdb',
+            external_ids: { tmdb: tmdbId },
+            raw_enrichment: { tmdb: { [language]: { season_details: { [n]: slim } } } }
+        });
+        const back = saved && tmdbBlob(saved, language) && (tmdbBlob(saved, language).season_details || {})[n];
+        if (back) return { success: true, source: 'raggae', data: { ...back, season_number: Number(n) } };
+    }
+    return { success: true, source: 'tmdb', data: { ...slim, season_number: Number(n) } };
+}
+
+/** A resolved trailer key onto the catalog item (raw_enrichment.trailer[<language>]); fire and forget. */
+function ingestTrailerKey(item, language, key, provider) {
+    if (!item || !item.catalog_id || !key) return;
+    ingestOutside({
+        catalog_id: item.catalog_id, category: item.category, title: item.title, source: 'tmdb',
+        raw_enrichment: { trailer: { [language]: { youtube_id: key, provider, resolved_at: new Date().toISOString() } } }
+    });
+}
+
+// ── Discover / trending from the catalog's lists ─────────────────────────────
+// scripts/ingest-front-page.js copies TMDB's trending and per-provider discover pages into the catalog (items +
+// ordered lists) on a schedule; these handlers only read the lists. List keys are shared with that script.
+const listKeys = require('./front-page-keys');
+
+/** Filter codes of the Discover genre <select> -> the catalog's (IMDb) genre names. Codes with no catalog genre
+ *  (curated picks such as "Jodorowsky") are not filtered. */
+const GENRE_CODES = {
+    wes: ['Western'], bio: ['Biography'], doc: ['Documentary'], dra: ['Drama'], com: ['Comedy'], rom: ['Romance'],
+    hor: ['Horror'], cri: ['Crime'], thr: ['Thriller'], noi: ['Film-Noir'], tru: ['Crime', 'Documentary'],
+    car: ['Animation'], kid: ['Family'], adv: ['Adventure'], nat: ['Documentary']
+};
+
+function decadeRange(decade) {
+    if (!decade || decade === 'all') return null;
+    const start = parseInt(decade, 10);
+    if (!Number.isFinite(start)) return null;
+    return start === 1920 ? { min: 0, max: 1929 } : { min: start, max: start + 9 };
+}
+
+function listItemMatches(item, { genreNames, range, origin }) {
+    if (genreNames) {
+        const g = Array.isArray(item.genres) ? item.genres : [];
+        if (!genreNames.every(name => g.includes(name))) return false;
+    }
+    if (range && !(item.year && item.year >= range.min && item.year <= range.max)) return false;
+    if (origin) {
+        const meta = item.raw_enrichment && item.raw_enrichment.tmdb && item.raw_enrichment.tmdb.meta;
+        const countries = (meta && meta.origin_country) || [];
+        if (!countries.includes(origin)) return false;
+    }
+    return true;
+}
+
+const PAGE_SIZE = 20;
+const listCache = new Map(); // key -> { ts, items }
+const browseCache = new Map(); // filtered catalog browse (slow on the gateway) -> { ts, results }
+const LIST_CACHE_MS = 10 * 60 * 1000;
+
+async function cachedList(key) {
+    const hit = listCache.get(key);
+    if (hit && Date.now() - hit.ts < LIST_CACHE_MS) return hit.items;
+    const out = await raggae.getList(key, { limit: 500, raw: true });
+    const items = (out && Array.isArray(out.items)) ? out.items : null;
+    if (items && items.length) listCache.set(key, { ts: Date.now(), items });
+    return items && items.length ? items : null;
+}
+
+/**
+ * One Discover page from the catalog. Provider rows come from the stored lists, filtered locally; "All providers"
+ * with filters is a catalog browse (genre, decade, rating / year / votes).
+ */
+async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres, decade, region, sort, watchRegion }) {
+    const category = mediaType === 'tv' ? 'tv' : 'movie';
+    page = Math.max(1, parseInt(page, 10) || 1);
+    const genreNames = withGenres && withGenres !== 'all' ? (GENRE_CODES[withGenres] || null) : null;
+    const range = decadeRange(decade);
+    const origin = region && region !== 'all' ? String(region).toUpperCase() : null;
+    const filtered = !!(genreNames || range || origin);
+    const provider = providerId && providerId !== 'all' ? String(providerId) : 'all';
+    const wr = (watchRegion || await geoWatchRegion() || DEFAULT_WATCH_REGION).toUpperCase();
+
+    let items = await cachedList(listKeys.discover(category, provider, wr));
+    if (!items && wr !== DEFAULT_WATCH_REGION) items = await cachedList(listKeys.discover(category, provider, DEFAULT_WATCH_REGION));
+
+    if (items && (provider !== 'all' || !filtered || origin)) {
+        let rows = items.filter(it => listItemMatches(it, { genreNames, range, origin }));
+        if (sort && sort.startsWith('vote_average')) rows = [...rows].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        else if (sort && /release_date|air_date/.test(sort)) rows = [...rows].sort((a, b) => (b.year || 0) - (a.year || 0));
+        const results = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(catalogToCard);
+        return { success: true, source: 'raggae', list: true, results };
+    }
+
+    // "All providers" with filters, or no list stored yet: the catalog's own browse
+    const browseSort = sort && sort.startsWith('vote_average') ? 'rating' : (sort && /release_date|air_date/.test(sort) ? 'year' : 'votes');
+    const browseKey = JSON.stringify([category, browseSort, page, genreNames, range]);
+    const hit = browseCache.get(browseKey);
+    if (hit && Date.now() - hit.ts < LIST_CACHE_MS) return { success: true, source: 'raggae', list: false, results: hit.results };
+    const rows = await raggae.browse({
+        category, sort: browseSort, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
+        // a rating or newest-first sort over every title is all obscure entries: keep to titles people voted on
+        minVotes: browseSort === 'votes' ? undefined : 5000,
+        genre: genreNames ? genreNames[0] : undefined,
+        yearMin: range ? range.min || undefined : undefined,
+        yearMax: range ? range.max : (browseSort === 'year' ? new Date().getUTCFullYear() : undefined)
+    });
+    const results = rows.filter(it => listItemMatches(it, { genreNames, range: null, origin: null })).map(catalogToCard);
+    if (results.length) browseCache.set(browseKey, { ts: Date.now(), results });
+    if (browseCache.size > 200) browseCache.delete(browseCache.keys().next().value);
+    return { success: true, source: 'raggae', list: false, results };
+}
+
+/** The trending row (no query): the stored trending list, else the catalog's most voted. */
+async function trendingFromCatalog(page = 1) {
+    page = Math.max(1, parseInt(page, 10) || 1);
+    const items = await cachedList(listKeys.trending());
+    if (items) {
+        return { success: true, source: 'raggae', results: items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(catalogToCard) };
+    }
+    return { success: true, source: 'raggae', results: await localPopular(page) };
+}
+
+/** TMDB search hits the catalog already holds (by TMDB id) are served as the catalog's cards. */
+async function preferCatalogCards(outside) {
+    return Promise.all(outside.map(async card => {
+        if (card.source !== 'tmdb' || !/^\d+$/.test(String(card.id))) return card;
+        const item = await raggae.byExternal('tmdb', card.media_type === 'tv' ? 'tv' : 'movie', card.id);
+        if (!item) return card;
+        const local = catalogToCard(item);
+        // a catalog item with no poster yet keeps the TMDB card's
+        if (local.poster === PLACEHOLDER_POSTER && card.poster !== PLACEHOLDER_POSTER) local.poster = card.poster;
+        return { ...local, id: card.id };
+    }));
+}
+
 const localSearchCache = new Map();
 
 /** Local hits for a query, kept for the following pages of the same search (at most 50 queries). */
@@ -482,7 +872,7 @@ function registerTmdbHandlers(ipcMain) {
                     return { success: true, source: 'raggae', results: local };
                 }
                 const outsidePage = enough ? page - 1 : page;
-                let outside = await searchTmdbApi(query, outsidePage, language);
+                let outside = await preferCatalogCards(await searchTmdbApi(query, outsidePage, language));
                 let source = 'tmdb';
                 if (!outside.length) {
                     outside = await searchOmdbApi(query, outsidePage);
@@ -494,59 +884,8 @@ function registerTmdbHandlers(ipcMain) {
                 return { success: true, source: page === 1 && local.length ? `raggae+${source}` : source, results };
             }
 
-            // No query: trending discovery (the catalog's most voted titles when TMDB is not configured)
-            if (!TMDB_BEARER_TOKEN) {
-                return { success: true, source: 'raggae', results: await localPopular(page) };
-            }
-
-            const trendingUrl = `https://api.themoviedb.org/3/trending/all/day?language=${language}&page=${page}`;
-            console.log(`[TMDB] Fetching trending API: ${trendingUrl}`);
-            const response = await fetchWithTimeout(trendingUrl, {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json',
-                    Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
-                }
-            });
-
-            if (!response.ok) {
-                const localFallback = await localPopular(page);
-                if (localFallback.length > 0) {
-                    return { success: true, source: 'raggae', results: localFallback };
-                }
-                const errText = await response.text();
-                return { success: false, status: response.status, error: errText };
-            }
-
-            const data = await response.json();
-            const results = (data.results || []).map(item => {
-                const title = item.title || item.name || 'Untitled';
-                const dateStr = item.release_date || item.first_air_date || '';
-                const year = dateStr ? dateStr.substring(0, 4) : '—';
-                const rating = item.vote_average ? item.vote_average.toFixed(1) : '—';
-                const genres = (item.genre_ids || [])
-                    .map(id => GENRE_MAP[id])
-                    .filter(Boolean)
-                    .slice(0, 3)
-                    .join(', ') || 'General';
-                const poster = item.poster_path 
-                    ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-                    : 'public/poster_placeholder.svg';
-
-                return {
-                    id: item.id,
-                    media_type: item.media_type || 'movie',
-                    title,
-                    year,
-                    rating,
-                    genres,
-                    poster,
-                    overview: item.overview || 'No description available.',
-                    source: 'tmdb'
-                };
-            });
-
-            return { success: true, results };
+            // No query: the trending row, from the catalog (scripts/ingest-front-page.js keeps it current)
+            return await trendingFromCatalog(page);
         } catch (err) {
             console.error('[Search] Handler Error:', err);
             return { success: false, error: err.message };
@@ -564,106 +903,13 @@ function registerTmdbHandlers(ipcMain) {
                 id = arg;
             }
 
-            // A local catalog hit may carry an IMDb id: map it; a title TMDB cannot give comes from the catalog
-            const tmdbId = await toTmdbId(id, 'movie');
-            if (!tmdbId) {
-                const localItem = await catalogItemFor(id);
-                if (localItem) return { success: true, source: 'raggae', data: catalogToTmdbShape(localItem, 'movie') };
-            }
-
-            if (!TMDB_BEARER_TOKEN) {
-                return {
-                    success: true,
-                    data: {
-                        id,
-                        title: "Dune: Part Two (Offline)",
-                        overview: "Follow the mythic journey of Paul Atreides as he unites with Chani and the Fremen while on a path of revenge against the conspirators who destroyed his family.",
-                        release_date: "2024-03-01",
-                        vote_average: 8.3,
-                        genres: [{ name: "Sci-Fi" }, { name: "Adventure" }],
-                        videos: {
-                            results: [
-                                {
-                                    key: "Way9DexNy3w",
-                                    site: "YouTube",
-                                    type: "Trailer"
-                                }
-                            ]
-                        }
-                    }
-                };
-            }
-
-            const url = `https://api.themoviedb.org/3/movie/${tmdbId || id}?append_to_response=videos&language=${language}`;
-            const response = await fetchWithTimeout(url, {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json',
-                    Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
-                }
-            });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-
-            // Kinocheck fallback if no YouTube trailer is returned by TMDB
-            if (!data.videos || !data.videos.results || data.videos.results.length === 0) {
-                try {
-                    console.log(`[TMDB] No YouTube trailer found in TMDB. Querying Kinocheck fallback for TMDB ID: ${id}`);
-                    const kcUrl = `https://api.kinocheck.de/movies?tmdb_id=${tmdbId || id}`;
-                    const kcRes = await fetchWithTimeout(kcUrl);
-                    if (kcRes.ok) {
-                        const kcData = await kcRes.json();
-                        if (kcData && kcData.trailer && kcData.trailer.youtube_video_id) {
-                            if (!data.videos) data.videos = { results: [] };
-                            if (!data.videos.results) data.videos.results = [];
-                            data.videos.results.push({
-                                key: kcData.trailer.youtube_video_id,
-                                site: 'YouTube',
-                                type: 'Trailer'
-                            });
-                            console.log('[TMDB] Kinocheck fallback succeeded: found YouTube video ID:', kcData.trailer.youtube_video_id);
-                        }
-                    }
-                } catch (kcErr) {
-                    console.error('[TMDB] Kinocheck fallback fetch failed:', kcErr);
-                }
-            }
-
-            // Outside details into the catalog: keyed on the IMDb id, so a known title is only filled in
-            if (data && data.title) {
-                ingestOutside({
-                    category: 'movie',
-                    title: data.title,
-                    original_title: data.original_title || null,
-                    year: data.release_date ? parseInt(data.release_date.substring(0, 4)) : null,
-                    release_date: data.release_date || null,
-                    runtime_mins: data.runtime || null,
-                    rating: data.vote_average ? parseFloat(data.vote_average.toFixed(1)) : null,
-                    votes: data.vote_count || null,
-                    genres: Array.isArray(data.genres) ? data.genres.map(g => g.name).filter(Boolean) : [],
-                    poster_url: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null,
-                    overview: data.overview || null,
-                    external_ids: { tmdb: data.id, imdb: data.imdb_id || null },
-                    source: 'tmdb'
-                });
-            }
-
-            return { success: true, data };
+            // Read through the catalog: served from it, TMDB asked only to fill it
+            const result = await readThroughDetails(id, 'movie', language);
+            if (result) return result;
+            throw new Error('not in the catalog and TMDB has nothing');
         } catch (e) {
-            console.error('[TMDB] get-tmdb-movie failed, returning offline fallback:', e);
-            return {
-                success: true,
-                data: {
-                    id,
-                    title: "Movie Title (Offline Fallback)",
-                    overview: "A premium offline cinematic presentation. Please check your internet connection and .env file credentials for live data.",
-                    release_date: "2026",
-                    vote_average: 8.0,
-                    genres: [{ name: "Drama" }],
-                    videos: { results: [] }
-                }
-            };
+            console.error('[TMDB] get-tmdb-movie failed:', e.message);
+            return { success: false, error: e.message };
         }
     });
 
@@ -678,77 +924,12 @@ function registerTmdbHandlers(ipcMain) {
                 id = arg;
             }
 
-            const tmdbId = await toTmdbId(id, 'tv');
-            if (!tmdbId) {
-                const localItem = await catalogItemFor(id);
-                if (localItem) return { success: true, source: 'raggae', data: catalogToTmdbShape(localItem, 'tv') };
-            }
-
-            if (!TMDB_BEARER_TOKEN) {
-                return {
-                    success: true,
-                    data: {
-                        id,
-                        name: "Breaking Bad (Offline)",
-                        overview: "A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine with a former student in order to secure his family's future.",
-                        first_air_date: "2008-01-20",
-                        vote_average: 9.5,
-                        genres: [{ name: "Drama" }, { name: "Crime" }],
-                        seasons: [
-                            { season_number: 1, name: "Season 1", episode_count: 7 },
-                            { season_number: 2, name: "Season 2", episode_count: 13 }
-                        ]
-                    }
-                };
-            }
-
-            const url = `https://api.themoviedb.org/3/tv/${tmdbId || id}?language=${language}&append_to_response=external_ids`;
-            const response = await fetchWithTimeout(url, {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json',
-                    Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
-                }
-            });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-
-            // Outside details into the catalog, keyed on the IMDb id when TMDB knows it
-            if (data && (data.name || data.title)) {
-                ingestOutside({
-                    category: 'tv',
-                    title: data.name || data.title,
-                    original_title: data.original_name || null,
-                    year: data.first_air_date ? parseInt(data.first_air_date.substring(0, 4)) : null,
-                    release_date: data.first_air_date || null,
-                    rating: data.vote_average ? parseFloat(data.vote_average.toFixed(1)) : null,
-                    votes: data.vote_count || null,
-                    genres: Array.isArray(data.genres) ? data.genres.map(g => g.name).filter(Boolean) : [],
-                    poster_url: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null,
-                    overview: data.overview || null,
-                    external_ids: { tmdb: data.id, imdb: (data.external_ids && data.external_ids.imdb_id) || null },
-                    source: 'tmdb'
-                });
-            }
-
-            return { success: true, data };
+            const result = await readThroughDetails(id, 'tv', language);
+            if (result) return result;
+            throw new Error('not in the catalog and TMDB has nothing');
         } catch (e) {
-            console.error('[TMDB] get-tmdb-tv failed, returning offline fallback:', e);
-            return {
-                success: true,
-                data: {
-                    id,
-                    name: "Series Title (Offline Fallback)",
-                    overview: "An elite offline episodic selection. Set up your TMDB key in .env to pull seasons and episodes in real time.",
-                    first_air_date: "2026",
-                    vote_average: 8.5,
-                    genres: [{ name: "Adventure" }],
-                    seasons: [
-                        { season_number: 1, name: "Season 1", episode_count: 5 }
-                    ]
-                }
-            };
+            console.error('[TMDB] get-tmdb-tv failed:', e.message);
+            return { success: false, error: e.message };
         }
     });
 
@@ -765,43 +946,12 @@ function registerTmdbHandlers(ipcMain) {
                 id = arg;
             }
 
-            id = (await toTmdbId(id, 'tv')) || id;
-
-            if (!TMDB_BEARER_TOKEN) {
-                return {
-                    success: true,
-                    data: {
-                        episodes: [
-                            { episode_number: 1, name: "Pilot", overview: "Chemistry teacher Walter White learns he has terminal cancer." },
-                            { episode_number: 2, name: "Cat's in the Bag...", overview: "Walt and Jesse clean up the chemical mess." }
-                        ]
-                    }
-                };
-            }
-
-            const url = `https://api.themoviedb.org/3/tv/${id}/season/${seasonNumber}?language=${language}`;
-            const response = await fetchWithTimeout(url, {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json',
-                    Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
-                }
-            });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            return { success: true, data };
+            const result = await readThroughSeason(id, seasonNumber, language);
+            if (result) return result;
+            throw new Error('season not in the catalog and TMDB has nothing');
         } catch (e) {
-            console.error('[TMDB] get-tmdb-tv-season failed, returning offline fallback:', e);
-            return {
-                success: true,
-                data: {
-                    episodes: [
-                        { episode_number: 1, name: "Episode 1 (Offline)", overview: "An engaging episodic installment. Ensure your network is active." },
-                        { episode_number: 2, name: "Episode 2 (Offline)", overview: "The narrative deepens. Check your internet connection." }
-                    ]
-                }
-            };
+            console.error('[TMDB] get-tmdb-tv-season failed:', e.message);
+            return { success: false, error: e.message };
         }
     });
 
@@ -821,205 +971,20 @@ function registerTmdbHandlers(ipcMain) {
         };
     });
 
-    // ── KinoCheck Premium API Handler ────────────────────────────────────────
-    ipcMain.handle('get-kinocheck-trailer', async (event, { tmdbId: requestedId, mediaType, language }) => {
-        let tmdbId = requestedId;
+    // ── Trailer key (KinoCheck, then the catalog's TMDB videos), remembered by src/trailers.js ──
+    ipcMain.handle('get-kinocheck-trailer', async (event, { tmdbId, mediaType, language } = {}) => {
         try {
-            if (!KINOCHECK_API_KEY) {
-                console.warn('[KinoCheck] No API key loaded.');
-                return { success: false, error: 'No API key loaded.' };
-            }
-            const type = mediaType === 'tv' ? 'shows' : 'movies';
-            tmdbId = (await toTmdbId(tmdbId, mediaType === 'tv' ? 'tv' : 'movie')) || tmdbId;
-            // KinoCheck takes a bare language code. Was pinned to English, so a
-            // French UI still got English trailers.
-            const kcLang = String(language || 'en').slice(0, 2).toLowerCase() === 'fr' ? 'fr' : 'en';
-            const url = `https://api.kinocheck.com/${type}?tmdb_id=${tmdbId}&language=${kcLang}`;
-            console.log(`[KinoCheck] Fetching premium trailer: ${url}`);
-            
-            const response = await fetchWithTimeout(url, {
-                headers: {
-                    'X-Api-Key': KINOCHECK_API_KEY,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP status ${response.status}`);
-            }
-            
-            const data = await response.json();
-            if (data && data.trailer && data.trailer.youtube_video_id) {
-                return {
-                    success: true,
-                    key: data.trailer.youtube_video_id,
-                    title: data.trailer.title,
-                    thumbnail: data.trailer.youtube_thumbnail
-                };
-            }
-            
-            // Fallback to the videos array if main trailer object is missing
-            if (data && Array.isArray(data.videos)) {
-                const trailerVideo = data.videos.find(v => v.categories && v.categories.includes('Trailer') && v.youtube_video_id);
-                if (trailerVideo) {
-                    return {
-                        success: true,
-                        key: trailerVideo.youtube_video_id,
-                        title: trailerVideo.title,
-                        thumbnail: trailerVideo.youtube_thumbnail
-                    };
-                }
-                
-                // Final fallback: first available video
-                if (data.videos.length > 0 && data.videos[0].youtube_video_id) {
-                    return {
-                        success: true,
-                        key: data.videos[0].youtube_video_id,
-                        title: data.videos[0].title,
-                        thumbnail: data.videos[0].youtube_thumbnail
-                    };
-                }
-            }
-            
-            return { success: false, error: 'No trailer found in KinoCheck response' };
+            return await trailers.resolveKey({ id: tmdbId, mediaType, language });
         } catch (err) {
-            console.error('[KinoCheck] Error fetching premium trailer:', err);
+            console.error('[Trailer] key lookup failed:', err);
             return { success: false, error: err.message };
         }
     });
 
     ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort, watchRegion }) => {
         try {
-            const type = mediaType === 'tv' ? 'tv' : 'movie';
-            
-            if (!TMDB_BEARER_TOKEN) {
-                // Mock provider listings for offline/unconfigured usage
-                let mockList = [];
-                const netflixMock = [
-                    { id: 201, media_type: type, title: "Stranger Things", year: "2016", rating: "8.6", genres: "Sci-Fi, Drama", poster: "public/poster_placeholder.svg", overview: "When a young boy vanishes, a small town uncovers a mystery involving secret experiments and terrifying supernatural forces." },
-                    { id: 202, media_type: type, title: "Squid Game", year: "2021", rating: "8.1", genres: "Action, Thriller", poster: "public/poster_placeholder.svg", overview: "Hundreds of cash-strapped players accept a strange invitation to compete in children's games. Inside, a tempting prize awaits with deadly high stakes." }
-                ];
-                const disneyMock = [
-                    { id: 301, media_type: type, title: "The Mandalorian", year: "2019", rating: "8.4", genres: "Action, Sci-Fi", poster: "public/poster_placeholder.svg", overview: "The travels of a lone bounty hunter in the outer reaches of the galaxy, far from the authority of the New Republic." },
-                    { id: 302, media_type: type, title: "Loki", year: "2021", rating: "8.2", genres: "Sci-Fi, Adventure", poster: "public/poster_placeholder.svg", overview: "The mercurial villain Loki resumes his role as the God of Mischief in a new series that takes place after the events of Avengers: Endgame." }
-                ];
-                const appleMock = [
-                    { id: 401, media_type: type, title: "Ted Lasso", year: "2020", rating: "8.5", genres: "Comedy, Drama", poster: "public/poster_placeholder.svg", overview: "US American football coach Ted Lasso heads to the UK to manage a struggling London football team in the top flight of English football." },
-                    { id: 402, media_type: type, title: "Severance", year: "2022", rating: "8.7", genres: "Sci-Fi, Drama", poster: "public/poster_placeholder.svg", overview: "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives." }
-                ];
-                const primeMock = [
-                    { id: 501, media_type: type, title: "The Boys", year: "2019", rating: "8.7", genres: "Sci-Fi, Action", poster: "public/poster_placeholder.svg", overview: "A group of vigilantes set out to take down corrupt superheroes who abuse their superpowers." },
-                    { id: 502, media_type: type, title: "Reacher", year: "2022", rating: "8.1", genres: "Action, Crime", poster: "public/poster_placeholder.svg", overview: "Jack Reacher, a veteran military police investigator, is falsely accused of murder and finds himself in the middle of a deadly conspiracy." }
-                ];
-
-                if (providerId === '8' || providerId === '213') {
-                    mockList = netflixMock;
-                } else if (providerId === '337') {
-                    mockList = disneyMock;
-                } else if (providerId === '350') {
-                    mockList = appleMock;
-                } else if (providerId === '119' || providerId === '9') {
-                    mockList = primeMock;
-                } else {
-                    mockList = [...netflixMock, ...disneyMock, ...appleMock, ...primeMock];
-                }
-                return { success: true, results: mockList };
-            }
-
-            // discover/tv understands first_air_date.*, not primary_release_date.*,
-            // but the filter UI only ever sends the latter — so "Release Date"
-            // sorting was silently ignored for series.
-            const dateField = type === 'tv' ? 'first_air_date' : 'primary_release_date';
-            let sortByParam = sort || 'popularity.desc';
-            if (type === 'tv') sortByParam = sortByParam.replace(/^primary_release_date\./, 'first_air_date.');
-
-            let url = `https://api.themoviedb.org/3/discover/${type}?sort_by=${sortByParam}&language=${language}&page=${page}`;
-            
-            if (providerId && providerId !== 'all') {
-                // watch_region is mandatory here: without it TMDB ignores the
-                // provider filter entirely and returns the whole catalogue.
-                const wr = (watchRegion || await geoWatchRegion() || DEFAULT_WATCH_REGION).toUpperCase();
-                url += `&with_watch_providers=${providerId}&watch_region=${wr}&with_watch_monetization_types=flatrate`;
-            }
-            if (withGenres && withGenres !== 'all') {
-                url += `&with_genres=${withGenres}`;
-            }
-            if (region && region !== 'all') {
-                url += `&with_origin_country=${region}`;
-            }
-            // One date window, built once. The decade filter and the
-            // not-yet-released cap both constrain the upper bound, and emitting
-            // two `.lte` params would leave which one wins up to TMDB.
-            let dateGte = null;
-            let dateLte = null;
-            if (decade && decade !== 'all') {
-                const startYear = parseInt(decade);
-                if (startYear === 1920) {
-                    dateLte = '1929-12-31';
-                } else {
-                    dateGte = `${startYear}-01-01`;
-                    dateLte = `${startYear + 9}-12-31`;
-                }
-            }
-            // Sorting by release date otherwise puts unreleased titles at the top,
-            // filling the grid with things nobody can play. Cap at today in UTC
-            // rather than local time: a local-midnight cap would include or hide a
-            // same-day worldwide release depending on the viewer's timezone.
-            if (sortByParam.startsWith(dateField)) {
-                const todayUtc = new Date().toISOString().slice(0, 10);
-                if (!dateLte || dateLte > todayUtc) dateLte = todayUtc;
-            }
-            if (dateGte) url += `&${dateField}.gte=${dateGte}`;
-            if (dateLte) url += `&${dateField}.lte=${dateLte}`;
-            
-            url += `&with_original_language=${await originalLanguageFilter()}`;
-            
-            // with_original_language now carries every language TMDB supports
-            // (72 codes), which buried every other line in the log. The value is
-            // constant per session, so log it once and elide it afterwards.
-            const loggableUrl = url.replace(/with_original_language=[^&]*/, 'with_original_language=<all>');
-            console.log(`[TMDB] Discovering streaming items: ${loggableUrl}`);
-            
-            const response = await fetchWithTimeout(url, {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json',
-                    Authorization: `Bearer ${TMDB_BEARER_TOKEN}`
-                }
-            });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            
-            const results = (data.results || []).map(item => {
-                const title = item.title || item.name || 'Untitled';
-                const dateStr = item.release_date || item.first_air_date || '';
-                const year = dateStr ? dateStr.substring(0, 4) : '—';
-                const rating = item.vote_average ? item.vote_average.toFixed(1) : '—';
-                
-                const genres = (item.genre_ids || [])
-                    .map(id => GENRE_MAP[id])
-                    .filter(Boolean)
-                    .slice(0, 3)
-                    .join(', ') || 'General';
-
-                const poster = item.poster_path 
-                    ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-                    : 'public/poster_placeholder.svg';
-
-                return {
-                    id: item.id,
-                    media_type: type,
-                    title,
-                    year,
-                    rating,
-                    genres,
-                    poster,
-                    overview: item.overview || 'No description available.'
-                };
-            });
-
-            return { success: true, results };
+            // From the catalog's front-page lists (scripts/ingest-front-page.js), never live TMDB
+            return await discoverFromCatalog({ providerId, mediaType, page, withGenres, decade, region, sort, watchRegion });
         } catch (e) {
             console.error('[TMDB] discover-tmdb failed:', e);
             return { success: false, error: e.message };
@@ -1137,8 +1102,16 @@ function registerTmdbHandlers(ipcMain) {
     });
 }
 
+// the trailer module asks these (it is required above, so hand them over instead of a circular require)
+trailers.configure({ readThroughDetails, fetchKinoCheckTrailer, findCatalogItem, ingestTrailerKey });
+
 module.exports = {
     registerTmdbHandlers,
+    readThroughDetails,
+    readThroughSeason,
+    findCatalogItem,
     // for tests/test_raggae_integration.js
-    _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, localSearchCache, tmdbIdCache }
+    _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, localSearchCache, tmdbIdCache,
+                  slimDetails, slimSeason, catalogDetails, listItemMatches, GENRE_CODES, decadeRange, discoverFromCatalog,
+                  trendingFromCatalog }
 };

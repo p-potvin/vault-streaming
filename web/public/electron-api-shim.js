@@ -389,6 +389,7 @@
     getOMDbDetails: inv('get-omdb-details'),
     searchTorrents: inv('search-torrents'),
     streamRDTorrent: inv('rd-stream-torrent'),
+    streamDeepbrid: inv('deepbrid-stream'),
     getTorrentStatus: inv('rd-torrent-status'),
     debridURL: inv('rd-unrestrict-url'),
     downloadDebridFile: inv('rd-download-file'),
@@ -438,8 +439,9 @@
     getDebridStatsReport: inv('debrid-stats-report'),
     resetDebridStats: inv('debrid-stats-reset'),
 
+    getTrailer: inv('trailer:get'),
     getCachedTrailer: inv('trailer-cache:get'),
-    cacheTrailer: inv('trailer-cache:put'),
+    getTrailerCacheStats: inv('trailer-cache:stats'),
 
     clipVideo: inv('clipVideo'),
     cancelClip: inv('clip-cancel'),

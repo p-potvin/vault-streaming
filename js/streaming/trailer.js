@@ -1,4 +1,4 @@
-// js/streaming/trailer.js — trailer resolution (KinoCheck + TMDB fallback) and TMDB token cache
+// js/streaming/trailer.js — the details modal's trailer, played from the local cache (src/trailers.js)
 // Part of the streaming feature, split out of the former monolithic js/streaming.js.
 
 async function _fetchAndInjectTrailer(tmdbId, mediaType) {
@@ -15,79 +15,19 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
     if (loadingEl) loadingEl.style.display = 'flex';
 
     try {
-        let trailerKey = null;
-        const cacheKey = `${mediaType}_${tmdbId}`;
-        window._trailerKeyCache = window._trailerKeyCache || new Map();
-
-        if (window._trailerKeyCache.has(cacheKey)) {
-            trailerKey = window._trailerKeyCache.get(cacheKey);
-        } else {
-            // API Key Priority Tracking
-            const statsJson = localStorage.getItem('vault_trailer_api_stats');
-            const stats = statsJson ? JSON.parse(statsJson) : { kinocheck: 0, tmdb: 0 };
-
-            const providers = [
-                {
-                    id: 'kinocheck',
-                    score: stats.kinocheck,
-                    fn: async () => {
-                        if (window.electronAPI && window.electronAPI.getKinoCheckTrailer) {
-                            console.log(`[streaming] Attempting KinoCheck Premium for TMDB ID: ${tmdbId}`);
-                            const kcResult = await window.electronAPI.getKinoCheckTrailer({ tmdbId, mediaType, language: window.tmdbLanguage() });
-                            if (kcResult && kcResult.success && kcResult.key) {
-                                console.log(`[streaming] KinoCheck successfully resolved trailer key:`, kcResult.key);
-                                return kcResult.key;
-                            } else {
-                                console.warn(`[streaming] KinoCheck premium lookup skipped or empty:`, kcResult ? kcResult.error : 'No response');
-                            }
-                        }
-                        return null;
-                    }
-                },
-                {
-                    id: 'tmdb',
-                    score: stats.tmdb,
-                    fn: async () => {
-                        console.log(`[streaming] Attempting TMDB video lookup for TMDB ID: ${tmdbId}`);
-                        const type = mediaType === 'tv' ? 'tv' : 'movie';
-                        const url = `https://api.themoviedb.org/3/${type}/${tmdbId}/videos?language=en-US`;
-                        const TMDB_BEARER_TOKEN = await _getTMDBToken();
-                        if (TMDB_BEARER_TOKEN) {
-                            const res = await fetch(url, {
-                                headers: { accept: 'application/json', Authorization: `Bearer ${TMDB_BEARER_TOKEN}` }
-                            });
-                            if (res.ok) {
-                                const data = await res.json();
-                                const trailer = (data.results || []).find(v => v.type === 'Trailer' && v.site === 'YouTube') || data.results?.[0];
-                                if (trailer && trailer.key) {
-                                    return trailer.key;
-                                }
-                            }
-                        }
-                        return null;
-                    }
-                }
-            ];
-
-            // Sort providers by success score descending
-            providers.sort((a, b) => b.score - a.score);
-
-            for (const provider of providers) {
-                trailerKey = await provider.fn();
-                if (trailerKey) {
-                    stats[provider.id]++;
-                    localStorage.setItem('vault_trailer_api_stats', JSON.stringify(stats));
-                    break;
-                }
-            }
-
-            if (trailerKey) {
-                window._trailerKeyCache.set(cacheKey, trailerKey);
-            }
-        }
+        // One call: the trailer's YouTube id and its local copy (src/trailers.js). KinoCheck / TMDB are asked and
+        // YouTube is downloaded only the first time a title is opened; after that this is a disk lookup.
+        const titleEl0 = el('streaming-details-title');
+        const res = (window.electronAPI && window.electronAPI.getTrailer)
+            ? await window.electronAPI.getTrailer({ id: tmdbId, mediaType, language: window.tmdbLanguage(),
+                                                    title: titleEl0 ? titleEl0.textContent : '' })
+            : null;
+        const trailerKey = res && res.key;
+        const directUrl = res && res.success ? window.trailerSrc(res) : null;
+        if (res && !res.success) console.warn('[streaming] Trailer not cached:', res.error);
 
         if (!trailerKey) {
-            console.warn('[streaming] No trailer could be resolved from KinoCheck or TMDB fallback.');
+            if (!stillCurrent()) return;
             if (iframeWrapper) iframeWrapper.style.display = 'none';
             if (loadingEl) loadingEl.style.display = 'none';
             return;
@@ -108,25 +48,6 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
 
         if (!iframeWrapper) return;
 
-        // -----------------------------------------------------------------
-        // PRIMARY: Extract direct stream URL via yt-dlp (bypasses ALL
-        // embedding restrictions, CORS, error 152/150/101).
-        // -----------------------------------------------------------------
-        window._directTrailerUrlCache = window._directTrailerUrlCache || {};
-        let directUrl = window._directTrailerUrlCache[trailerKey];
-
-        if (!directUrl && window.electronAPI && window.electronAPI.extractYouTubeURL) {
-            try {
-                const result = await window.electronAPI.extractYouTubeURL(trailerKey);
-                if (result && result.success && result.url) {
-                    directUrl = result.url;
-                    window._directTrailerUrlCache[trailerKey] = directUrl;
-                }
-            } catch (e) {
-                console.warn('[streaming] yt-dlp extraction failed, falling back to iframe:', e.message);
-            }
-        }
-
         // The modal was closed while we were resolving — do NOT attach anything
         // (this is what prevents the off-screen ghost trailer).
         if (!stillCurrent()) {
@@ -135,7 +56,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
         }
 
         if (directUrl) {
-            console.log('[streaming] yt-dlp resolved direct stream, replacing iframe with native video');
+            console.log('[streaming] Playing the cached trailer', trailerKey);
             // Remove old iframe listener if any
             if (window._ytTrailerListener) {
                 window.removeEventListener('message', window._ytTrailerListener);
@@ -210,9 +131,8 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
         }
 
         // -----------------------------------------------------------------
-        // FALLBACK: Legacy iframe embed (for when yt-dlp is unavailable or
-        // the video has no downloadable formats). Still subject to
-        // embedding restrictions.
+        // FALLBACK: iframe embed, only when the download failed (it is
+        // retried after a day). Still subject to embedding restrictions.
         // -----------------------------------------------------------------
         // Recreate the iframe if it was removed or isn't a native iframe
         let iframe = el('movie-trailer-iframe');
@@ -313,19 +233,12 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
     }
 }
 
-// Cache TMDB token retrieval (read from settings data or env indirectly through search result headers)
-let _cachedTMDBToken = null;
-async function _getTMDBToken() {
-    if (_cachedTMDBToken) return _cachedTMDBToken;
-    // We use the TMDB search endpoint to confirm the token is valid; the token itself
-    // lives in the backend (.env). For front-end trailer fetches, we must re-use it from window.appSettings.
-    const settings = window.appSettings || {};
-    if (settings.tmdbBearerToken) {
-        _cachedTMDBToken = settings.tmdbBearerToken;
-        return _cachedTMDBToken;
-    }
-    return null; // Trailer fetch will silently skip — movie info still works
-}
+/** The URL to play a cached trailer from: the file itself in the desktop app, the server's /trailers route on the
+ *  web client (which cannot read the host's disk). */
+window.trailerSrc = function (res) {
+    if (!res) return null;
+    return window.__VW_WEB__ ? res.httpPath : res.fileUrl;
+};
 
 window.destroyTrailer = function () {
     // Invalidate any in-flight _fetchAndInjectTrailer so a late resolution can't

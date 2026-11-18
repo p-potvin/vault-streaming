@@ -80,6 +80,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   raggaeHealth: () => ipcRenderer.invoke('raggae-health'),
   searchTorrents: (movieTitle) => ipcRenderer.invoke('search-torrents', movieTitle),
   streamRDTorrent: (data) => ipcRenderer.invoke('rd-stream-torrent', data),
+  // Deepbrid: the fallback when no Real-Debrid / Comet source plays (src/deepbrid/client.js)
+  streamDeepbrid: (data) => ipcRenderer.invoke('deepbrid-stream', data),
   getTorrentStatus: (torrentId) => ipcRenderer.invoke('rd-torrent-status', torrentId),
   debridURL: (data) => ipcRenderer.invoke('rd-unrestrict-url', data),
   downloadDebridFile: (data) => ipcRenderer.invoke('rd-download-file', data),
@@ -130,9 +132,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDebridStatsReport: () => ipcRenderer.invoke('debrid-stats-report'),
   resetDebridStats: () => ipcRenderer.invoke('debrid-stats-reset'),
 
-  // Trailer cache (durable per-instance hosted copies of YouTube trailers)
+  // Trailer cache (src/trailers.js): looked up and downloaded once, then played from the local disk
+  getTrailer: (data) => ipcRenderer.invoke('trailer:get', data),
   getCachedTrailer: (youtubeId) => ipcRenderer.invoke('trailer-cache:get', youtubeId),
-  cacheTrailer: (data) => ipcRenderer.invoke('trailer-cache:put', data),
+  getTrailerCacheStats: () => ipcRenderer.invoke('trailer-cache:stats'),
 
   // Video Clipping API
   clipVideo: (data) => ipcRenderer.invoke('clipVideo', data),

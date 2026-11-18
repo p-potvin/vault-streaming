@@ -38,6 +38,21 @@ When you start a stream, a Python daemon is spawned that processes audio via FFm
 
 ---
 
+## Metadata, trailers and debrid
+
+- **Metadata comes from the local catalog** (vault-raggae, `http://127.0.0.1:8750`, `src/raggae.js`). Details, seasons
+  and episodes are read through it: on a miss TMDB is asked once, the answer is ingested (TMDB's extras under the
+  item's `raw_enrichment.tmdb[<language>]`) and the catalog's copy is served (`src/tmdb.js`).
+- **Discover and trending** read ordered catalog lists. `scripts/ingest-front-page.js` fills them from TMDB (trending,
+  and each provider's popular titles per watch region); `scripts/Register-FrontPageTask.ps1` schedules it at 06:30 and
+  18:30 (at most 1500 TMDB requests a run, 4/s). Dry run: `node scripts/ingest-front-page.js --dry-run`.
+- **Trailers** are looked up (KinoCheck, then the catalog's TMDB videos) and downloaded with yt-dlp once, then played
+  from `TRAILER_CACHE_DIR` (default `G:\VaultStreaming\trailers`, `src/trailers.js`); the web client gets them at
+  `/trailers/<id>.mp4`.
+- **Deepbrid** is the fallback when Real-Debrid fails (Debrid Downloader, and one attempt after every stream source
+  failed), through the proxy tunnel when one is enabled, else directly (`src/deepbrid/client.js`; key `DEEPBRID_API_TOKEN` or
+  `.access/deepbrid_api_token.txt`).
+
 ## 📋 FFmpeg Requirements
 
 Vault Streaming uses FFmpeg for audio extraction and video manipulation.
