@@ -3,6 +3,7 @@
 //   GET  /v1/catalog/search     full-text search (one category at a time)
 //   GET  /v1/catalog/{id}       one item (e.g. imdb:tt0133093); ?raw=true adds raw_enrichment (TMDB extras)
 //   GET  /v1/catalog/xref/tmdb/{movie|tv}/{id}   the item carrying a TMDB id
+//   POST /v1/moments/stream     queue the Moments + transcript of a stream being played (loopback only)
 //   GET  /v1/catalog/lists/{key} an ordered list (the Discover front page); POST replaces it (loopback only)
 //   GET  /v1/catalog/browse     a sorted page of a category (the offline "popular" list)
 //   POST /v1/catalog/ingest     outside metadata in: new items added, known ones only filled (loopback only)
@@ -125,6 +126,13 @@ async function setList(key, catalogIds) {
         { body: { catalog_ids: catalogIds.slice(0, 1000) } });
 }
 
+/** Queue the Moments + transcript of a stream being played (POST /v1/moments/stream, loopback only): resolves
+ *  { key, state: 'queued' | 'running' | 'done', position? } or null. */
+async function queueStream(job) {
+    if (!job || !job.key || !job.url) return null;
+    return call('POST', '/v1/moments/stream', { body: job, timeoutMs: 10000, tripOnTimeout: false });
+}
+
 /**
  * Full-text search (GET /v1/catalog/search) in one category; resolves the hit list ([] on any failure).
  * @param {object} options - { category, year, mode, limit }
@@ -210,6 +218,7 @@ module.exports = {
     byExternal,
     getList,
     setList,
+    queueStream,
     search,
     searchTitles,
     browse,

@@ -21,6 +21,12 @@ This application is built with **Electron** and utilizes local FFmpeg and Python
 - **AI Daemon**: Python-based daemon managing NVIDIA NeMo (Parakeet-TDT) models for real-time transcription.
 - **Video Processing**: FFmpeg integration for clipping, upscaling, and format conversion.
 
+### Version
+
+One version, set only in `package.json`: bump with `node scripts/sync-version.js X.Y.Z`, which writes the copies
+(the `<!-- vX.Y.Z -->` comment in `index.html`, `package-lock.json`); `node tests/test_version.js` names any file that
+drifts. The iOS app keeps its own version.
+
 ## Quick Start
 
 1. Ensure you have Node.js and npm installed.

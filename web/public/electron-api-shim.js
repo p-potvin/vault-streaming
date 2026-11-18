@@ -435,6 +435,7 @@
 
     probeAudioTracks: inv('probe-audio-tracks'),
     detectAudioLanguage: inv('detect-audio-language'),
+    indexPlayback: inv('moments:index-playback'),
 
     getDebridStats: inv('debrid-stats-get'),
     getDebridStatsReport: inv('debrid-stats-report'),
