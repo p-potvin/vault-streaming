@@ -3,7 +3,7 @@
 // so the app reads them from vault-raggae instead of asking TMDB on each first view.
 //
 // Who: IMDb films with >= --movie-votes votes (default 600) and series with >= --tv-votes (default 1000), most voted
-// first. Series with at most --max-episodes episodes (default 250, counted locally from IMDb's title.episode dump) also
+// first. Series with at most --max-episodes episodes (default 500, counted locally from IMDb's title.episode dump) also
 // get every season's episodes: they come in the same request as the details (up to 15 seasons appended), so they cost
 // next to nothing, while the long-running soaps / talk / game shows (10,000+ episodes) are skipped (operator, Wed 18
 // Nov 2026). --episodes-top (default 3000, operator) keeps the N most voted of those; 0 takes all 12,963 (411k
@@ -24,8 +24,8 @@
 //     the file), overview / release date / runtime / external_ids.tmdb when the catalog has none
 //
 // Bounded (REQUEST_RATE_LIMITING): one request start every --interval-ms (default 100 ms: 10/s, TMDB allows ~40/s),
-// a hard --max-requests cap (default 200000) per run, a 429 waits its Retry-After (at most 3 times a run, then stops),
-// no other retries. Resumable: done and missed titles are kept in %LOCALAPPDATA%\VaultWares\vault-streaming\
+// a hard --max-requests cap (default 200000) per run. A 429 waits its Retry-After; 3 in a row (no success between)
+// start a 5-minute cooldown, after which the run goes on; the 4th cooldown stops the run. No other retries. Resumable: done and missed titles are kept in %LOCALAPPDATA%\VaultWares\vault-streaming\
 // (backfill-done.txt, backfill-misses.txt) and skipped by the next run. --dry-run asks only the local gateway and
 // prints the plan.
 //
@@ -58,13 +58,15 @@ const EXECUTE = process.argv.includes('--execute');
 const MOVIE_VOTES = int('movie-votes', 600);
 const TV_VOTES = int('tv-votes', 1000);
 const EPISODES_TOP = parseInt(arg('episodes-top', '3000'), 10) || 0;  // 0: every series under the cap
-const MAX_EPISODES = int('max-episodes', 250);
+const MAX_EPISODES = int('max-episodes', 500);
 const EPISODE_DUMP = process.env.IMDB_EPISODE_DUMP || 'G:/Catalogs/Sources/films/title.episode.tsv.gz';
 const LIMIT = parseInt(arg('limit', '0'), 10) || 0;
 const ONLY = arg('category', '');
 const MAX_REQUESTS = int('max-requests', 200000);
 const INTERVAL_MS = Math.max(25, int('interval-ms', 100));
-const MAX_429 = 3;
+const MAX_429_STREAK = 3;               // consecutive 429s before a cooldown
+const COOLDOWN_MS = 5 * 60 * 1000;
+const MAX_COOLDOWNS = 4;                // the 4th cooldown ends the run
 const TOKEN = process.env.TMDB_BEARER_TOKEN;
 const STATE_DIR = path.join(process.env.LOCALAPPDATA || os.homedir(), 'VaultWares', 'vault-streaming');
 const DONE_FILE = path.join(STATE_DIR, 'backfill-done.txt');
@@ -73,7 +75,8 @@ const MISS_FILE = path.join(STATE_DIR, 'backfill-misses.txt');
 // ── bounded TMDB requests ────────────────────────────────────────────────────
 let requests = 0;
 let lastAt = 0;
-let hits429 = 0;
+let streak429 = 0;
+let cooldowns = 0;
 class Stop extends Error { }
 
 async function tmdb(route) {
@@ -89,12 +92,19 @@ async function tmdb(route) {
             headers: { accept: 'application/json', Authorization: `Bearer ${TOKEN}` }, signal: controller.signal,
         });
         if (res.status === 429) {
-            if (++hits429 > MAX_429) throw new Stop('TMDB keeps answering 429: stopping this run');
+            if (++streak429 >= MAX_429_STREAK) {
+                if (++cooldowns >= MAX_COOLDOWNS) throw new Stop(`TMDB kept answering 429 after ${MAX_COOLDOWNS - 1} cooldowns: stopping this run`);
+                console.warn(`  ${streak429} 429s in a row: cooling down 5 min (${cooldowns}/${MAX_COOLDOWNS - 1})`);
+                streak429 = 0;
+                await new Promise(r => setTimeout(r, COOLDOWN_MS));
+                return null;
+            }
             const after = Math.min(60, parseInt(res.headers.get('retry-after') || '10', 10) || 10);
-            console.warn(`  429: waiting ${after} s (${hits429}/${MAX_429})`);
+            console.warn(`  429: waiting ${after} s`);
             await new Promise(r => setTimeout(r, after * 1000));
             return null;
         }
+        streak429 = 0;
         if (!res.ok) return res.status === 404 ? { notFound: true } : null;
         return await res.json();
     } catch (e) {
