@@ -1585,13 +1585,23 @@ async function applyDetectedLanguages(probe, url, proxy) {
     const ids = (probe.undetermined || []).slice(0, 3);
     if (!ids.length) return;
     const started = Date.now();
-    const results = await Promise.race([
-        Promise.all(ids.map(audioIndex => window.electronAPI.detectAudioLanguage({
-            url, proxy, audioIndex, durationSeconds: probe.durationSeconds,
-        }).catch(() => null))),
-        new Promise(resolve => setTimeout(() => resolve([]), 15000)),
-    ]);
-    for (const r of results || []) {
+    // Each answer is kept as it arrives: at the deadline the ones already in count, a slow track does not void the
+    // others. A track in the preferred language ends the wait at once.
+    const results = [];
+    await new Promise(resolve => {
+        let pending = ids.length;
+        const timer = setTimeout(resolve, 15000);
+        const done = () => { clearTimeout(timer); resolve(); };
+        ids.forEach(audioIndex => {
+            window.electronAPI.detectAudioLanguage({ url, proxy, audioIndex, durationSeconds: probe.durationSeconds })
+                .catch(() => null)
+                .then(r => {
+                    if (r) results.push(r);
+                    if ((r && r.success && r.lang === probe.preferredLang) || --pending === 0) done();
+                });
+        });
+    });
+    for (const r of results) {
         if (!r || !r.success) continue;
         const t = probe.tracks.find(x => x.audioIndex === r.audioIndex);
         if (t && t.lang === 'und') { t.lang = r.lang; t.langSource = 'detected'; }
