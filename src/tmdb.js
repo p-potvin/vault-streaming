@@ -73,7 +73,8 @@ try {
     console.error('[KinoCheck] Failed to load API key:', e);
 }
 
-/** KinoCheck's trailer for a TMDB id: { key, title, thumbnail } or null. One request. */
+/** KinoCheck's trailer for a TMDB id: { key, title, thumbnail }, null when KinoCheck answered without one, undefined
+ *  when it did not answer (network, 429, 5xx: the caller must not remember that as "no trailer"). One request. */
 async function fetchKinoCheckTrailer(tmdbId, category, language) {
     if (!KINOCHECK_API_KEY || !tmdbId) return null;
     const type = category === 'tv' ? 'shows' : 'movies';
@@ -84,7 +85,7 @@ async function fetchKinoCheckTrailer(tmdbId, category, language) {
             { headers: { 'X-Api-Key': KINOCHECK_API_KEY, Accept: 'application/json' } });
         if (!res.ok) {
             console.warn(`[KinoCheck] ${type} ${tmdbId} -> HTTP ${res.status}`);
-            return null;
+            return (res.status === 429 || res.status >= 500) ? undefined : null;
         }
         const data = await res.json();
         const pick = v => v && v.youtube_video_id ? { key: v.youtube_video_id, title: v.title, thumbnail: v.youtube_thumbnail } : null;
@@ -96,7 +97,7 @@ async function fetchKinoCheckTrailer(tmdbId, category, language) {
         return null;
     } catch (e) {
         console.warn(`[KinoCheck] ${type} ${tmdbId} failed (${e.message})`);
-        return null;
+        return undefined;
     }
 }
 
@@ -585,7 +586,8 @@ function catalogDetails(item, blob, category) {
         : { ...base, title: b.title || card.title, release_date: date };
 }
 
-/** The TMDB details call (one request), or null. */
+/** The TMDB details call (one request): the answer, null when TMDB does not know the title, undefined when it did not
+ *  answer (network, 429, 5xx). */
 async function fetchTmdbDetails(tmdbId, category, language) {
     if (!TMDB_BEARER_TOKEN || !tmdbId) return null;
     const lang2 = String(language || 'en').slice(0, 2);
@@ -595,12 +597,12 @@ async function fetchTmdbDetails(tmdbId, category, language) {
         const res = await fetchWithTimeout(url, { headers: tmdbHeaders() });
         if (!res.ok) {
             console.warn(`[TMDB] ${category} ${tmdbId} -> HTTP ${res.status}`);
-            return null;
+            return (res.status === 429 || res.status >= 500) ? undefined : null;
         }
         return await res.json();
     } catch (e) {
         console.warn(`[TMDB] ${category} ${tmdbId} failed (${e.message})`);
-        return null;
+        return undefined;
     }
 }
 
@@ -637,8 +639,8 @@ async function ingestAndReadBack(ingestItem) {
 }
 
 /**
- * Details for a movie or series, read through the catalog. Resolves { success, source, data } or null (unknown
- * everywhere / TMDB down and nothing local).
+ * Details for a movie or series, read through the catalog. Resolves { success, source, data }, null (unknown
+ * everywhere) or undefined (TMDB did not answer and nothing is local).
  */
 async function readThroughDetails(id, category, language = 'en-US') {
     let item = await findCatalogItem(id, category);
@@ -654,7 +656,8 @@ async function readThroughDetails(id, category, language = 'en-US') {
     if (!data) {
         // TMDB unknown / down: whatever the catalog has (a stale copy included)
         if (item) return { success: true, source: 'raggae', data: catalogDetails(item, blob, category) };
-        return null;
+        // undefined: TMDB did not answer (callers must not remember it as "unknown"); null: nobody knows the title
+        return tmdbId && data === undefined ? undefined : null;
     }
     const slim = slimDetails(data, category);
     const saved = await ingestAndReadBack(detailsToIngest(data, slim, category, language, item && item.catalog_id));
@@ -727,10 +730,28 @@ const listKeys = require('./front-page-keys');
 /** Filter codes of the Discover genre <select> -> the catalog's (IMDb) genre names. Codes with no catalog genre
  *  (curated picks such as "Jodorowsky") are not filtered. */
 const GENRE_CODES = {
-    wes: ['Western'], bio: ['Biography'], doc: ['Documentary'], dra: ['Drama'], com: ['Comedy'], rom: ['Romance'],
-    hor: ['Horror'], cri: ['Crime'], thr: ['Thriller'], noi: ['Film-Noir'], tru: ['Crime', 'Documentary'],
-    car: ['Animation'], kid: ['Family'], adv: ['Adventure'], nat: ['Documentary']
+    // the Discover dropdown (js/tmdb.js MOVIE_GENRES / TV_GENRES) sends TMDB genre ids; the catalog holds IMDb names.
+    // `any`: one of them is enough ("Action & Adventure"); `all`: every one is needed.
+    28: { any: ['Action'] }, 12: { any: ['Adventure'] }, 16: { any: ['Animation'] }, 35: { any: ['Comedy'] },
+    80: { any: ['Crime'] }, 99: { any: ['Documentary'] }, 18: { any: ['Drama'] }, 10751: { any: ['Family'] },
+    14: { any: ['Fantasy'] }, 36: { any: ['History'] }, 27: { any: ['Horror'] }, 10402: { any: ['Music', 'Musical'] },
+    9648: { any: ['Mystery'] }, 10749: { any: ['Romance'] }, 878: { any: ['Sci-Fi'] }, 53: { any: ['Thriller'] },
+    10752: { any: ['War'] }, 37: { any: ['Western'] },
+    10759: { any: ['Action', 'Adventure'] }, 10762: { any: ['Family', 'Animation'] }, 10763: { any: ['News'] },
+    10764: { any: ['Reality-TV'] }, 10765: { any: ['Sci-Fi', 'Fantasy'] }, 10766: { any: ['Drama'] },
+    10767: { any: ['Talk-Show'] }, 10768: { any: ['War'] },
+    // the abbreviations of the static markup in index.html (replaced by the ids above once the dropdown is built)
+    wes: { any: ['Western'] }, bio: { any: ['Biography'] }, doc: { any: ['Documentary'] }, dra: { any: ['Drama'] },
+    com: { any: ['Comedy'] }, rom: { any: ['Romance'] }, hor: { any: ['Horror'] }, cri: { any: ['Crime'] },
+    thr: { any: ['Thriller'] }, noi: { any: ['Film-Noir'] }, tru: { all: ['Crime', 'Documentary'] },
+    car: { any: ['Animation'] }, kid: { any: ['Family'] }, adv: { any: ['Adventure'] }, nat: { any: ['Documentary'] }
 };
+// TMDB's "TV Movie" (10770) and the curated picks (Jodorowsky…) have no catalog genre: not filtered.
+
+function genreSpec(withGenres) {
+    if (!withGenres || withGenres === 'all') return null;
+    return GENRE_CODES[String(withGenres)] || null;
+}
 
 function decadeRange(decade) {
     if (!decade || decade === 'all') return null;
@@ -739,10 +760,17 @@ function decadeRange(decade) {
     return start === 1920 ? { min: 0, max: 1929 } : { min: start, max: start + 9 };
 }
 
+/** Released by today (UTC): a full release date when the catalog has one, else the year. */
+function isReleased(item, todayIso) {
+    if (item.release_date && /^\d{4}-\d{2}-\d{2}/.test(item.release_date)) return item.release_date.slice(0, 10) <= todayIso;
+    return !item.year || item.year <= parseInt(todayIso.slice(0, 4), 10);
+}
+
 function listItemMatches(item, { genreNames, range, origin }) {
     if (genreNames) {
         const g = Array.isArray(item.genres) ? item.genres : [];
-        if (!genreNames.every(name => g.includes(name))) return false;
+        if (genreNames.any && !genreNames.any.some(name => g.includes(name))) return false;
+        if (genreNames.all && !genreNames.all.every(name => g.includes(name))) return false;
     }
     if (range && !(item.year && item.year >= range.min && item.year <= range.max)) return false;
     if (origin) {
@@ -774,7 +802,9 @@ async function cachedList(key) {
 async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres, decade, region, sort, watchRegion }) {
     const category = mediaType === 'tv' ? 'tv' : 'movie';
     page = Math.max(1, parseInt(page, 10) || 1);
-    const genreNames = withGenres && withGenres !== 'all' ? (GENRE_CODES[withGenres] || null) : null;
+    const genreNames = genreSpec(withGenres);
+    const bySort = sort && /release_date|air_date/.test(sort);
+    const todayIso = new Date().toISOString().slice(0, 10);
     const range = decadeRange(decade);
     const origin = region && region !== 'all' ? String(region).toUpperCase() : null;
     const filtered = !!(genreNames || range || origin);
@@ -787,9 +817,19 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres
     if (items && (provider !== 'all' || !filtered || origin)) {
         let rows = items.filter(it => listItemMatches(it, { genreNames, range, origin }));
         if (sort && sort.startsWith('vote_average')) rows = [...rows].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        else if (sort && /release_date|air_date/.test(sort)) rows = [...rows].sort((a, b) => (b.year || 0) - (a.year || 0));
+        else if (bySort) {
+            // newest first, but nothing not yet released (the lists are popularity pages and hold upcoming titles)
+            rows = rows.filter(it => isReleased(it, todayIso))
+                .sort((a, b) => String(b.release_date || b.year || '').localeCompare(String(a.release_date || a.year || '')));
+        }
         const results = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(catalogToCard);
         return { success: true, source: 'raggae', list: true, results };
+    }
+
+    // A provider or an origin country is only known from the stored lists: without one, say so rather than show
+    // titles that do not match the selection
+    if (provider !== 'all' || origin) {
+        return { success: true, source: 'raggae', list: false, results: [], missingList: true };
     }
 
     // "All providers" with filters, or no list stored yet: the catalog's own browse
@@ -805,7 +845,8 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres
         yearMin: range ? range.min || undefined : undefined,
         yearMax: range ? range.max : (browseSort === 'year' ? new Date().getUTCFullYear() : undefined)
     });
-    const results = rows.filter(it => listItemMatches(it, { genreNames, range: null, origin: null })).map(catalogToCard);
+    const results = rows.filter(it => listItemMatches(it, { genreNames, range: null, origin: null })
+        && (!bySort || isReleased(it, todayIso))).map(catalogToCard);
     if (results.length) browseCache.set(browseKey, { ts: Date.now(), results });
     if (browseCache.size > 200) browseCache.delete(browseCache.keys().next().value);
     return { success: true, source: 'raggae', list: false, results };
@@ -1112,6 +1153,6 @@ module.exports = {
     findCatalogItem,
     // for tests/test_raggae_integration.js
     _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, localSearchCache, tmdbIdCache,
-                  slimDetails, slimSeason, catalogDetails, listItemMatches, GENRE_CODES, decadeRange, discoverFromCatalog,
+                  slimDetails, slimSeason, catalogDetails, listItemMatches, GENRE_CODES, genreSpec, isReleased, decadeRange, discoverFromCatalog,
                   trendingFromCatalog }
 };

@@ -51,7 +51,7 @@ When you start a stream, a Python daemon is spawned that processes audio via FFm
   `/trailers/<id>.mp4`.
 - **Deepbrid** is the fallback when Real-Debrid fails (Debrid Downloader, and one attempt after every stream source
   failed), through the proxy tunnel when one is enabled, else directly (`src/deepbrid/client.js`; key `DEEPBRID_API_TOKEN` or
-  `.access/deepbrid_api_token.txt`).
+  `deepbrid_api_token.txt` in the `.access` folder next to this repo, i.e. `..\.access\`).
 
 ## 📋 FFmpeg Requirements
 

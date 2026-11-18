@@ -98,18 +98,35 @@ async function resolveKey({ id, mediaType, language } = {}) {
         return { success: false, error: 'No trailer known for this title (cached miss)', cached: true };
     }
 
-    // 3. outside, once: KinoCheck, then the TMDB videos the catalog keeps (read through)
-    const tmdbId = /^\d+$/.test(String(id)) ? Number(id) : (item && item.external_ids && item.external_ids.tmdb);
+    // 3. outside, once: KinoCheck, then the TMDB videos the catalog keeps (read through). A title known only by its
+    // IMDb id gets its TMDB id from the read-through first, so KinoCheck is still asked.
+    let tmdbId = /^\d+$/.test(String(id)) ? Number(id) : (item && item.external_ids && item.external_ids.tmdb);
+    let details;          // undefined: not asked yet; 'unanswered': TMDB did not answer; null: unknown title
+    if (!tmdbId) {
+        details = await deps.readThroughDetails(id, category, lang).catch(() => undefined);
+        if (details === undefined) details = 'unanswered';
+        const did = details && details.data && details.data.id;
+        if (/^\d+$/.test(String(did || ''))) tmdbId = Number(did);
+    }
     let found = null;
-    const kc = tmdbId ? await deps.fetchKinoCheckTrailer(tmdbId, category, lang) : null;
-    if (kc && YT_ID.test(kc.key)) found = { youtube_id: kc.key, provider: 'kinocheck', title: kc.title || null };
+    let unanswered = false;
+    if (tmdbId) {
+        const kc = await deps.fetchKinoCheckTrailer(tmdbId, category, lang);
+        if (kc === undefined) unanswered = true;
+        if (kc && YT_ID.test(kc.key)) found = { youtube_id: kc.key, provider: 'kinocheck', title: kc.title || null };
+    }
     if (!found) {
-        const details = await deps.readThroughDetails(id, category, lang).catch(() => null);
+        if (details === undefined) details = await deps.readThroughDetails(id, category, lang).catch(() => undefined);
+        if (details === undefined || details === 'unanswered') unanswered = true;
         const v = details && details.data && pickTmdbVideo(details.data.videos);
         if (v) found = { youtube_id: v.key, provider: 'tmdb', title: v.name || null };
     }
 
     const now = new Date().toISOString();
+    if (!found && unanswered) {
+        // a service did not answer: not a fact about the title, so nothing is remembered and the next view asks again
+        return { success: false, error: 'Trailer lookup failed (a service did not answer)' };
+    }
     updateIndex(idx => { idx.keys[k] = found ? { ...found, resolved_at: now } : { none: true, resolved_at: now }; });
     if (!found) return { success: false, error: 'No trailer found (KinoCheck, TMDB)' };
     const saved = item || await deps.findCatalogItem(id, category).catch(() => null);

@@ -740,7 +740,11 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
                 statusText.innerHTML = window.currentLang === 'fr'
                     ? 'Aucun flux Real-Debrid lisible. Essai avec Deepbrid…'
                     : 'No playable Real-Debrid stream. Trying Deepbrid…';
-                const db = await window.electronAPI.streamDeepbrid({ magnet: pick.magnet, hash: pick.hash, name: pick.name, proxy });
+                const media = window.activeStreamingMedia || {};
+                const db = await window.electronAPI.streamDeepbrid({ magnet: pick.magnet, hash: pick.hash, name: pick.name, proxy,
+                    // a season pack must yield the requested episode, never another one
+                    season: media.mediaType === 'tv' ? media.season : null,
+                    episode: media.mediaType === 'tv' ? media.episode : null });
                 if (window.activeRDFlowId !== currentFlowId) return;
                 if (db && db.success) {
                     response = { ...db, magnet: pick.magnet, hash: pick.hash };

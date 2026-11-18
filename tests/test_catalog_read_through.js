@@ -171,6 +171,11 @@ test('discover reads the stored list, filters it locally, and never calls TMDB',
     assert.deepStrictEqual(all.results.map(r => r.title), ['New Drama', 'Old Western', 'The Matrix']);
     const western = await handlers['discover-tmdb']({}, { providerId: '8', mediaType: 'movie', watchRegion: 'CA', withGenres: 'wes' });
     assert.deepStrictEqual(western.results.map(r => r.title), ['Old Western']);
+    // the dropdown sends TMDB genre ids (37 Western, 10759 Action & Adventure = either one)
+    const western37 = await handlers['discover-tmdb']({}, { providerId: '8', mediaType: 'movie', watchRegion: 'CA', withGenres: '37' });
+    assert.deepStrictEqual(western37.results.map(r => r.title), ['Old Western']);
+    const action = await handlers['discover-tmdb']({}, { providerId: '8', mediaType: 'movie', watchRegion: 'CA', withGenres: 10759 });
+    assert.deepStrictEqual(action.results.map(r => r.title), ['The Matrix']);
     const sixties = await handlers['discover-tmdb']({}, { providerId: '8', mediaType: 'movie', watchRegion: 'CA', decade: '1960' });
     assert.deepStrictEqual(sixties.results.map(r => r.title), ['Old Western']);
     const french = await handlers['discover-tmdb']({}, { providerId: '8', mediaType: 'movie', watchRegion: 'CA', region: 'FR' });
@@ -187,7 +192,21 @@ test('trending reads its list; with no list it falls back to the catalog browse'
     assert.deepStrictEqual(r.results.map(c => c.title), ['Breaking Bad', 'The Matrix']);
     assert.strictEqual(r.results[0].media_type, 'tv');
     const none = await handlers['discover-tmdb']({}, { providerId: '337', mediaType: 'tv', watchRegion: 'JP' });
-    assert.strictEqual(none.list, false);
+    assert.strictEqual(none.missingList, true, 'a provider with no stored list shows nothing, not unrelated titles');
+    assert.deepStrictEqual(none.results, []);
+    const browse = await handlers['discover-tmdb']({}, { providerId: 'all', mediaType: 'tv', watchRegion: 'JP', withGenres: '80' });
+    assert.strictEqual(browse.list, false, '"All" with filters and no list: the catalog browse');
+});
+
+test('newest first leaves out titles not released yet', async () => {
+    const nextYear = new Date().getUTCFullYear() + 1;
+    items.set('imdb:tt3', { catalog_id: 'imdb:tt3', category: 'movie', title: 'Upcoming', year: nextYear,
+                            release_date: `${nextYear}-06-01`, genres: ['Drama'], external_ids: { tmdb: 13 } });
+    lists.set('vs:discover:movie:350:CA', ['imdb:tt3', 'imdb:tt1', 'imdb:tt2']);
+    const r = await handlers['discover-tmdb']({}, { providerId: '350', mediaType: 'movie', watchRegion: 'CA', sort: 'primary_release_date.desc' });
+    assert.deepStrictEqual(r.results.map(x => x.title), ['New Drama', 'Old Western']);
+    const pop = await handlers['discover-tmdb']({}, { providerId: '350', mediaType: 'movie', watchRegion: 'CA' });
+    assert.strictEqual(pop.results[0].title, 'Upcoming', 'popularity order keeps it');
 });
 
 // ---- trailers --------------------------------------------------------------------------------------------------
@@ -212,6 +231,29 @@ test('trailer key: KinoCheck once, then index + catalog; a miss is remembered', 
     const missAgain = await trailers.resolveKey({ id: 424242, mediaType: 'movie', language: 'en-US' });
     assert.strictEqual(missAgain.cached, true);
     assert.strictEqual(outside().length, 0, 'a miss is not asked again within the week');
+});
+
+test('trailer key: an IMDb-only title still asks KinoCheck; a service that did not answer is not remembered', async () => {
+    items.set('imdb:tt0111161', { catalog_id: 'imdb:tt0111161', category: 'movie', title: 'The Shawshank Redemption', year: 1994, external_ids: {} });
+    tmdbAnswers['/find/tt0111161'] = { movie_results: [{ id: 278, title: 'The Shawshank Redemption' }] };
+    tmdbAnswers['/movie/278'] = { id: 278, title: 'The Shawshank Redemption', imdb_id: 'tt0111161', videos: { results: [] } };
+    kinoAnswers['278'] = { trailer: { youtube_video_id: 'PLl99DlL6b4', title: 'Trailer' } };
+    const r = await trailers.resolveKey({ id: 'tt0111161', mediaType: 'movie', language: 'en-US' });
+    if (r.success) assert.strictEqual(r.key, 'PLl99DlL6b4');      // KinoCheck key file present on this machine
+    else assert.match(r.error, /No trailer found/);              // no key file: KinoCheck skipped, TMDB had no video
+
+    const realFetch = global.fetch;
+    global.fetch = async (url, opts) => (String(url).includes('raggae.test') ? realFetch(url, opts)
+        : (() => { throw new Error('ECONNRESET'); })());
+    try {
+        const down = await trailers.resolveKey({ id: 777, mediaType: 'movie', language: 'en-US' });
+        assert.strictEqual(down.success, false);
+        assert.match(down.error, /did not answer/);
+    } finally {
+        global.fetch = realFetch;
+    }
+    const idx = JSON.parse(fs.readFileSync(path.join(process.env.TRAILER_CACHE_DIR, 'index.json'), 'utf8'));
+    assert.strictEqual(idx.keys['movie:777:en-US'], undefined, 'no week-long miss after an outage');
 });
 
 test('trailer file: an existing local copy is served without yt-dlp, as file:// and /trailers/', async () => {
@@ -239,6 +281,32 @@ test('a failed download is remembered for a day (YouTube is not asked again)', a
 });
 
 // ---- Deepbrid --------------------------------------------------------------------------------------------------
+test('Deepbrid: a season pack yields the requested episode, or fails; never another one', async () => {
+    process.env.DEEPBRID_API_TOKEN = 'test-deepbrid';
+    const deepbrid = require('../src/deepbrid/client');
+    const realFetch = global.fetch;
+    const files = { a: 'Show.S01E01.mkv', b: 'Show.S01E02.mkv', c: 'Show.S01E03.mkv' };
+    global.fetch = async (url, opts = {}) => {
+        url = String(url);
+        if (url.endsWith('/torrents/add')) return json({ error: 0, id: '9' });
+        if (url.includes('/torrents/info')) return json({ status: 'downloaded', links: Object.keys(files).map(f => `https://www.deepbrid.test/mytorrents?torrent=9&file=${f}`) });
+        if (url.endsWith('/generate/link')) {
+            const f = new URLSearchParams(opts.body).get('link').split('file=')[1];
+            return json({ error: 0, link: `https://dl.test/${f}`, filename: files[f], size: '1 GB' });
+        }
+        return json({}, 404);
+    };
+    try {
+        const e2 = await deepbrid.unrestrictMagnet('magnet:?xt=urn:btih:pack', '', 'pack', { season: 1, episode: 2 });
+        assert.strictEqual(e2.filename, 'Show.S01E02.mkv');
+        const e9 = await deepbrid.unrestrictMagnet('magnet:?xt=urn:btih:pack', '', 'pack', { season: 1, episode: 9 });
+        assert.strictEqual(e9.success, false);
+        assert.match(e9.error, /S01E09/);
+    } finally {
+        global.fetch = realFetch;
+    }
+});
+
 test('Deepbrid: works without the tunnel (direct), magnet -> poll -> link; sizes parsed', async () => {
     process.env.DEEPBRID_API_TOKEN = 'test-deepbrid';
     const deepbrid = require('../src/deepbrid/client');
@@ -266,6 +334,7 @@ test('Deepbrid: works without the tunnel (direct), magnet -> poll -> link; sizes
         global.fetch = realFetch;
     }
     assert.strictEqual(deepbrid._parseSize('1.50 GB'), Math.round(1.5 * 1024 ** 3));
+    assert.ok(deepbrid._isEpisode('Show.S01E01-E03.1080p.mkv', 1, 2) && !deepbrid._isEpisode('Show.S01E12.mkv', 1, 2));
     assert.strictEqual(deepbrid._parseSize('n/a'), 0);
 });
 

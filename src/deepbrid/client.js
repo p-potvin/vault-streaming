@@ -77,14 +77,36 @@ function torrentIdOf(d) {
     return v ? String(v) : null;
 }
 
-const _inFlight = new Map(); // hash/magnet -> Promise
+const _inFlight = new Map(); // hash/magnet (+ episode) -> Promise
+const MAX_EPISODE_LINKS = 40;    // a season pack: at most this many files are unrestricted to find the episode
+
+/** True when a file name is season `season`, episode `episode` (S01E02, 1x02, S01.E02). */
+function isEpisode(filename, season, episode) {
+    const s = Number(season);
+    const e = Number(episode);
+    const name = String(filename || '');
+    // S01E02, S01.E02, S01E01-E03 / S01E01E02 / S01E01-03 (multi-episode files), 1x02
+    const m = name.match(/S(\d{1,2})[ ._-]?E(\d{1,3})(?:-?E(\d{1,3})|-(\d{1,3}))?/i) || name.match(/\b(\d{1,2})x(\d{1,3})\b/i);
+    if (!m) return false;
+    const from = Number(m[2]);
+    const to = m[3] ? Number(m[3]) : (m[4] ? Number(m[4]) : from);
+    return Number(m[1]) === s && e >= from && e <= to;
+}
+
+/** A video file, not a sample / subtitle / nfo. */
+function isVideo(filename) {
+    return /\.(mkv|mp4|avi|m4v|webm|ts)$/i.test(String(filename || '')) && !/\bsample\b/i.test(String(filename || ''));
+}
 
 /**
  * A magnet -> { success, download, filename, filesize } when Deepbrid has it (cached), else { success: false,
  * downloading: true } once the bounded wait ends (Deepbrid keeps downloading it server-side).
+ * `want` ({ season, episode }) picks that episode's file out of a season pack; no match is a failure, never another
+ * episode. Without it the largest video file is used.
  */
-function unrestrictMagnet(magnet, proxy, dedupKey) {
-    const key = (dedupKey || magnet || '').toLowerCase();
+function unrestrictMagnet(magnet, proxy, dedupKey, want = null) {
+    const ep = want && want.season != null && want.episode != null ? want : null;
+    const key = `${(dedupKey || magnet || '').toLowerCase()}${ep ? `:${ep.season}:${ep.episode}` : ''}`;
     if (_inFlight.has(key)) return _inFlight.get(key);
     const job = (async () => {
         if (!configured()) return { success: false, notConfigured: true, error: 'Deepbrid API key is not configured' };
@@ -103,12 +125,30 @@ function unrestrictMagnet(magnet, proxy, dedupKey) {
             return { success: false, downloading: true, torrentId: id, progress: (info && info.progress) || 0,
                      error: 'Not cached on Deepbrid (it is downloading the torrent; try again later).' };
         }
-        const out = await unrestrictLink(info.links[0], proxy);
-        if (out.success && !out.filename) out.filename = info.filename || null;
-        return { ...out, torrentId: id };
+        if (info.links.length === 1 && !ep) {
+            const out = await unrestrictLink(info.links[0], proxy);
+            if (out.success && !out.filename) out.filename = info.filename || null;
+            return { ...out, torrentId: id };
+        }
+        // several files (a season pack, extras, samples): the links carry no names, so they are unrestricted one by one
+        // (bounded) until the wanted episode, or for a film the largest video, is found
+        let best = null;
+        for (const link of info.links.slice(0, MAX_EPISODE_LINKS)) {
+            const out = await unrestrictLink(link, proxy);
+            if (!out.success || !isVideo(out.filename)) continue;
+            if (ep) {
+                if (isEpisode(out.filename, ep.season, ep.episode)) return { ...out, torrentId: id };
+            } else if (!best || out.filesize > best.filesize) {
+                best = out;
+            }
+        }
+        if (best) return { ...best, torrentId: id };
+        return { success: false, torrentId: id,
+                 error: ep ? `Deepbrid: no file for S${String(ep.season).padStart(2, '0')}E${String(ep.episode).padStart(2, '0')} in this torrent`
+                           : 'Deepbrid: no video file in this torrent' };
     })().finally(() => _inFlight.delete(key));
     _inFlight.set(key, job);
     return job;
 }
 
-module.exports = { configured, unrestrictLink, unrestrictMagnet, _parseSize: parseSize };
+module.exports = { configured, unrestrictLink, unrestrictMagnet, _parseSize: parseSize, _isEpisode: isEpisode };

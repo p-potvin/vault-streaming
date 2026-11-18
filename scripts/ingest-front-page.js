@@ -18,6 +18,18 @@
 
 const fs = require('fs');
 const path = require('path');
+
+// ── the repo's .env first: src/raggae.js reads RAGGAE_URL and the options below read FRONT_PAGE_REGIONS at load
+// (the token is never logged) ──────────────────────────
+function loadEnv() {
+    const envPath = path.join(__dirname, '..', '.env');
+    if (!fs.existsSync(envPath)) return;
+    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+        if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+    }
+}
+loadEnv();
 const raggae = require('../src/raggae');
 const keys = require('../src/front-page-keys');
 
@@ -33,16 +45,6 @@ const MAX_REQUESTS = Math.max(1, parseInt(arg('max-requests', '1500'), 10) || 15
 const INTERVAL_MS = Math.max(100, parseInt(arg('interval-ms', '250'), 10) || 250);
 const LANGUAGE = 'en-US';
 
-// ── TMDB token from the repo's .env (never logged) ──────────────────────────
-function loadEnv() {
-    const envPath = path.join(__dirname, '..', '.env');
-    if (!fs.existsSync(envPath)) return;
-    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-        if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-    }
-}
-loadEnv();
 const TOKEN = process.env.TMDB_BEARER_TOKEN;
 
 // ── one bounded TMDB request ────────────────────────────────────────────────
@@ -193,10 +195,12 @@ async function main() {
             console.warn(`  ${list.key}: incomplete, the stored list is kept`);
             break;
         }
+        let ingestFailed = false;
         for (let i = 0; i < batch.length; i += 100) {
             const chunk = batch.slice(i, i + 100);
             const res = await raggae.ingest(chunk.map(b => b.item));
-            const saved = (res && res.items) || [];
+            if (!res || !Array.isArray(res.items)) { ingestFailed = true; continue; }
+            const saved = res.items;
             chunk.forEach((b, j) => {
                 const s = saved[j];
                 if (s && s.catalog_id) {
@@ -208,6 +212,11 @@ async function main() {
         for (const b of batch) {
             const cid = known.get(b.k);
             if (cid && !ids.includes(cid)) ids.push(cid);
+        }
+        if (ingestFailed) {
+            // a list missing the titles of a failed batch would replace a complete one: keep the stored copy
+            console.warn(`  ${list.key}: the catalog did not store every title, the stored list is kept`);
+            continue;
         }
         const out = await raggae.setList(list.key, ids);
         if (out) written++;

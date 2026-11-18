@@ -30,11 +30,12 @@ function registerProxyHandlers(ipcMain) {
 
     // Stream fallback when no Comet / Real-Debrid source played (js/streaming/rd-flow.js): one magnet on Deepbrid
     // (through the tunnel when the renderer passes one).
-    ipcMain.handle('deepbrid-stream', async (event, { magnet, hash, proxy } = {}) => {
+    ipcMain.handle('deepbrid-stream', async (event, { magnet, hash, proxy, season, episode } = {}) => {
         if (!deepbrid.configured()) return { success: false, notConfigured: true, error: 'Deepbrid is not configured' };
         if (!magnet) return { success: false, error: 'No magnet for this source' };
         try {
-            const db = await deepbrid.unrestrictMagnet(magnet, proxy, hash);
+            const want = season != null && episode != null ? { season, episode } : null;
+            const db = await deepbrid.unrestrictMagnet(magnet, proxy, hash, want);
             if (!db.success) return db;
             return { success: true, provider: 'deepbrid', streamUrl: db.download, filename: db.filename, filesize: db.filesize };
         } catch (e) {
