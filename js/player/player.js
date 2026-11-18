@@ -1576,6 +1576,41 @@ function endPlayerHandoff() {
     if (modal) modal.classList.remove('preparing');
 }
 
+/**
+ * Speech detection for the tracks a probe could not name (src/ipc/audio-tracks.ipc.js 'detect-audio-language'):
+ * at most 3 tracks, in parallel, 15 s in all. A track detected in the preferred language becomes the one to play.
+ * Mutates the probe result the way the probe itself reports a language switch.
+ */
+async function applyDetectedLanguages(probe, url, proxy) {
+    const ids = (probe.undetermined || []).slice(0, 3);
+    if (!ids.length) return;
+    const started = Date.now();
+    const results = await Promise.race([
+        Promise.all(ids.map(audioIndex => window.electronAPI.detectAudioLanguage({
+            url, proxy, audioIndex, durationSeconds: probe.durationSeconds,
+        }).catch(() => null))),
+        new Promise(resolve => setTimeout(() => resolve([]), 15000)),
+    ]);
+    for (const r of results || []) {
+        if (!r || !r.success) continue;
+        const t = probe.tracks.find(x => x.audioIndex === r.audioIndex);
+        if (t && t.lang === 'und') { t.lang = r.lang; t.langSource = 'detected'; }
+    }
+    const want = probe.preferredLang;
+    const hit = probe.tracks.find(t => t.langSource === 'detected' && t.lang === want);
+    console.log(`[audio-tracks] detection in ${Date.now() - started}ms:`,
+        probe.tracks.map(t => `a:${t.audioIndex}=${t.lang}(${t.langSource})`).join(' '));
+    if (!hit) return;
+    probe.chosenAudioIndex = hit.audioIndex;
+    probe.chosenLang = hit.lang;
+    probe.chosenCodec = hit.codec;
+    probe.mismatch = hit.audioIndex !== probe.defaultAudioIndex;
+    probe.suggestedAudioIndex = probe.mismatch ? hit.audioIndex : null;
+    probe.needsRemux = probe.mismatch || !hit.browserSafe;
+    probe.remuxReason = probe.mismatch ? 'language' : (!hit.browserSafe ? `codec:${hit.codec}` : null);
+    probe.languageDetected = true;
+}
+
 async function playStream(url, title) {
     if (window.autoplayTimer) {
         clearInterval(window.autoplayTimer);
@@ -1720,6 +1755,11 @@ async function playStream(url, title) {
         } catch (_) { audioProbe = null; }
 
         if (audioProbe && audioProbe.success) {
+            // No reported track is in the preferred language, but some report none: ask speech detection about those
+            // (in parallel, capped). What a stream reports is never overridden by a guess.
+            if (audioProbe.needsDetection && window.electronAPI.detectAudioLanguage) {
+                await applyDetectedLanguages(audioProbe, url, _proxy);
+            }
             window._audioTracks = audioProbe;
             if (typeof window.refreshAudioMenu === 'function') window.refreshAudioMenu();
 
@@ -1756,7 +1796,8 @@ async function playStream(url, title) {
             window._activeAudioIndex = audioIdx;
             if (audioProbe.remuxReason === 'language') {
                 window.showToast(
-                    `Audio: using ${String(audioProbe.chosenLang).toUpperCase()} track (default was ${String(audioProbe.defaultLang).toUpperCase()})`,
+                    `Audio: using ${String(audioProbe.chosenLang).toUpperCase()} track` +
+                    (audioProbe.languageDetected ? ' (language detected from speech)' : ` (default was ${String(audioProbe.defaultLang).toUpperCase()})`),
                     'info');
             } else {
                 window.showToast(`Preparing ${String(audioProbe.chosenCodec || '').toUpperCase()} audio…`, 'info');

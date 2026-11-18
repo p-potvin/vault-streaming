@@ -434,6 +434,7 @@
     onAppHidden: () => { },
 
     probeAudioTracks: inv('probe-audio-tracks'),
+    detectAudioLanguage: inv('detect-audio-language'),
 
     getDebridStats: inv('debrid-stats-get'),
     getDebridStatsReport: inv('debrid-stats-report'),

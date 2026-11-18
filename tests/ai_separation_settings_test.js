@@ -15,11 +15,11 @@ console.log('[PASS] index.html markup verified.\n');
 // 2. Verify Translations
 console.log('[Test 2] Checking EN and QC translations...');
 const enPath = path.join(__dirname, '..', 'js', 'translations.en.js');
-const qcPath = path.join(__dirname, '..', 'js', 'translations.qc.js');
+const qcPath = path.join(__dirname, '..', 'js', 'translations.fr.js');
 const enContent = fs.readFileSync(enPath, 'utf8');
 const qcContent = fs.readFileSync(qcPath, 'utf8');
 assert.ok(enContent.includes('settingAiSeparate:'), 'translations.en.js must contain settingAiSeparate');
-assert.ok(qcContent.includes('settingAiSeparate:'), 'translations.qc.js must contain settingAiSeparate');
+assert.ok(qcContent.includes('settingAiSeparate:'), 'translations.fr.js must contain settingAiSeparate');
 console.log('[PASS] EN & QC translations verified.\n');
 
 // 3. Verify js/settings/core.js wiring
