@@ -196,6 +196,10 @@ async function details(category, tmdbId, seasonNumbers) {
     let incomplete = false;
     const take = (src, n) => { const s = src[`season/${n}`]; if (s && Array.isArray(s.episodes)) seasons[String(n)] = T.slimSeason(s); };
     first.forEach(n => take(data, n));
+    // a season TMDB lists (with episodes) but whose append came back empty: not done, asked again next run
+    const listed = (Array.isArray(data.seasons) ? data.seasons : [])
+        .filter(s => s.season_number >= 1 && s.episode_count > 0).map(s => s.season_number);
+    if (first.some(n => listed.includes(n) && !seasons[String(n)])) incomplete = true;
     for (let i = first.length; i < seasonNumbers.length; i += 20) {
         const chunk = seasonNumbers.slice(i, i + 20);
         const more = await tmdb(`/tv/${tmdbId}?language=en-US&append_to_response=${chunk.map(n => `season/${n}`).join(',')}`);
