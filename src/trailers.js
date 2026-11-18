@@ -3,7 +3,7 @@
 // Two caches, both on the G: drive by default (TRAILER_CACHE_DIR overrides):
 //   index.json        title -> YouTube id ("movie:603:en-US" -> { youtube_id, provider }), and the misses
 //                     ("none", retried after NEGATIVE_TTL_MS) so a title with no trailer is not asked again every view
-//   <youtubeId>.mp4   the trailer itself, downloaded once with yt-dlp (H.264 + AAC, <= 1080p, plays in <video>)
+//   <youtubeId>.mp4   the trailer itself, downloaded once with yt-dlp (AV1 + AAC, <= 720p, plays in <video>)
 // The resolved key is also written onto the catalog item (raw_enrichment.trailer), so vault-raggae knows it.
 //
 // Key lookup order: the catalog item's trailer key -> index.json -> KinoCheck -> the catalog's TMDB videos (read
@@ -175,8 +175,10 @@ function download(youtubeId) {
         fs.mkdirSync(partDir, { recursive: true });
         const out = path.join(partDir, `${youtubeId}.%(ext)s`);
         const args = [
-            // H.264 + AAC so Chromium's <video> plays it; progressive mp4 when no separate streams exist
-            '-f', 'bv*[height<=1080][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]/b',
+            // 720p AV1 + AAC in mp4 (operator, Wed 18 Nov 2026: ~2 MB a minute, less than half of H.264 at the same
+            // resolution; Chromium decodes it, in hardware on the RTX 3060). H.264 720p when YouTube has no AV1,
+            // then any mp4.
+            '-f', 'bv*[height<=720][vcodec^=av01]+ba[ext=m4a]/bv*[height<=720][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]/b',
             // yt-dlp's default YouTube clients: forcing android,web limited it to the 360p progressive file
             '--merge-output-format', 'mp4', '--no-playlist', '--no-warnings', '--no-progress', '-o', out,
         ];
