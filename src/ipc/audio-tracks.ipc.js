@@ -11,28 +11,84 @@
 const { execFile } = require('child_process');
 const utils = require('../utils');
 
-// ISO 639-2/B -> 639-1 for the tags ffprobe reports (eng, fre, rus, ...).
+// Language of an audio track, most trusted first (operator, Wed 18 Nov 2026: what the stream reports wins; a model
+// guess mislabels close languages, e.g. Ukrainian as Russian):
+//   1. the stream's language tag (ISO 639-2/B or /T, 639-1, a BCP 47 tag, or a language name some muxers write);
+//   2. the track title ("VFQ", "TrueFrench", "Rus Dub", "English 5.1") when the tag is missing or "und";
+//   3. only then speech detection (Nemotron, 'detect-audio-language' below), asked for by the player when no
+//      reported track matches the preferred language.
+
+// ISO 639-2 (B and T) and 639-1 -> 639-1.
 const LANG_MAP = {
-    eng: 'en', en: 'en',
-    fre: 'fr', fra: 'fr', fr: 'fr',
-    rus: 'ru', ru: 'ru',
-    spa: 'es', es: 'es',
-    ger: 'de', deu: 'de', de: 'de',
-    ita: 'it', it: 'it',
-    por: 'pt', pt: 'pt',
-    dut: 'nl', nld: 'nl', nl: 'nl',
-    pol: 'pl', pl: 'pl',
-    cze: 'cs', ces: 'cs', cs: 'cs',
-    jpn: 'ja', ja: 'ja',
-    kor: 'ko', ko: 'ko',
-    chi: 'zh', zho: 'zh', zh: 'zh',
-    hin: 'hi', hi: 'hi',
-    ara: 'ar', ar: 'ar',
-    tur: 'tr', tr: 'tr',
-    ukr: 'uk', uk: 'uk',
-    swe: 'sv', sv: 'sv',
-    hun: 'hu', hu: 'hu',
+    eng: 'en', en: 'en', fre: 'fr', fra: 'fr', fr: 'fr', rus: 'ru', ru: 'ru', ukr: 'uk', uk: 'uk',
+    spa: 'es', es: 'es', ger: 'de', deu: 'de', de: 'de', ita: 'it', it: 'it', por: 'pt', pt: 'pt',
+    dut: 'nl', nld: 'nl', nl: 'nl', pol: 'pl', pl: 'pl', cze: 'cs', ces: 'cs', cs: 'cs', slo: 'sk', slk: 'sk', sk: 'sk',
+    jpn: 'ja', ja: 'ja', kor: 'ko', ko: 'ko', chi: 'zh', zho: 'zh', zh: 'zh', cmn: 'zh', yue: 'zh',
+    hin: 'hi', hi: 'hi', ara: 'ar', ar: 'ar', tur: 'tr', tr: 'tr', swe: 'sv', sv: 'sv', hun: 'hu', hu: 'hu',
+    dan: 'da', da: 'da', nor: 'no', nob: 'no', nno: 'no', no: 'no', nb: 'no', nn: 'no', fin: 'fi', fi: 'fi',
+    ice: 'is', isl: 'is', is: 'is', gre: 'el', ell: 'el', el: 'el', heb: 'he', he: 'he', iw: 'he',
+    rum: 'ro', ron: 'ro', ro: 'ro', mol: 'ro', bul: 'bg', bg: 'bg', hrv: 'hr', hr: 'hr', srp: 'sr', sr: 'sr',
+    bos: 'bs', bs: 'bs', slv: 'sl', sl: 'sl', mac: 'mk', mkd: 'mk', mk: 'mk', alb: 'sq', sqi: 'sq', sq: 'sq',
+    lit: 'lt', lt: 'lt', lav: 'lv', lv: 'lv', est: 'et', et: 'et', bel: 'be', be: 'be', geo: 'ka', kat: 'ka', ka: 'ka',
+    arm: 'hy', hye: 'hy', hy: 'hy', per: 'fa', fas: 'fa', fa: 'fa', urd: 'ur', ur: 'ur', ben: 'bn', bn: 'bn',
+    tam: 'ta', ta: 'ta', tel: 'te', te: 'te', mal: 'ml', ml: 'ml', kan: 'kn', kn: 'kn', mar: 'mr', mr: 'mr',
+    pan: 'pa', pa: 'pa', guj: 'gu', gu: 'gu', tha: 'th', th: 'th', vie: 'vi', vi: 'vi', ind: 'id', id: 'id',
+    may: 'ms', msa: 'ms', ms: 'ms', fil: 'tl', tgl: 'tl', tl: 'tl', cat: 'ca', ca: 'ca', baq: 'eu', eus: 'eu', eu: 'eu',
+    glg: 'gl', gl: 'gl', wel: 'cy', cym: 'cy', cy: 'cy', gle: 'ga', ga: 'ga', lat: 'la', la: 'la',
+    afr: 'af', af: 'af', swa: 'sw', sw: 'sw', kaz: 'kk', kk: 'kk', uzb: 'uz', uz: 'uz', aze: 'az', az: 'az',
+    mon: 'mn', mn: 'mn', tib: 'bo', bod: 'bo', bo: 'bo', khm: 'km', km: 'km', lao: 'lo', lo: 'lo', bur: 'my', mya: 'my', my: 'my',
+    // not languages
+    und: 'und', unk: 'und', zxx: 'und', mis: 'und', mul: 'multi', qaa: 'und',
 };
+
+// Language names some muxers put in the tag, and the words release groups use in track titles. Unicode letter
+// boundaries rather than \b, which only knows ASCII (a Cyrillic or Greek title would never match). Unicode letter
+// boundaries rather than , which only knows ASCII (a Cyrillic or Greek title would never match).
+const NAME_PATTERNS = [
+    ['fr', /(?<!\p{L})(fran[cç]ais|french|truefrench|vf[fqi2]?|vff|vfq|vfi|vf2|qu[eé]b[eé]c(ois)?|canadien)(?!\p{L})/iu],
+    ['en', /(?<!\p{L})(english|anglais|eng)(?!\p{L})/iu],
+    ['ru', /(?<!\p{L})(russian|русский|rus)(?!\p{L})/iu],
+    ['uk', /(?<!\p{L})(ukrainian|українська|ukr)(?!\p{L})/iu],
+    ['es', /(?<!\p{L})(spanish|espa[nñ]ol|castellano|latino|spa)(?!\p{L})/iu],
+    ['de', /(?<!\p{L})(german|deutsch|ger)(?!\p{L})/iu],
+    ['it', /(?<!\p{L})(italian|italiano|ita)(?!\p{L})/iu],
+    ['pt', /(?<!\p{L})(portuguese|portugu[eê]s|por)(?!\p{L})/iu],
+    ['ja', /(?<!\p{L})(japanese|日本語|jpn)(?!\p{L})/iu],
+    ['ko', /(?<!\p{L})(korean|한국어|kor)(?!\p{L})/iu],
+    ['zh', /(?<!\p{L})(chinese|mandarin|cantonese|中文|chi)(?!\p{L})/iu],
+    ['pl', /(?<!\p{L})(polish|polski)(?!\p{L})/iu],
+    ['nl', /(?<!\p{L})(dutch|nederlands)(?!\p{L})/iu],
+    ['tr', /(?<!\p{L})(turkish|t[uü]rk[cç]e)(?!\p{L})/iu],
+    ['ar', /(?<!\p{L})(arabic|العربية)(?!\p{L})/iu],
+    ['hi', /(?<!\p{L})(hindi)(?!\p{L})/iu],
+    ['cs', /(?<!\p{L})(czech|[cč]e[sš]tina)(?!\p{L})/iu],
+    ['hu', /(?<!\p{L})(hungarian|magyar)(?!\p{L})/iu],
+    ['sv', /(?<!\p{L})(swedish|svenska)(?!\p{L})/iu],
+    ['da', /(?<!\p{L})(danish|dansk)(?!\p{L})/iu],
+    ['no', /(?<!\p{L})(norwegian|norsk)(?!\p{L})/iu],
+    ['fi', /(?<!\p{L})(finnish|suomi)(?!\p{L})/iu],
+    ['el', /(?<!\p{L})(greek|ελληνικά)(?!\p{L})/iu],
+    ['he', /(?<!\p{L})(hebrew|עברית)(?!\p{L})/iu],
+];
+
+/** A language tag -> ISO 639-1 ('und' when unknown). `fr-CA`, `fre`, `French` -> 'fr'. */
+function normLang(tag) {
+    if (!tag) return 'und';
+    const raw = String(tag).trim();
+    if (!raw) return 'und';
+    const t = raw.toLowerCase().split(/[-_]/)[0];
+    if (LANG_MAP[t]) return LANG_MAP[t];
+    const named = NAME_PATTERNS.find(([, re]) => re.test(raw));
+    if (named) return named[0];
+    return /^[a-z]{2}$/.test(t) ? t : 'und';
+}
+
+/** The language a track title names ("VFQ 5.1", "Rus Dub [MVO]"), or null. "VO" / "Original" name none. */
+function langFromTitle(title) {
+    if (!title) return null;
+    const named = NAME_PATTERNS.find(([, re]) => re.test(String(title)));
+    return named ? named[0] : null;
+}
 
 // Audio codecs this Electron build can decode directly. AC3/E-AC3 work thanks to
 // the castlabs build; DTS / DTS-HD / TrueHD / MLP do NOT and play silently, which
@@ -50,17 +106,16 @@ function isBrowserSafeAudio(codec) {
 // would keep an extra connection open on the debrid link with nobody listening.
 // Shorter here means the child is always dead before the caller gives up.
 const PROBE_TIMEOUT_MS = 10000;
+// One detection: the 20 s sample (a remote seek) and the ASR call each get this long.
+const DETECT_TIMEOUT_MS = 12000;
+// The always-loaded nemo-speech server (vault-cacophony NeMo-Speech.cpp, Nemotron 3.5 ASR streaming).
+const NEMO_SPEECH_URL = (process.env.NEMO_SPEECH_URL || 'http://127.0.0.1:8793').replace(/\/+$/, '');
 
 // A movie shorter than this is a trailer, sample, or the wrong file inside the
 // release — no legitimate feature runs under 15 minutes. Episodes legitimately
 // do, so callers only apply this to movies.
 const MIN_FEATURE_DURATION_SECONDS = 15 * 60;
 
-function normLang(tag) {
-    if (!tag) return 'und';
-    const t = String(tag).toLowerCase().split(/[-_]/)[0];
-    return LANG_MAP[t] || t;
-}
 
 function ffprobePath() {
     return utils.getFFmpegPath().replace('ffmpeg.exe', 'ffprobe.exe').replace(/ffmpeg$/, 'ffprobe');
@@ -164,10 +219,14 @@ function registerAudioTracksIpc(ipcMain) {
         // index used by `-map 0:a:<idx>`.
         const tracks = allStreams.filter((s) => s.codec_type === 'audio').map((s, i) => {
             const tags = s.tags || {};
+            const tagged = normLang(tags.language);
+            const titled = tagged === 'und' ? langFromTitle(tags.title) : null;
             return {
                 audioIndex: i,                       // for -map 0:a:<audioIndex>
                 streamIndex: s.index,                // absolute index in the file
-                lang: normLang(tags.language),
+                lang: tagged !== 'und' ? tagged : (titled || 'und'),
+                // where the language came from: what the stream reports beats a model's guess
+                langSource: tagged !== 'und' ? 'tag' : (titled ? 'title' : 'none'),
                 rawLang: tags.language || null,
                 title: tags.title || null,
                 codec: s.codec_name || null,
@@ -190,6 +249,9 @@ function registerAudioTracksIpc(ipcMain) {
         // The track that SHOULD play: a preferred-language match if one exists,
         // otherwise the file's default.
         const chosen = match || defaultTrack;
+        // Tracks with no reported language: the player may ask 'detect-audio-language' for these, but only when no
+        // reported track matched the preference (a guess never overrides what the stream says).
+        const undetermined = tracks.filter((t) => t.lang === 'und').map((t) => t.audioIndex);
 
         // Direct playback is only safe when the browser can decode the track that
         // will actually play. Undecodable audio (DTS/TrueHD) plays silently, so
@@ -215,6 +277,8 @@ function registerAudioTracksIpc(ipcMain) {
             // The track we WOULD switch to (null = nothing to do).
             suggestedAudioIndex: needsRemuxForLang ? chosen.audioIndex : null,
             mismatch: needsRemuxForLang,
+            undetermined,
+            needsDetection: !!(wantsSpecific && !match && undetermined.length > 0 && tracks.length > 1),
             needsRemux: needsRemuxForCodec || needsRemuxForLang,
             remuxReason: needsRemuxForLang
                 ? 'language'
@@ -240,6 +304,58 @@ function registerAudioTracksIpc(ipcMain) {
         }
 
         return result;
+    });
+
+    // Speech detection for a track whose language the stream does not report: 20 s of it (from a fifth of the way
+    // in, past intros and logos) sent to the local nemo-speech server (Nemotron 3.5 returns a language tag).
+    ipcMain.handle('detect-audio-language', async (_event, { url, proxy, audioIndex = 0, durationSeconds } = {}) => {
+        if (!url || typeof url !== 'string') return { success: false, error: 'No source provided' };
+        const started = Date.now();
+        const total = Number(durationSeconds) || 0;
+        // a fifth of the way in (past intros and logos), 30 s to 15 min, and always leaving the 20 s sample
+        let at = Math.max(30, Math.min(900, Math.round((total || 600) * 0.2)));
+        if (total) at = Math.max(0, Math.min(at, Math.floor(total - 21)));
+        const isRemote = /^https?:\/\//i.test(url);
+        const args = ['-v', 'error', '-nostdin'];
+        if (isRemote) args.push('-user_agent', 'Mozilla/5.0', '-reconnect', '1', '-reconnect_streamed', '1');
+        args.push('-ss', String(at), '-i', url, '-map', `0:a:${Number(audioIndex) || 0}`, '-t', '20',
+            '-ac', '1', '-ar', '16000', '-f', 'wav', 'pipe:1');
+        let wav;
+        try {
+            wav = await new Promise((resolve, reject) => {
+                execFile(utils.getFFmpegPath(), args, {
+                    windowsHide: true, timeout: DETECT_TIMEOUT_MS, killSignal: 'SIGKILL', encoding: 'buffer',
+                    maxBuffer: 8 * 1024 * 1024, env: { ...process.env, ...proxyEnv(proxy) },
+                }, (err, stdout, stderr) => {
+                    if (err && !(stdout && stdout.length)) return reject(new Error(String(stderr || err.message).slice(-200)));
+                    resolve(stdout);
+                });
+            });
+        } catch (e) {
+            console.warn('[audio-tracks] detection sample failed:', e.message);
+            return { success: false, error: 'could not read the audio track' };
+        }
+        if (!wav || wav.length < 16000 * 2 * 3) return { success: false, error: 'track too short or silent' };
+        try {
+            const form = new FormData();
+            form.append('file', new Blob([wav], { type: 'audio/wav' }), 'sample.wav');
+            form.append('response_format', 'verbose_json');
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), DETECT_TIMEOUT_MS);
+            const res = await fetch(`${NEMO_SPEECH_URL}/v1/audio/transcriptions`, { method: 'POST', body: form, signal: controller.signal })
+                .finally(() => clearTimeout(timer));
+            if (!res.ok) return { success: false, error: `nemo-speech HTTP ${res.status}` };
+            const j = await res.json();
+            const lang = normLang(j.language);
+            const words = String(j.text || '').trim().split(/\s+/).filter(Boolean).length;
+            console.log(`[audio-tracks] a:${audioIndex} detected '${lang}' (${j.language}, ${words} words) in ${Date.now() - started}ms`);
+            // too little speech to trust (music, effects): report nothing rather than a guess
+            if (lang === 'und' || words < 5) return { success: false, error: 'not enough speech to tell' };
+            return { success: true, audioIndex: Number(audioIndex) || 0, lang, rawLang: j.language, langSource: 'detected', words };
+        } catch (e) {
+            console.warn('[audio-tracks] nemo-speech failed:', e.message);
+            return { success: false, error: 'speech detection unavailable' };
+        }
     });
 }
 
@@ -282,4 +398,4 @@ function mseCodecForCopy(videoInfo) {
     return null;
 }
 
-module.exports = { registerAudioTracksIpc, mseCodecForCopy };
+module.exports = { registerAudioTracksIpc, mseCodecForCopy, normLang, langFromTitle };

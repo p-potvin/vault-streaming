@@ -320,7 +320,7 @@ function showAsrContextMenu(anchorEl, defaultLangs) {
 
         const languages = [
             { code: 'en', name: 'English (EN)' },
-            { code: 'qc', name: 'French / Québécois (FR)' },
+            { code: 'fr', name: 'French (FR)' },
             { code: 'es', name: 'Spanish (ES)' },
             { code: 'de', name: 'German (DE)' },
             { code: 'it', name: 'Italian (IT)' },
@@ -347,7 +347,9 @@ function showAsrContextMenu(anchorEl, defaultLangs) {
             { code: 'uk', name: 'Ukrainian (UK)' }
         ];
 
-        const selectedCodes = new Set(defaultLangs && defaultLangs.length > 0 ? defaultLangs : ['en', 'qc']);
+        // 'qc' (saved by older versions) is French: language codes are ISO, the Québec flag is only cosmetic
+        const saved = (defaultLangs || []).map(c => (String(c).toLowerCase() === 'qc' ? 'fr' : c));
+        const selectedCodes = new Set(saved.length > 0 ? saved : ['en', 'fr']);
 
         function createLangItem(lang) {
             const item = document.createElement('label');
@@ -380,7 +382,7 @@ function showAsrContextMenu(anchorEl, defaultLangs) {
         if (initialList.length === 0) {
             initialList = [languages[0], languages[1]];
             selectedCodes.add('en');
-            selectedCodes.add('qc');
+            selectedCodes.add('fr');
         }
 
         function renderList(list) {
