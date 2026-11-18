@@ -394,6 +394,7 @@ const { registerTranscodeIpc } = require('./src/ipc/transcode.ipc');
 const { registerClipIpc } = require('./src/ipc/clip.ipc');
 const { registerTrailerCacheIpc } = require('./src/ipc/trailer-cache.ipc');
 const { registerAudioTracksIpc } = require('./src/ipc/audio-tracks.ipc');
+const { registerMomentsIpc } = require('./src/ipc/moments.ipc');
 const { registerDebridStatsIpc } = require('./src/telemetry/debrid-stats');
 const { registerNormalizationHandlers } = require('./src/normalization');
 
@@ -404,6 +405,7 @@ registerTranscodeIpc(ipcMain);
 registerClipIpc(ipcMain);
 registerTrailerCacheIpc(ipcMain);
 registerAudioTracksIpc(ipcMain);
+registerMomentsIpc(ipcMain);
 registerDebridStatsIpc(ipcMain);
 registerNormalizationHandlers(ipcMain);
 

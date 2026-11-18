@@ -775,6 +775,7 @@ function initPlayer() {
         const now = Date.now();
         if (now - lastHistoryUpdate > 5000) {
             lastHistoryUpdate = now;
+            trackMomentsPlayback(vp);
             if (window.activeStreamingMedia) {
                 window.electronAPI.setWatchProgress({
                     ...window.activeStreamingMedia,
@@ -1621,7 +1622,43 @@ async function applyDetectedLanguages(probe, url, proxy) {
     probe.languageDetected = true;
 }
 
+/**
+ * What plays becomes searchable (src/ipc/moments.ipc.js -> vault-raggae app/moments/stream.py): once a stream has
+ * actually played for two minutes (paused time and seeks do not count), it is handed over once, with the audio track
+ * being played and that track's language as the stream reports it. Off with appSettings.indexPlayback = false.
+ */
+const MOMENTS_AFTER_SECONDS = 120;
+function trackMomentsPlayback(vp) {
+    const s = window._momentsSession;
+    if (!s || s.sent) return;
+    if (vp.paused || vp.seeking) { s.last = null; return; }
+    const t = vp.currentTime;
+    if (s.last != null) {
+        const d = t - s.last;
+        if (d > 0 && d < 15) s.watched += d;          // a jump (seek, transcode restart) is not watching
+    }
+    s.last = t;
+    if (s.watched < MOMENTS_AFTER_SECONDS || !window.electronAPI || !window.electronAPI.indexPlayback) return;
+    s.sent = true;
+    const media = window.activeStreamingMedia || {};
+    const probe = window._audioTracks;
+    const audioIndex = window._activeAudioIndex != null ? window._activeAudioIndex
+        : (probe && probe.chosenAudioIndex != null ? probe.chosenAudioIndex : 0);
+    const track = probe && Array.isArray(probe.tracks) ? probe.tracks.find(x => x.audioIndex === audioIndex) : null;
+    window.electronAPI.indexPlayback({
+        url: s.url, title: media.title || s.title, tmdbId: media.tmdbId, mediaType: media.mediaType,
+        season: media.season, episode: media.episode, audioIndex,
+        language: track ? track.lang : 'und', languageSource: track ? track.langSource : 'none',
+        durationSec: (probe && probe.durationSeconds) || (isFinite(vp.duration) ? vp.duration : null),
+    }).then(r => console.log('[moments] playback handed over:', r && (r.state || r.skipped || r.error)))
+      .catch(e => console.warn('[moments] hand-over failed:', e && e.message));
+}
+
 async function playStream(url, title) {
+    // a new playback: its own two-minute count before it is handed to Moments (streams only, not library files)
+    window._momentsSession = (/^https?:\/\//i.test(String(url || ''))
+        && !(window.appSettings && window.appSettings.indexPlayback === false))
+        ? { url, title, watched: 0, last: null, sent: false } : null;
     if (window.autoplayTimer) {
         clearInterval(window.autoplayTimer);
         window.autoplayTimer = null;
