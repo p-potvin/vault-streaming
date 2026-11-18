@@ -16,8 +16,9 @@
 // Stored like the app's own read-through (src/tmdb.js slimDetails / slimSeason), through POST /v1/catalog/ingest
 // (fill-only for plain fields):
 //   - raw_enrichment.tmdb["en-US"]: the details, videos (trailer ids), season list, and season_details (episodes)
-//   - raw_enrichment.tmdb["fr-CA"]: the same with TMDB's French title / overview / tagline from `translations`
-//     (fr-CA, else fr-FR), so a French UI needs no request either; episodes stay English (the app falls back to them)
+//   - raw_enrichment.tmdb["fr-FR"] (the key js/utils.js tmdbLanguage() asks for): the same with TMDB's French title /
+//     overview / tagline from `translations` (Québec's, else France's), so a French UI needs no request either;
+//     episodes stay English (the app falls back to them)
 //   - raw_enrichment.tmdb.meta: keywords, certification, origin country, popularity
 //   - poster_url at w780 (1170 px tall: the 1080p poster; `python -m app.pictures catalog` in vault-raggae then keeps
 //     the file), overview / release date / runtime / external_ids.tmdb when the catalog has none
@@ -109,7 +110,9 @@ async function tmdb(route) {
 async function candidates(category, minVotes) {
     const out = [];
     for (let offset = 0; ; offset += 500) {
-        const rows = await raggae.browse({ category, sort: 'votes', limit: 500, offset, minVotes });
+        const rows = await raggae.browse({ category, sort: 'votes', limit: 500, offset, minVotes, nullOnError: true });
+        // a failed page would silently end the list early: stop the run instead
+        if (rows === null) throw new Error(`catalog browse failed (${category}, offset ${offset}); nothing was asked of TMDB`);
         if (!rows.length) break;
         for (const r of rows) if (String(r.catalog_id).startsWith('imdb:') && (r.votes || 0) >= minVotes) out.push(r);
         if (rows.length < 500 || (rows[rows.length - 1].votes || 0) < minVotes) break;
@@ -138,6 +141,7 @@ function readSet(file) {
 // ── what is stored ───────────────────────────────────────────────────────────
 function frenchOf(translations) {
     const list = (translations && translations.translations) || [];
+    // the Québec translation first, France's otherwise; stored under fr-FR, the key the renderer asks for
     const fr = list.find(t => t.iso_639_1 === 'fr' && t.iso_3166_1 === 'CA') || list.find(t => t.iso_639_1 === 'fr');
     return fr && fr.data ? fr.data : null;
 }
@@ -170,7 +174,7 @@ function buildIngest(item, data, category, seasons) {
     ingest.raw_enrichment = {
         tmdb: {
             'en-US': en,
-            'fr-CA': frBlob,
+            'fr-FR': frBlob,
             meta: {
                 keywords: Array.isArray(keywords) ? keywords.map(k => k.name).slice(0, 30) : [],
                 certification: certificationOf(data, category),
@@ -189,14 +193,16 @@ async function details(category, tmdbId, seasonNumbers) {
         `&append_to_response=${[...base, ...first.map(n => `season/${n}`)].join(',')}`);
     if (!data || data.notFound) return data;
     const seasons = {};
+    let incomplete = false;
     const take = (src, n) => { const s = src[`season/${n}`]; if (s && Array.isArray(s.episodes)) seasons[String(n)] = T.slimSeason(s); };
     first.forEach(n => take(data, n));
     for (let i = first.length; i < seasonNumbers.length; i += 20) {
         const chunk = seasonNumbers.slice(i, i + 20);
         const more = await tmdb(`/tv/${tmdbId}?language=en-US&append_to_response=${chunk.map(n => `season/${n}`).join(',')}`);
         if (more && !more.notFound) chunk.forEach(n => take(more, n));
+        else incomplete = true;
     }
-    return { data, seasons };
+    return { data, seasons, incomplete };
 }
 
 // ── run ──────────────────────────────────────────────────────────────────────
@@ -244,8 +250,13 @@ async function main() {
             console.warn(`  ingest of ${batch.length} titles failed; they stay to do`);
             return;
         }
-        fs.appendFileSync(DONE_FILE, batch.map(b => b.cid).join('\n') + '\n');
-        stored += batch.length;
+        // done only when the gateway saved that title and its data was complete (a series with a failed season
+        // request is stored as far as it goes and asked again by the next run)
+        const saved = new Set(res.items.map(s => s && s.catalog_id).filter(Boolean));
+        const finished = batch.filter(b => saved.has(b.cid) && !b.incomplete).map(b => b.cid);
+        if (finished.length) fs.appendFileSync(DONE_FILE, finished.join('\n') + '\n');
+        stored += batch.filter(b => saved.has(b.cid)).length;
+        if (saved.size < batch.length) console.warn(`  the gateway skipped ${batch.length - saved.size} of ${batch.length} titles`);
     };
     for (const [i, q] of queue.entries()) {
         try {
@@ -281,9 +292,11 @@ async function main() {
                     const chunk = rest.slice(j, j + 20);
                     const more = await tmdb(`/tv/${tmdbId}?language=en-US&append_to_response=${chunk.map(n => `season/${n}`).join(',')}`);
                     if (more && !more.notFound) chunk.forEach(n => { const s = more[`season/${n}`]; if (s && s.episodes) got.seasons[String(n)] = T.slimSeason(s); });
+                    else got.incomplete = true;
                 }
             }
-            pending.push({ cid: q.item.catalog_id, ingest: buildIngest(q.item, got.data, q.category, got.seasons) });
+            pending.push({ cid: q.item.catalog_id, incomplete: !!got.incomplete,
+                           ingest: buildIngest(q.item, got.data, q.category, got.seasons) });
             if (pending.length >= 50) await flush();
         } catch (e) {
             if (!(e instanceof Stop)) throw e;

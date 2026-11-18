@@ -166,14 +166,16 @@ async function searchTitles(query, { limit = 20 } = {}) {
 }
 
 /** A sorted page of one category (GET /v1/catalog/browse): the "popular" list when TMDB is not available. */
-async function browse({ category = 'movie', sort = 'votes', limit = 20, offset = 0, minVotes, genre, yearMin, yearMax } = {}) {
+async function browse({ category = 'movie', sort = 'votes', limit = 20, offset = 0, minVotes, genre, yearMin, yearMax, nullOnError = false } = {}) {
     let route = `/v1/catalog/browse?category=${category}&sort=${sort}&limit=${limit}&offset=${offset}`;
     if (minVotes) route += `&min_votes=${minVotes}`;
     if (genre) route += `&genre=${encodeURIComponent(genre)}`;
     if (yearMin) route += `&year_min=${yearMin}`;
     if (yearMax) route += `&year_max=${yearMax}`;
     const data = await call('GET', route, { timeoutMs: 30000, tripOnTimeout: false });
-    return Array.isArray(data && data.items) ? data.items : [];
+    if (Array.isArray(data && data.items)) return data.items;
+    // a failed page is not an empty one: callers that page through everything must be able to tell
+    return nullOnError ? null : [];
 }
 
 /**
