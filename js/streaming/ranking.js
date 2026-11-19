@@ -182,8 +182,17 @@ function scoreTorrent(torrent, preferredLang) {
         if (FOREIGN_DUB_RE.test(text) && !isMulti && !isFR) score -= 60;
     }
 
+    // ── Episode fit (TV): the episode itself beats a season pack ────────────
+    // search.js tags `fit`. A pack that is not cached means the debrid service
+    // has to fetch tens of GB first; the single episode is far likelier to play.
+    if (torrent.fit === 'pack')       score -= torrent.isRDCached ? 10 : 60;
+    else if (torrent.fit === 'other') score -= 100000;   // a different episode
+
     // ── Seeder health (log curve, sharp penalty for dead torrents) ──────────
-    if (!torrent.isUsenet) {
+    // Comet's description often carries no seeder count ("—"): unknown is
+    // neutral, not dead — it used to cost every entry 30 points.
+    const seedsKnown = /^\d+$/.test(String(torrent.seeds == null ? '' : torrent.seeds).trim());
+    if (!torrent.isUsenet && seedsKnown) {
         const seeds = parseInt(torrent.seeds, 10) || 0;
         if      (seeds === 0) score -= 30;
         else if (seeds < 5)   score -= 10;
@@ -231,7 +240,65 @@ function isRejectedForAutoPlay(torrent) {
     return BAD_RELEASE_RE.test(text) || THREE_D_RE.test(text) || PROMO_RE.test(text);
 }
 
+// How many distinct sources one play tries before giving up, and for how long.
+// Each try is one Comet resolve (+ one tiny size probe); a source Comet has to
+// fetch first fails its probe within ~12 s.
+const PLAY_QUEUE_MAX = 8;
+const PLAY_QUEUE_BUDGET_MS = 120 * 1000;
+
+/**
+ * The sources to try, in order, for one play.
+ *
+ *   1. Only entries with a Comet link (a bare magnet can't play through Comet)
+ *      and never a CAM / 3D / promo release or a different episode.
+ *   2. Cached (⚡) first — then the single episode / film not marked cached
+ *      (Comet's cache list is very incomplete; Real-Debrid often has it), then
+ *      uncached season packs last.
+ *   3. Within a tier, the ranked order (`ranked` is already rankTorrents' output).
+ *   4. A manual pick goes first whatever it is; the rest follow.
+ *
+ * search.js has already removed sync entries, lapsed services and duplicate hashes.
+ */
+function buildPlayQueue(ranked, { pick = null, max = PLAY_QUEUE_MAX } = {}) {
+    const list = Array.isArray(ranked) ? ranked : [];
+    const tier = (t) => {
+        if (t.isRDCached || t.cached) return 0;
+        if (t.fit === 'pack') return 2;
+        return 1;
+    };
+    const auto = list
+        .map((t, i) => ({ t, i }))
+        .filter(({ t }) => t && t.url && t.fit !== 'other' && !isRejectedForAutoPlay(t))
+        .sort((a, b) => (tier(a.t) - tier(b.t)) || (a.i - b.i))
+        .map(({ t }) => t);
+    const same = (a, b) => a === b || (a.hash && a.hash === b.hash) || (a.url && a.url === b.url);
+    const queue = pick ? [pick, ...auto.filter(t => !same(t, pick))] : auto;
+    return queue.slice(0, Math.max(1, max));
+}
+
+/**
+ * The one magnet handed to Deepbrid when nothing played through Real-Debrid.
+ * Deepbrid has no cache check and waits ~16 s, so prefer what is most likely
+ * to be there and small enough to finish: a manual pick that had no Comet link,
+ * else the best-ranked single episode / film, else any acceptable magnet.
+ */
+function pickDeepbridSource(ranked, { pick = null } = {}) {
+    if (pick && pick.magnet && !pick.url) return pick;
+    const ok = (Array.isArray(ranked) ? ranked : [])
+        .filter(t => t && t.magnet && t.fit !== 'other' && !isRejectedForAutoPlay(t));
+    return ok.find(t => t.fit !== 'pack') || ok[0] || null;
+}
+
 window.isRejectedForAutoPlay = isRejectedForAutoPlay;
 window.scoreTorrent = scoreTorrent;
 window.rankTorrents = rankTorrents;
+window.buildPlayQueue = buildPlayQueue;
+window.pickDeepbridSource = pickDeepbridSource;
+window.PLAY_QUEUE_BUDGET_MS = PLAY_QUEUE_BUDGET_MS;
+
+// Node (tests): the same functions without a browser.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { scoreTorrent, rankTorrents, isRejectedForAutoPlay, buildPlayQueue, pickDeepbridSource,
+                       PLAY_QUEUE_MAX, PLAY_QUEUE_BUDGET_MS };
+}
 

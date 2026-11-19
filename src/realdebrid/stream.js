@@ -36,9 +36,9 @@ const MIN_REAL_BYTES = 50 * 1024 * 1024; // 50 MB
 // Probe the resolved stream's real total size with ONE tiny GET range request
 // to the COMET PROXY url (same origin the player hits — stays on Comet's IP,
 // never touches the RD CDN directly). Returns total bytes, or null if unknown.
-async function probeStreamBytes(url) {
+async function probeStreamBytes(url, timeoutMs = 12000) {
     try {
-        const res = await fetchWithTimeout(url, { method: 'GET', headers: { Range: 'bytes=0-1' } }, 12000);
+        const res = await fetchWithTimeout(url, { method: 'GET', headers: { Range: 'bytes=0-1' } }, timeoutMs);
         // 206 → Content-Range: "bytes 0-1/<total>"; 200 → Content-Length is total.
         const cr = res.headers.get('content-range');
         if (cr) {
@@ -59,7 +59,7 @@ async function probeStreamBytes(url) {
 }
 
 function registerStreamHandlers(ipcMain) {
-    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url, name } = {}) => {
+    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url, name, cached: markedCached = true } = {}) => {
         const dedupKey = (hash || url || magnet || '').toLowerCase().trim();
 
         // Only a Comet-resolved url is playable. No url = not cached/available;
@@ -92,7 +92,8 @@ function registerStreamHandlers(ipcMain) {
             // a tiny placeholder when actually hit — since RD killed the
             // instantAvailability check. Reject placeholder-sized streams so the
             // caller can fall back to the next ranked source.
-            const totalBytes = await probeStreamBytes(streamUrl);
+            // An uncached source makes Comet add it to Real-Debrid on this first hit: give it longer to answer.
+            const totalBytes = await probeStreamBytes(streamUrl, markedCached ? 12000 : 20000);
             if (totalBytes !== null && totalBytes < MIN_REAL_BYTES) {
                 console.warn(`[Comet] Placeholder detected (${(totalBytes / 1048576).toFixed(1)} MB) — not actually cached.`);
                 // The single most useful signal for cutting a service: it
@@ -103,6 +104,20 @@ function registerStreamHandlers(ipcMain) {
                     notCached: true,
                     placeholder: true,
                     error: 'Provider returned a placeholder (not actually cached). Trying the next source.'
+                };
+            }
+            // A source Comet did not mark cached (⬇️) is often on Real-Debrid anyway, which is why it is tried at
+            // all — but only a probe that answers proves it. One that errors or times out would hand the player a
+            // link that never starts, so it moves on to the next source instead. A ⚡ source keeps the benefit of
+            // the doubt (a probe hiccup should not block it).
+            if (totalBytes === null && !markedCached) {
+                console.warn('[Comet] Uncached source did not answer the size probe — trying the next one.');
+                recordOutcome(name, 'failed');
+                return {
+                    success: false,
+                    notCached: true,
+                    placeholder: true,
+                    error: 'Source did not answer (not on Real-Debrid yet). Trying the next source.'
                 };
             }
 

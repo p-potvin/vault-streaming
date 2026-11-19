@@ -1,12 +1,13 @@
 // src/realdebrid/search.js - torrent source discovery (Comet primary, Torrentio/EZTV/YTS fallbacks)
 const { fetchWithTimeout, checkRealDebridCache, COMET_STREAM_BASE } = require("./client");
 const { recordResolve, detectDebridProvider } = require("../telemetry/debrid-stats");
+const { filterAndDedupe, episodeFit } = require("./candidates");
 
 async function fetchCometStreams(streamType, idParam, cleanTitle) {
     if (!COMET_STREAM_BASE) return null;
     const url = `${COMET_STREAM_BASE}/stream/${streamType}/${idParam}.json`;
 
-    // Comet fans out to indexers + AllDebrid/TorBox/RD on a rotating IP; a cold,
+    // Comet fans out to indexers + the debrid services in its config on a rotating IP; a cold,
     // uncached query routinely takes 15-40s (hence the 45s per-attempt timeout).
     // It also frequently returns an EMPTY list on the first hit for a title while
     // it's still scraping server-side, then populates seconds later. So retry on
@@ -79,7 +80,7 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
                 // for display and is not safe to attribute from.
                 name: nameStr,
                 // Comet's own name already carries the provider marker (e.g. [TB⚡],
-                // [AD], [RD⚡], [RD⬇️]) now that we fan out to AllDebrid/TorBox/RD.
+                // [RD⚡], [RD⬇️]). Lapsed services are dropped afterwards (candidates.js).
                 // Prepend ⚡ only if genuinely cached; otherwise show download symbol.
                 type: (isCached ? '⚡ ' : (nameStr.includes('⬇️') ? '⬇️ ' : '')) + 'Comet ' + nameStr.split('\n')[0].trim(),
                 size,
@@ -149,7 +150,15 @@ function registerSearchHandlers(ipcMain) {
                 if (cometList && cometList.length > 0) {
                     // Comet already flags cached streams (they carry a resolved
                     // url). No direct Real-Debrid instantAvailability call.
-                    return { success: true, title: cleanTitle, torrents: cometList };
+                    // One entry per torrent, no sync actions, no lapsed services; each tagged with how it fits the
+                    // requested episode so the picker can prefer the episode itself over a season pack.
+                    const isTv = streamType === 'series';
+                    const torrents = filterAndDedupe(cometList).map(t => ({
+                        ...t,
+                        fit: episodeFit(`${t.desc || ''} ${t.name || ''}`, isTv ? s : null, isTv ? e : null),
+                    }));
+                    console.log(`[Comet] ${torrents.length} distinct candidates (from ${cometList.length} entries)`);
+                    if (torrents.length > 0) return { success: true, title: cleanTitle, torrents };
                 }
                 return { success: false, error: 'No streams found via Comet for this title.' };
             }
