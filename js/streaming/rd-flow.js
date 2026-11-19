@@ -50,8 +50,8 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     const streamingMode = 'torrent-only';
 
     if (titleTextEl) {
-        // Comet fans out to AllDebrid / TorBox / Real-Debrid, so naming a single
-        // provider here was both inaccurate and needlessly long.
+        // Real-Debrid through Comet, with Deepbrid as the fallback, so naming a
+        // single provider here would be inaccurate.
         if (streamingMode === 'usenet-only') {
             titleTextEl.textContent = 'Usenet Streaming';
         } else if (streamingMode === 'hybrid') {
@@ -190,7 +190,11 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
         const mergedList = [...torrentsWithCacheStatus, ...usenetItems];
 
         // ── Rank torrents/nzbs by user's quality + language prefs ────────────────
-        const ranked = rankTorrents(mergedList);
+        // Listed in the order they will be tried (so "Best Match" is what plays
+        // first), then the entries auto-play skips (no link, CAM/3D, other episode).
+        const scored = rankTorrents(mergedList);
+        const autoQueue = window.buildPlayQueue(scored, { max: Infinity });
+        const ranked = [...autoQueue, ...scored.filter(t => !autoQueue.includes(t))];
         window.currentTorrentList = ranked;
         window.currentMovieTitle = title;
 
@@ -267,7 +271,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
         if (currentRequestNum !== _torrentRequestCounter) return;
         
         const isRejected = window.isRejectedForAutoPlay || (() => false);
-        const acceptableStreams = ranked.filter(t => !isRejected(t));
+        const acceptableStreams = ranked.filter(t => !isRejected(t) && t.fit !== 'other');
 
         if (acceptableStreams.length === 0) {
             // All streams are CAM / 3D / promo recordings! Never auto-play.
@@ -283,13 +287,9 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
             return;
         }
 
-        const bestItem = acceptableStreams[0];
-        const bestIndex = ranked.indexOf(bestItem);
-        if (bestItem.isUsenet) {
-            window.startUsenetStreamFlow(bestItem, title, bestIndex >= 0 ? bestIndex : 0);
-        } else {
-            window.startRDDebridFlow(bestItem, title, bestIndex >= 0 ? bestIndex : 0);
-        }
+        // The queue head, or — when no entry has a Real-Debrid link — no pick at
+        // all: the flow then goes straight to its Deepbrid fallback.
+        window.startRDDebridFlow(autoQueue[0] || null, title, 0);
 
     } catch (e) {
         console.error('[streaming] triggerRDStream failed:', e);
@@ -530,9 +530,12 @@ window.startUsenetStreamFlow = async function(usenetItem, movieTitle, index = 0)
 };
 
 window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
+    // `index` is kept for older callers (the quality picker); the source is found by identity, not position.
     const loadingStatus = el('rd-loading-status');
     const statusText = el('rd-status-text');
     const torrentsList = el('rd-torrents-list');
+    const fr = window.currentLang === 'fr';
+    const boltIcon = window.icons ? window.icons.lightning('tab-icon', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : '';
 
     // Record the committed quality so the quality picker can mark "now playing".
     if (torrent && typeof window.qualityLabelOf === 'function') {
@@ -542,7 +545,7 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
     torrentsList.style.display = 'none';
     loadingStatus.style.display = 'block';
     loadingStatus.querySelector('.spinner').style.display = 'block';
-    statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Unrestricting cached torrent on Real-Debrid servers...<br><span style="font-size:10px; color:var(--vault-slate);">Checking availability & generating direct stream link</span>`;
+    statusText.innerHTML = `${boltIcon} ${fr ? 'Préparation du flux Real-Debrid…' : 'Preparing the Real-Debrid stream…'}<br><span style="font-size:10px; color:var(--vault-slate);">${fr ? 'Vérification de la disponibilité' : 'Checking availability'}</span>`;
 
     const chooseManuallyBtn = el('btn-rd-choose-manually');
     if (chooseManuallyBtn) {
@@ -552,239 +555,119 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             loadingStatus.style.display = 'none';
             torrentsList.style.display = 'flex';
             chooseManuallyBtn.style.display = 'none';
-            window.showToast(window.currentLang === 'fr' ? 'Sélection manuelle activée' : 'Manual selection active', 'info');
+            window.showToast(fr ? 'Sélection manuelle activée' : 'Manual selection active', 'info');
         };
     }
 
-    // Generate unique flow ID
     const currentFlowId = Math.random();
     window.activeRDFlowId = currentFlowId;
+    const cancelled = () => window.activeRDFlowId !== currentFlowId;
 
-    // Get all torrents for automatic fallback
+    // The ranked, de-duplicated list from triggerRDStream. The picked source goes first; the rest follow in
+    // queue order (cached, then single episode / film, then packs), never a link-less entry or a duplicate hash.
     const allTorrents = window.currentTorrentList || [];
+    const queue = window.buildPlayQueue(allTorrents, { pick: torrent && torrent.url ? torrent : null });
+    const budgetMs = window.PLAY_QUEUE_BUDGET_MS || 120000;
+    const started = Date.now();
 
-    // Find starting index
-    let startIndex = index;
-    if (torrent && !index) {
-        startIndex = allTorrents.findIndex(t => t.magnet === torrent.magnet || t.hash === torrent.hash);
-    }
-
-    // Sort: RD cached first, then by rank
-    const torrentsToTry = [...allTorrents].sort((a, b) => {
-        if (a.isRDCached && !b.isRDCached) return -1;
-        if (!a.isRDCached && b.isRDCached) return 1;
-        return allTorrents.indexOf(a) - allTorrents.indexOf(b);
-    });
-
-    // Helper function
-    const formatSpeed = (bytesPerSec) => {
-        if (!bytesPerSec) return '0 KB/s';
-        const kb = bytesPerSec / 1024;
-        if (kb < 1024) return kb.toFixed(1) + ' KB/s';
-        const mb = kb / 1024;
-        return mb.toFixed(1) + ' MB/s';
+    const media = window.activeStreamingMedia || {};
+    const proxy = (window.appSettings && window.appSettings.debridProxyEnable)
+        ? (window.appSettings.debridProxyAddress || '') : '';
+    let deepbridTried = false;
+    const tryDeepbrid = async (src) => {
+        if (!src || deepbridTried || !window.electronAPI.streamDeepbrid) return null;
+        deepbridTried = true;
+        statusText.innerHTML = `${boltIcon} ${fr ? 'Essai avec Deepbrid…' : 'Trying Deepbrid…'}<br><span style="font-size:10px; color:var(--vault-slate);">${window.escapeHtml(`${src.quality || ''} ${src.desc || ''}`)}</span>`;
+        const db = await window.electronAPI.streamDeepbrid({ magnet: src.magnet, hash: src.hash, name: src.name, proxy,
+            // a season pack must yield the requested episode, never another one
+            season: media.mediaType === 'tv' ? media.season : null,
+            episode: media.mediaType === 'tv' ? media.episode : null });
+        if (db && db.success) return { ...db, magnet: src.magnet, hash: src.hash, source: src };
+        if (db && !db.notConfigured) {
+            console.warn('[Deepbrid] failed:', db.error);
+            lastError = `${lastError ? lastError + ' — ' : ''}Deepbrid: ${db.error}`;
+        }
+        return null;
     };
 
+    let lastError = null;
+    let response = null;
+    let tried = 0;
+    let placeholders = 0;
+
     try {
-        const maxAttempts = Math.min(torrentsToTry.length, 5);
-        let lastError = null;
-        let successfulResponse = null;
-        // Hoisted: the post-loop branch references `response`. If the loop ran
-        // zero iterations (empty list / past startIndex) or every iteration
-        // hit `continue` before this assignment, the old block-scoped `let`
-        // turned every recovery path into a fatal ReferenceError.
-        let response = null;
+        // A manual pick Comet has no link for can only play through Deepbrid: try it there first.
+        if (torrent && !torrent.url && torrent.magnet) {
+            response = await tryDeepbrid(torrent);
+            if (cancelled()) return;
+        }
 
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const currentTorrent = torrentsToTry[startIndex + attempt] || torrentsToTry[attempt];
-            if (!currentTorrent) break;
-
-            if (attempt > 0) {
-                statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Unrestricting cached torrent on Real-Debrid servers...<br><span style="font-size:10px; color:var(--vault-slate);">Attempt ${attempt + 1}/${maxAttempts}: ${currentTorrent.quality} ${currentTorrent.desc || ''}</span>`;
-            }
-
-            response = await window.electronAPI.streamRDTorrent({
-                magnet: currentTorrent.magnet,
-                hash: currentTorrent.hash,
-                url: currentTorrent.url,
-                name: currentTorrent.name
-            });
-
-            if (window.activeRDFlowId !== currentFlowId) {
-                console.log('[Real-Debrid] Flow cancelled during attempt', attempt);
-                return;
-            }
-
-            // Skip on infringing file
-            if (response && response.error === 'infringing_file') {
-                console.warn(`[RD] Infringing file, trying next: ${currentTorrent.quality}`);
-                lastError = response.error;
-                continue;
-            }
-
-            // Non-cached sources can't be resolved via Comet — skip to the next
-            // (⚡ cached) result instead of trying to grab it directly.
-            if (response && response.notCached) {
-                console.warn(`[RD] Not available via Comet, trying next cached result`);
-                lastError = response.error;
-                continue;
-            }
-
-            // Skip on other recoverable errors
-            if (response && !response.success && !response.downloading) {
-                const skipErrors = ['link_not_allowed', 'bad_token', 'magnet_error', 'error', 'Duplicate in-flight'];
-                if (skipErrors.some(err => response.error && response.error.includes(err))) {
-                    console.warn(`[RD] Skipping torrent: ${response.error}`);
-                    lastError = response.error;
-                    continue;
-                }
-            }
-
-            if (response && response.success && response.downloading) {
-                let progress = response.progress || 0;
-                let status = response.status || 'downloading';
-                let speed = response.speed || 0;
-                let seeders = response.seeders || 0;
-                const torrentId = response.torrentId;
-
-                statusText.innerHTML = `
-                    <div style="text-align: center; width: 100%;">
-                        <span style="font-size: 13px; font-weight: 700; color: var(--vault-accent, #F5B929); display: block; margin-bottom: 8px;">${window.icons ? window.icons.cloud('', 'width:14px; height:14px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Caching Torrent to Cloud...</span>
-                        <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; margin: 12px 0;">
-                            <div style="width: ${progress}%; height: 100%; background: linear-gradient(90deg, var(--vault-accent, #F5B929), #FF6B7A); border-radius: 4px; transition: width 0.4s ease;"></div>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #fff; margin-bottom: 6px; font-family: var(--font-mono);">
-                            <span>Progress: <strong>${progress}%</strong></span>
-                            <span>Speed: <strong>${formatSpeed(speed)}</strong></span>
-                        </div>
-                        <div style="font-size: 10.5px; color: var(--vault-slate); text-align: left; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px; margin-top: 6px;">
-                            Status: <strong style="color: #fff; text-transform: uppercase;">${status.replace('_', ' ')}</strong> | Seeders: <strong style="color: #fff;">${seeders}</strong>
-                        </div>
-                    </div>
-                `;
-
-                while (status !== 'downloaded') {
-                    if (window.activeRDFlowId !== currentFlowId || el('rd-stream-dialog').style.display === 'none') {
-                        console.log('[Real-Debrid] Caching flow aborted.');
-                        return;
-                    }
-
-                    await new Promise(r => setTimeout(r, 3500));
-
-                    if (window.activeRDFlowId !== currentFlowId || el('rd-stream-dialog').style.display === 'none') {
-                        console.log('[Real-Debrid] Caching flow aborted post-sleep.');
-                        return;
-                    }
-
-                    const poll = await window.electronAPI.getTorrentStatus(torrentId);
-                    if (window.activeRDFlowId !== currentFlowId) {
-                        console.log('[Real-Debrid] Flow cancelled post getTorrentStatus.');
-                        return;
-                    }
-
-                    if (!poll || !poll.success) {
-                        throw new Error(poll ? poll.error : 'Polling failed');
-                    }
-
-                    status = poll.status;
-                    progress = poll.progress || 0;
-                    speed = poll.speed || 0;
-                    seeders = poll.seeders || 0;
-
-                    if (status === 'downloaded' || (poll.links && poll.links.length > 0)) {
-                        statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} <span style="color:var(--vault-accent);">Caching finished!</span> Unrestricting final stream...`;
-                        const finalRes = await window.electronAPI.streamRDTorrent({
-                            magnet: currentTorrent.magnet,
-                            hash: currentTorrent.hash,
-                            url: currentTorrent.url,
-                            name: currentTorrent.name
-                        });
-                        if (window.activeRDFlowId !== currentFlowId) return;
-                        if (finalRes && finalRes.success) {
-                            response = finalRes;
-                            break;
-                        } else {
-                            lastError = finalRes?.error || 'Failed to unrestrict finished link';
-                            console.warn(`[RD] Final unrestrict failed, trying next...`);
-                            break;
-                        }
-                    } else if (status === 'dead' || status === 'error' || status === 'magnet_error') {
-                        throw new Error(`Torrent download failed: ${status}`);
-                    }
-                }
-            }
-
-            // After each attempt, check if we succeeded
-            if (response && response.success) {
-                successfulResponse = response;
+        for (let i = 0; !response && i < queue.length; i++) {
+            if (Date.now() - started > budgetMs) {
+                console.warn(`[RD] Time budget spent after ${tried} sources`);
                 break;
             }
+            const current = queue[i];
+            tried++;
+            statusText.innerHTML = `${boltIcon} ${fr ? 'Ouverture du flux Real-Debrid…' : 'Opening the Real-Debrid stream…'}<br><span style="font-size:10px; color:var(--vault-slate);">${fr ? 'Source' : 'Source'} ${i + 1}/${queue.length}${current.isRDCached ? ' ⚡' : ''}: ${window.escapeHtml(`${current.quality || ''} ${current.desc || ''}`)}</span>`;
 
-            lastError = response?.error || 'Unknown error';
-            console.warn(`[RD] Attempt ${attempt + 1}/${maxAttempts} failed, trying next...`);
-        }
-
-        if (window.activeRDFlowId !== currentFlowId) return;
-
-        if (successfulResponse && successfulResponse.success) {
-            response = successfulResponse;
-        }
-
-        // Fallback: nothing played through Real-Debrid / Comet -> the best-ranked source on Deepbrid, once, through
-        // the proxy tunnel when enabled, else directly. Skipped quietly when no Deepbrid key is configured.
-        if ((!response || !response.success) && window.electronAPI.streamDeepbrid) {
-            const pick = torrentsToTry.find(t => t.magnet);
-            const proxy = (window.appSettings && window.appSettings.debridProxyEnable)
-                ? (window.appSettings.debridProxyAddress || '') : '';
-            if (pick) {
-                statusText.innerHTML = window.currentLang === 'fr'
-                    ? 'Aucun flux Real-Debrid lisible. Essai avec Deepbrid…'
-                    : 'No playable Real-Debrid stream. Trying Deepbrid…';
-                const media = window.activeStreamingMedia || {};
-                const db = await window.electronAPI.streamDeepbrid({ magnet: pick.magnet, hash: pick.hash, name: pick.name, proxy,
-                    // a season pack must yield the requested episode, never another one
-                    season: media.mediaType === 'tv' ? media.season : null,
-                    episode: media.mediaType === 'tv' ? media.episode : null });
-                if (window.activeRDFlowId !== currentFlowId) return;
-                if (db && db.success) {
-                    response = { ...db, magnet: pick.magnet, hash: pick.hash };
-                } else if (db && !db.notConfigured) {
-                    console.warn('[Deepbrid] fallback failed:', db.error);
-                    lastError = `${lastError ? lastError + ' — ' : ''}Deepbrid: ${db.error}`;
-                }
+            const r = await window.electronAPI.streamRDTorrent({
+                magnet: current.magnet,
+                hash: current.hash,
+                url: current.url,
+                name: current.name,
+                cached: !!current.isRDCached,
+            });
+            if (cancelled()) {
+                console.log('[Real-Debrid] Flow cancelled during source', i + 1);
+                return;
             }
+            if (r && r.success) {
+                response = { ...r, magnet: current.magnet, hash: current.hash, source: current };
+                break;
+            }
+            if (r && r.placeholder) placeholders++;
+            lastError = (r && r.error) || 'Unknown error';
+            console.warn(`[RD] Source ${i + 1}/${queue.length} failed (${lastError}), trying next`);
+        }
+
+        // Nothing played through Real-Debrid / Comet: one Deepbrid try with the likeliest magnet. Skipped quietly
+        // when no Deepbrid key is configured.
+        if (!response) {
+            response = await tryDeepbrid(window.pickDeepbridSource(allTorrents, { pick: torrent }));
+            if (cancelled()) return;
         }
 
         if (!response || !response.success) {
             loadingStatus.querySelector('.spinner').style.display = 'none';
-            let errMsg = 'Failed to load torrent.';
+            let errMsg = lastError || (fr ? 'Échec du chargement du flux.' : 'Failed to load the stream.');
 
-            if (lastError === 'infringing_file') {
-                errMsg = window.currentLang === 'fr'
+            if (tried === 0 && !deepbridTried) {
+                errMsg = fr
+                    ? "Aucune source n'a de lien Real-Debrid. Choisissez un flux manuellement."
+                    : 'No source has a Real-Debrid link. Select a stream manually.';
+            } else if (lastError === 'infringing_file') {
+                errMsg = fr
                     ? "Tous les flux ont été bloqués pour atteinte aux droits d'auteur (DMCA)."
-                    : "All streams were blocked due to copyright complaints (DMCA).";
-            } else if (lastError) {
-                if (lastError.includes('bad_token')) {
-                    errMsg = window.currentLang === 'fr'
-                        ? "Clé API Real-Debrid non configurée, invalide ou expirée."
-                        : "Real-Debrid API key is unconfigured, invalid, or expired.";
-                } else if (lastError.includes('link_not_allowed')) {
-                    errMsg = window.currentLang === 'fr'
-                        ? "Aucun des liens testés n'est autorisé par Real-Debrid."
-                        : "None of the tested links are allowed by Real-Debrid.";
-                } else if (lastError && (lastError.includes('placeholder') || lastError.includes('not available through Comet') || lastError.includes('not actually cached'))) {
-                    errMsg = window.currentLang === 'fr'
-                        ? "Aucun des flux trouvés n'est actuellement en cache sur Real-Debrid. Choisissez un flux manuellement ou réessayez plus tard."
-                        : "None of the found streams are currently cached on Real-Debrid. Select a stream manually or try again later.";
-                } else {
-                    errMsg = lastError;
-                }
+                    : 'All streams were blocked due to copyright complaints (DMCA).';
+            } else if (lastError && lastError.includes('bad_token')) {
+                errMsg = fr
+                    ? 'Clé API Real-Debrid non configurée, invalide ou expirée.'
+                    : 'Real-Debrid API key is unconfigured, invalid, or expired.';
+            } else if (lastError && lastError.includes('link_not_allowed')) {
+                errMsg = fr
+                    ? "Aucun des liens testés n'est autorisé par Real-Debrid."
+                    : 'None of the tested links are allowed by Real-Debrid.';
+            } else if (placeholders > 0) {
+                errMsg = fr
+                    ? `${tried} source(s) essayée(s), ${placeholders} pas encore disponible(s) sur Real-Debrid. Choisissez un flux manuellement ou réessayez plus tard.`
+                    : `Tried ${tried} source(s); ${placeholders} not available on Real-Debrid yet. Select a stream manually or try again later.`;
             }
 
-            statusText.innerHTML = `${window.icons ? window.icons.close('', 'width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4px; stroke:var(--vault-signal-alert);') : ''} Real-Debrid Error:<br><strong style="color:var(--vault-signal-alert, #FF6B7A); font-size:11px; display: block; margin-top: 6px; line-height: 1.4;">${window.escapeHtml(errMsg)}</strong>`;
+            statusText.innerHTML = `${window.icons ? window.icons.close('', 'width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4px; stroke:var(--vault-signal-alert);') : ''} ${fr ? 'Erreur de flux' : 'Stream error'}:<br><strong style="color:var(--vault-signal-alert, #FF6B7A); font-size:11px; display: block; margin-top: 6px; line-height: 1.4;">${window.escapeHtml(errMsg)}</strong>`;
 
             const retryBtn = document.createElement('button');
-            retryBtn.innerText = window.currentLang === 'fr' ? 'Retour aux Flux' : 'Back to Streams';
+            retryBtn.innerText = fr ? 'Retour aux Flux' : 'Back to Streams';
             retryBtn.style.cssText = 'margin-top: 15px; background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;';
             retryBtn.addEventListener('click', () => {
                 loadingStatus.style.display = 'none';
@@ -796,13 +679,16 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
 
         // SUCCESS! The dialog is dismissed by beginPlayerHandoff() once the
         // player shell is up, so the two never both disappear at once.
-        const successfulTorrent = torrentsToTry.find(t => t.magnet === response.magnet || t.hash === response.hash);
+        const successfulTorrent = response.source || null;
+        if (successfulTorrent && typeof window.qualityLabelOf === 'function') {
+            window._activeStreamLabel = window.qualityLabelOf(successfulTorrent);
+        }
         if (window.activeStreamingMedia) {
             window.activeStreamingMedia.quality = (successfulTorrent || {}).quality || '';
         }
         window.playStream(response.streamUrl, movieTitle);
         if (response.provider === 'deepbrid') {
-            window.showToast(window.currentLang === 'fr' ? 'Flux Deepbrid chargé.' : 'Deepbrid stream loaded.', 'success');
+            window.showToast(fr ? 'Flux Deepbrid chargé.' : 'Deepbrid stream loaded.', 'success');
         } else {
             window.showToast(tr('toastRdStreamLoaded', 'Direct high-speed RD stream loaded successfully!'), 'success');
         }
@@ -812,7 +698,7 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             const hasFrench = /\b(vf|vff|vfq|vfi|french|truefrench|multi|dual|vostfr)\b/.test(sText);
             if (!hasFrench) {
                 setTimeout(() => {
-                    window.showToast(window.currentLang === 'fr'
+                    window.showToast(fr
                         ? 'Aucun flux français en cache. Lecture du meilleur flux en cache (sous-titres français disponibles).'
                         : 'No cached French stream found. Playing best cached stream (French subtitles available).',
                         'info', 6000);
@@ -822,10 +708,10 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
     } catch (e) {
         console.error('Real-Debrid streaming workflow failed:', e);
         loadingStatus.querySelector('.spinner').style.display = 'none';
-        statusText.innerHTML = `${window.icons ? window.icons.close('', 'width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4px; stroke:var(--vault-signal-alert);') : ''} Real-Debrid Workflow Error:<br><strong style="color:var(--vault-signal-alert, #FF6B7A); font-size:11px; display: block; margin-top: 6px; line-height: 1.4;">${window.escapeHtml(e.message || e)}</strong>`;
+        statusText.innerHTML = `${window.icons ? window.icons.close('', 'width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4px; stroke:var(--vault-signal-alert);') : ''} ${fr ? 'Erreur de flux' : 'Stream error'}:<br><strong style="color:var(--vault-signal-alert, #FF6B7A); font-size:11px; display: block; margin-top: 6px; line-height: 1.4;">${window.escapeHtml(e.message || e)}</strong>`;
 
         const retryBtn = document.createElement('button');
-        retryBtn.innerText = window.currentLang === 'fr' ? 'Retour aux Flux' : 'Back to Streams';
+        retryBtn.innerText = fr ? 'Retour aux Flux' : 'Back to Streams';
         retryBtn.style.cssText = 'margin-top: 15px; background: var(--vault-accent); color: var(--vt-primary); border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;';
         retryBtn.addEventListener('click', () => {
             loadingStatus.style.display = 'none';
