@@ -44,6 +44,17 @@ test('episode fit: single episode, ranges, season packs, other episodes', () => 
         ['Game of Thrones 1080p BluRay', 'unknown'],
     ];
     for (const [text, want] of cases) assert.strictEqual(episodeFit(text, 1, 1), want, text);
+    // multi-episode files and multi-season bundles contain later episodes / seasons too
+    const later = [
+        ['Show.S01E01E02.1080p', 1, 2, 'pack'],
+        ['Show.S01E01E02E03.1080p', 1, 3, 'pack'],
+        ['Show.S01E01E02.1080p', 1, 4, 'other'],
+        ['Show S01-S08 Complete 1080p', 5, 3, 'pack'],
+        ['Show S01-08 1080p', 8, 1, 'pack'],
+        ['Show Seasons 1-8 1080p', 3, 1, 'pack'],
+        ['Show S01-S08 1080p', 9, 1, 'other'],
+    ];
+    for (const [text, s, e, want] of later) assert.strictEqual(episodeFit(text, s, e), want, `${text} S${s}E${e}`);
     assert.strictEqual(episodeFit('Anything at all', null, null), 'exact', 'films always fit');
 });
 

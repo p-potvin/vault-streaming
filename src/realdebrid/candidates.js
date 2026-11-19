@@ -54,18 +54,23 @@ function episodeFit(text, season, episode) {
     const e = Number(episode || 1);
     const str = String(text || '');
 
-    // S01E01, S1E01, S01 E01, S01.E01, S01EP01, S01EP(01-10), S01E01-E05, S01E01-02, S01 E01-10
-    // (the range end must not run into a resolution: "S01E01-1080p" is one episode)
-    const m = str.match(/\bS(\d{1,2})[ ._-]?EP?\(?(\d{1,3})(?:\s*-\s*(?:EP?)?(\d{1,3})(?![\dp]))?\)?/i)
+    // S01E01, S1E01, S01 E01, S01.E01, S01EP01, S01EP(01-10), S01E01-E05, S01E01-02, S01 E01-10, and chained
+    // multi-episode files S01E01E02(E03…) (the range end must not run into a resolution: "S01E01-1080p" is one episode)
+    const m = str.match(/\bS(\d{1,2})[ ._-]?EP?\(?(\d{1,3})(?:\s*-\s*(?:EP?)?(\d{1,3})(?![\dp])|((?:E\d{1,3})+))?\)?/i)
         || str.match(/\b(\d{1,2})x(\d{1,3})(?:-(\d{1,3}))?\b/i);
     if (m) {
         const ms = Number(m[1]);
         const from = Number(m[2]);
-        const to = m[3] ? Number(m[3]) : from;
+        const chained = m[4] ? m[4].match(/\d{1,3}/g) : null;
+        const to = m[3] ? Number(m[3]) : (chained ? Number(chained[chained.length - 1]) : from);
         if (ms !== s) return 'other';
         if (e < from || e > to) return 'other';
         return to > from ? 'pack' : 'exact';
     }
+    // Several seasons: S01-S08, S01-08, Seasons 1-8, Saisons 1 à 8
+    const range = str.match(/\bS(\d{1,2})\s*-\s*S?(\d{1,2})\b/i)
+        || str.match(/\b(?:seasons?|saisons?)[ ._-]?(\d{1,2})\s*(?:-|to|à|a)\s*(\d{1,2})\b/i);
+    if (range) return s >= Number(range[1]) && s <= Number(range[2]) ? 'pack' : 'other';
     // A season with no episode: S01, Season 1, Saison 1
     const sm = str.match(/\bS(\d{1,2})\b/i) || str.match(/\b(?:season|saison)[ ._-]?(\d{1,2})\b/i);
     if (sm) return Number(sm[1]) === s ? 'pack' : 'other';
