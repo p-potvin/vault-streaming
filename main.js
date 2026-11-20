@@ -324,6 +324,15 @@ app.whenReady().then(async () => {
         if (!isE2E) setTimeout(finishSplash, 8000);
         app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
+        // Moments reads paused when the app last closed continue where they stopped (after start-up has settled).
+        if (!isE2E && loadSettings().indexPlayback !== false) {
+            setTimeout(() => {
+                require('./src/raggae').resumeStreams()
+                    .then(r => { if (r && r.resumed && r.resumed.length) console.log('[moments] resumed:', r.resumed.join(', ')); })
+                    .catch(() => { });
+            }, 20000);
+        }
+
         // Remove leftover .tmp files from previous crashes/kills in the background.
         // This runs after the window is created so startup is never blocked by I/O.
         cleanupAllVaultTempFiles().catch(err => {
@@ -339,7 +348,19 @@ app.whenReady().then(async () => {
         console.error('[main:fatal] app.whenReady rejected:', err);
     });
 
-app.on('before-quit', () => {
+// Moments reads (vault-raggae) pause when the app closes and resume when it starts again, from where they stopped.
+// before-quit can't await, so the first quit is held until the pause has been sent (2.5 s at most), then repeated.
+let momentsPauseSent = false;
+app.on('before-quit', (event) => {
+    if (!momentsPauseSent && process.env.VAULT_STREAMING_E2E !== '1') {
+        momentsPauseSent = true;
+        event.preventDefault();
+        require('./src/raggae').pauseStreams()
+            .then(r => { if (r && r.paused && r.paused.length) console.log('[moments] paused on quit:', r.paused.join(', ')); })
+            .catch(() => { })
+            .finally(() => app.quit());
+        return;
+    }
     isQuitting = true;
     performFullAppCleanup();
 });

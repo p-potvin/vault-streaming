@@ -50,6 +50,8 @@ function registerMomentsIpc(ipcMain) {
                 audio_index: Number.isInteger(p.audioIndex) ? p.audioIndex : 0,
                 language: p.language || 'und', language_source: p.languageSource || 'none',
                 duration: Number(p.durationSec) || null,
+                // a lighter copy read instead of the played source (above 1080p): which release it was
+                source_release: p.sourceRelease ? String(p.sourceRelease).slice(0, 200) : null,
             });
             if (!res) return { success: false, error: 'vault-raggae did not take the job' };
             console.log(`[moments] ${key}: ${res.state}${res.position ? ` (#${res.position} in the queue)` : ''}`);

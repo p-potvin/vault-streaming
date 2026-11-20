@@ -133,6 +133,16 @@ async function queueStream(job) {
     return call('POST', '/v1/moments/stream', { body: job, timeoutMs: 10000, tripOnTimeout: false });
 }
 
+/** Pause every Moments stream read (the app is closing): each keeps a checkpoint. { running, paused } or null. */
+async function pauseStreams({ timeoutMs = 2500 } = {}) {
+    return call('POST', '/v1/moments/stream/pause', { body: {}, timeoutMs, tripOnTimeout: false });
+}
+
+/** Resume the paused Moments stream reads from their checkpoints (the app started). { resumed, waiting_for_play }. */
+async function resumeStreams() {
+    return call('POST', '/v1/moments/stream/resume', { body: {}, timeoutMs: 10000, tripOnTimeout: false });
+}
+
 /** The Moments job of a played stream (GET /v1/moments/stream/{key}): { state: 'queued' | 'starting' | 'reading' |
  *  'done' | 'failed', read_s?, duration?, transcript? } or null (no job yet / gateway down). */
 async function streamStatus(key) {
@@ -237,6 +247,8 @@ module.exports = {
     queueStream,
     streamStatus,
     transcriptsByPath,
+    pauseStreams,
+    resumeStreams,
     search,
     searchTitles,
     browse,

@@ -1586,13 +1586,43 @@ function trackMomentsPlayback(vp) {
     const audioIndex = window._activeAudioIndex != null ? window._activeAudioIndex
         : (probe && probe.chosenAudioIndex != null ? probe.chosenAudioIndex : 0);
     const track = probe && Array.isArray(probe.tracks) ? probe.tracks.find(x => x.audioIndex === audioIndex) : null;
-    window.electronAPI.indexPlayback({
-        url: s.url, title: media.title || s.title, tmdbId: media.tmdbId, mediaType: media.mediaType,
-        season: media.season, episode: media.episode, audioIndex,
+    const durationSec = (probe && probe.durationSeconds) || (isFinite(vp.duration) ? vp.duration : null);
+    momentsSource(s.url, media, track ? track.lang : null).then((src) => window.electronAPI.indexPlayback({
+        url: src.url, title: media.title || s.title, tmdbId: media.tmdbId, mediaType: media.mediaType,
+        season: media.season, episode: media.episode, audioIndex: src.audioIndex != null ? src.audioIndex : audioIndex,
         language: track ? track.lang : 'und', languageSource: track ? track.langSource : 'none',
-        durationSec: (probe && probe.durationSeconds) || (isFinite(vp.duration) ? vp.duration : null),
-    }).then(r => console.log('[moments] playback handed over:', r && (r.state || r.skipped || r.error)))
+        durationSec, sourceRelease: src.release || media.release || null,
+    })).then(r => console.log('[moments] playback handed over:', r && (r.state || r.skipped || r.error)))
       .catch(e => console.warn('[moments] hand-over failed:', e && e.message));
+}
+
+/**
+ * What Moments reads: a 720p / 480p copy when the played source is above 1080p (js/streaming/ranking.js,
+ * momentsCopyCandidates), else the played stream. A copy is resolved through Comet like a play (at most 3 tries) and
+ * its audio track is the one in the language being heard. { url, audioIndex?, release? }.
+ */
+async function momentsSource(playedUrl, media, lang) {
+    const played = { url: playedUrl };
+    try {
+        const list = window.momentsCopyCandidates
+            ? window.momentsCopyCandidates(window.currentTorrentList, window._activeStreamLabel, media.release) : [];
+        for (const t of list.slice(0, 3)) {
+            const r = await window.electronAPI.streamRDTorrent({ magnet: t.magnet, hash: t.hash, url: t.url, name: t.name,
+                                                                 cached: !!t.isRDCached });
+            if (!r || !r.success || !r.streamUrl) continue;
+            let audioIndex = null;
+            if (lang && lang !== 'und' && window.electronAPI.probeAudioTracks) {
+                const p = await window.electronAPI.probeAudioTracks({ url: r.streamUrl, preferredLang: lang }).catch(() => null);
+                if (p && p.success && p.chosenAudioIndex != null) audioIndex = p.chosenAudioIndex;
+            }
+            const release = String(t.desc || '').replace(/^📄\s*/, '');
+            console.log(`[moments] reading a lighter copy: ${t.quality || ''} ${release.slice(0, 80)}`);
+            return { url: r.streamUrl, audioIndex, release };
+        }
+    } catch (e) {
+        console.warn('[moments] lighter copy failed, reading the played stream:', e && e.message);
+    }
+    return played;
 }
 
 async function playStream(url, title) {
