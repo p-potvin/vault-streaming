@@ -71,10 +71,25 @@ async function probeStreamBytes(url, timeoutMs = 12000) {
 }
 
 function registerStreamHandlers(ipcMain) {
+    // Paused on a stream (js/player/player.js, once a minute): one 2-byte range request keeps Comet's link warm. Done
+    // here, not with a renderer fetch: a no-cors fetch drops the Range header and would download the whole video.
+    ipcMain.handle('stream-keep-warm', async (_e, { url } = {}) => {
+        const u = cometUrl(url);
+        if (!/^https?:\/\//i.test(String(u || ''))) return { ok: false };
+        try {
+            const res = await fetchWithTimeout(u, { method: 'GET', headers: { Range: 'bytes=0-1' } }, 15000);
+            try { if (res.body && typeof res.body.cancel === 'function') await res.body.cancel(); } catch (_) { /* done */ }
+            return { ok: res.status === 206 || res.status === 200, status: res.status };
+        } catch (e) {
+            return { ok: false, error: e.message };
+        }
+    });
+
     ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url: givenUrl, name, cached: markedCached = true } = {}) => {
         // a saved source (watch history) is stored without the Comet config: put the current one back
         const url = cometUrl(givenUrl);
-        const dedupKey = (hash || url || magnet || '').toLowerCase().trim();
+        // keyed by the link itself: a season pack's episodes share one hash but each has its own link (/playback/<hash>/…/<s>/<e>)
+        const dedupKey = (url || hash || magnet || '').toLowerCase().trim();
 
         // Only a Comet-resolved url is playable. No url = not cached/available;
         // we refuse rather than fall back to a direct Real-Debrid grab.

@@ -77,6 +77,7 @@ function initSettingsListeners() {
             el('settings-sub-font-size').value = window.appSettings.subFontSize || '20px';
             el('settings-remember-position').checked = window.appSettings.rememberPosition !== false;
             if (el('settings-watched-at')) el('settings-watched-at').value = String(window.watchedAtPercent());
+            if (el('settings-up-next') && window.upNextSeconds) el('settings-up-next').value = String(window.upNextSeconds());
             // settings-mute-previews was removed from the UI; guard so opening the
             // modal doesn't throw a TypeError (which broke the Settings button).
             if (el('settings-mute-previews')) el('settings-mute-previews').checked = window.appSettings.mutePreviews === true;
@@ -197,6 +198,7 @@ function initSettingsListeners() {
         
         window.appSettings.rememberPosition = el('settings-remember-position').checked;
         if (el('settings-watched-at')) window.appSettings.watchedAtPercent = window.watchedAtPercent(el('settings-watched-at').value);
+        if (el('settings-up-next') && window.upNextSeconds) window.appSettings.upNextSeconds = window.upNextSeconds(el('settings-up-next').value);
         if (el('settings-mute-previews')) window.appSettings.mutePreviews = el('settings-mute-previews').checked;
         if (el('settings-mute-trailers')) window.appSettings.muteTrailers = el('settings-mute-trailers').checked;
         window.appSettings.minimizeToTray = el('settings-minimize-to-tray').checked;

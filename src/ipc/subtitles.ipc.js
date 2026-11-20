@@ -345,7 +345,11 @@ function registerSubtitlesIpc(ipcMain, _settingsPath, loadSettings) {
                 const safe = String(key).replace(/[^A-Za-z0-9._-]+/g, '_').slice(-120);
                 const out = path.join(subtitleCacheDir(), `transcript-${safe}.vtt`);
                 fs.writeFileSync(out, cuesToVtt(f.cue_list), 'utf8');
-                return { state: 'ready', path: out, lang: f.language || 'und', cues: f.cue_list.length };
+                // vault-raggae publishes the transcript minute by minute while it reads the stream (flags.partial)
+                let flags = f.flags;
+                if (typeof flags === 'string') { try { flags = JSON.parse(flags); } catch (_) { flags = {}; } }
+                const partial = !!(flags && flags.partial);
+                return { state: 'ready', path: out, lang: f.language || 'und', cues: f.cue_list.length, partial };
             }
             if (!isStream) return { state: 'none' };
             const st = await raggae.streamStatus(key);

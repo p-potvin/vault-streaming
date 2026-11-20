@@ -204,16 +204,10 @@ function updateAutoplayUI() {
 
 function updateVolumeIconUI(vol) {
     const btnVol = el('btn-volume-icon');
-    if (!btnVol) return;
-    let pathContent = '';
-    if (vol === 0) {
-        pathContent = `<path d="M 7 11 L 7 9 L 11 9 L 15 5 L 15 19 L 11 15 L 7 15 L 7 13" /><line x1="18" y1="9" x2="22" y2="13" /><line x1="18" y1="13" x2="21" y2="10" />`;
-    } else if (vol < 0.5) {
-        pathContent = `<path d="M 7 11 L 7 9 L 11 9 L 15 5 L 15 19 L 11 15 L 7 15 L 7 13" /><path d="M 18 9 A 3 3 0 0 1 18 15" />`;
-    } else {
-        pathContent = `<path d="M 7 11 L 7 9 L 11 9 L 15 5 L 15 19 L 11 15 L 7 15 L 7 13" /><path d="M 18 9 A 3 3 0 0 1 18 15" /><path d="M 21 7 A 6 6 0 0 1 21 17" />`;
-    }
-    btnVol.innerHTML = window.icons ? window.icons.volume('', 'width:16px; height:16px; display:block;', pathContent) : '';
+    if (!btnVol || !window.icons) return;
+    const style = 'width:16px; height:16px; display:block;';
+    btnVol.innerHTML = vol === 0 ? window.icons.volumeMute('', style)
+        : vol < 0.5 ? window.icons.volumeLow('', style) : window.icons.volume('', style);
 }
 
 async function playItem(idx) {
@@ -526,8 +520,11 @@ function initPlayer() {
 
         // Final position save to persistent Watch History
         if (vp.duration > 0) {
-            if (window.activeStreamingMedia) {
-                const completed = window.isWatchedAt(vp.currentTime, vp.duration); // Settings → Mark as Watched at (95 %)
+            if (window.activeStreamingMedia && !window.activeStreamingMedia.streamUrl) {
+                // a new episode was still being searched: the loaded video is the previous one (saved when it was left)
+            } else if (window.activeStreamingMedia) {
+                const completed = window.isWatchedAt(vp.currentTime, vp.duration)   // Settings → Mark as Watched at (95 %)
+                    || !!window.activeStreamingMedia.creditsDone;                     // reached its credits (series skip)
                 if (completed) {
                     window.electronAPI.markWatched({
                         mediaType: window.activeStreamingMedia.mediaType,
@@ -610,6 +607,7 @@ function initPlayer() {
         window.activeStreamingMedia = null;
         window.activeRDFlowId = null;
         window._resumePosAfterSwitch = null;
+        if (typeof window.seriesControlsOnPlay === 'function') window.seriesControlsOnPlay();   // hides the series UI
 
         vp.pause();
         // Hard-reset the <video> element. The prior `vp.src = ''` assignment
@@ -726,12 +724,17 @@ function initPlayer() {
         if (now - lastHistoryUpdate > 5000) {
             lastHistoryUpdate = now;
             trackMomentsPlayback(vp);
-            if (window.activeStreamingMedia) {
-                window.electronAPI.setWatchProgress({
-                    ...window.activeStreamingMedia,
-                    positionSec: vp.currentTime,
-                    durationSec: vp.duration
-                });
+            const m = window.activeStreamingMedia;
+            if (m) {
+                // only the episode whose stream is loaded (a new one being searched has no streamUrl yet: the
+                // still-playing video's clock is not its progress); one that reached its credits stays watched
+                if (m.streamUrl && !m.creditsDone) {
+                    window.electronAPI.setWatchProgress({
+                        ...m,
+                        positionSec: vp.currentTime,
+                        durationSec: vp.duration
+                    });
+                }
             } else if (window.currentPlayingItem) {
                 const itm = window.currentPlayingItem;
                 if (itm && itm.path) {
@@ -820,6 +823,21 @@ function initPlayer() {
     });
 
     vp.addEventListener('ended', () => {
+        // A clip under a minute that "ended" is a provider error video, not the title: nothing was watched
+        if (!(vp.duration >= 60)) return;
+        // the old episode ending while the next one is being searched is not the new one's end
+        if (window.activeStreamingMedia && !window.activeStreamingMedia.streamUrl) return;
+        // Series: the Up next card plays the next episode (js/player/up-next.js); the playlist logic below is for
+        // library files.
+        if (window.activeStreamingMedia && window.activeStreamingMedia.mediaType === 'tv' && typeof window.upNextOnEnded === 'function') {
+            window.electronAPI.markWatched({
+                mediaType: 'tv', tmdbId: window.activeStreamingMedia.tmdbId, title: window.activeStreamingMedia.title,
+                season: window.activeStreamingMedia.season, episode: window.activeStreamingMedia.episode,
+                poster: window.activeStreamingMedia.poster, year: window.activeStreamingMedia.year
+            });
+            window.upNextOnEnded();
+            return;
+        }
         // Mark as completed on ended
         if (window.activeStreamingMedia) {
             window.electronAPI.markWatched({
@@ -949,6 +967,27 @@ function initPlayer() {
         const pipPlayBtn = el('pip-btn-play');
         if (pipPlayBtn) pipPlayBtn.innerHTML = window.icons.pause('', 'width:14px;height:14px;vertical-align:middle;');
     });
+    // Paused on a stream: one tiny range request a minute keeps Comet's link warm, so playback restarts in ~0.6 s
+    // instead of ~3.3 s after a long pause (measured Fri 20 Nov 2026). Stops on play, a new source or close.
+    const KEEP_WARM_MS = 60 * 1000;
+    const keepWarmUrl = () => {
+        const m = window.activeStreamingMedia;
+        const u = (m && m.streamUrl) || vp.currentSrc || '';
+        return /^https?:\/\//i.test(u) && !/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/i.test(u) ? u : null;
+    };
+    const stopKeepWarm = () => { clearInterval(window._keepWarmTimer); window._keepWarmTimer = null; };
+    vp.addEventListener('pause', () => {
+        stopKeepWarm();
+        if (!keepWarmUrl() || vp.ended) return;
+        window._keepWarmTimer = setInterval(() => {
+            const u = keepWarmUrl();
+            if (!u || !vp.paused || el('video-modal').style.display === 'none') { stopKeepWarm(); return; }
+            // through the main process (a renderer no-cors fetch would drop the Range header: a whole-video download)
+            if (window.electronAPI && window.electronAPI.keepStreamWarm) window.electronAPI.keepStreamWarm({ url: u }).catch(() => {});
+        }, KEEP_WARM_MS);
+    });
+    vp.addEventListener('play', stopKeepWarm);
+    vp.addEventListener('emptied', stopKeepWarm);
     vp.addEventListener('pause', () => {
         btnPlay.innerHTML = PLAY_ICON_SVG;
         const pipPlayBtn = el('pip-btn-play');
@@ -992,8 +1031,10 @@ function initPlayer() {
         if (window.electronAPI && typeof window.electronAPI.setWindowFullScreen === 'function') {
             window.electronAPI.setWindowFullScreen(isFs).catch(() => { });
         }
-        // Reset idle state on transition so controls aren't stuck hidden.
-        document.body.classList.remove('player-idle');
+        // Reset idle state on transition so controls aren't stuck hidden (and the app title bar, which fullscreen
+        // covers, cannot leave its "hovered" state on).
+        document.body.classList.remove('player-idle', 'titlebar-hovered');
+        if (isFs) document.body.classList.add('player-awake');
     });
 
     // Idle-hide: hide custom controls + cursor after 2s of mouse inactivity
@@ -1002,6 +1043,7 @@ function initPlayer() {
     const markActive = () => {
         const wasIdle = document.body.classList.contains('player-idle');
         document.body.classList.remove('player-idle');
+        document.body.classList.add('player-awake');
         // Force a cursor repaint in fullscreen — Chromium sometimes fails to
         // repaint the cursor after removing `cursor: none` in fullscreen mode.
         if (wasIdle && document.fullscreenElement) {
@@ -1590,7 +1632,7 @@ async function applyDetectedLanguages(probe, url, proxy) {
  * actually played for two minutes (paused time and seeks do not count), it is handed over once, with the audio track
  * being played and that track's language as the stream reports it. Off with appSettings.indexPlayback = false.
  */
-const MOMENTS_AFTER_SECONDS = 120;
+const MOMENTS_AFTER_SECONDS = 15;   // handed to Moments (transcript + search vectors) after 15 s of real playback
 function trackMomentsPlayback(vp) {
     const s = window._momentsSession;
     if (!s || s.sent) return;
@@ -1661,7 +1703,7 @@ async function momentsSource(playedUrl, media, lang) {
 }
 
 async function playStream(url, title) {
-    // a new playback: its own two-minute count before it is handed to Moments (streams only, not library files)
+    // a new playback: its own 15-second count before it is handed to Moments (streams only, not library files)
     window._momentsSession = (/^https?:\/\//i.test(String(url || ''))
         && !(window.appSettings && window.appSettings.indexPlayback === false))
         ? { url, title, watched: 0, last: null, sent: false } : null;
@@ -1773,13 +1815,10 @@ async function playStream(url, title) {
         lastScrubSrc = url;
     }
 
-    const titleEl = el('player-title');
-    if (titleEl) titleEl.innerHTML = `${window.icons.lightning('', 'width:13px;height:13px;vertical-align:middle;')} RD Stream: ${window.escapeHtml(String(title || ''))}`;
-    const tbTitle = el('titlebar-video-title');
-    if (tbTitle) {
-        tbTitle.textContent = `RD Streaming: ${title}`;
-        tbTitle.style.display = 'inline-block';
-    }
+    // "Series · S06E14 · Episode name" (or the film's title) in the player and the app bar (js/player/episodes.js)
+    if (typeof window.updatePlayerTitles === 'function') window.updatePlayerTitles(title);
+    // series: prev/next episode buttons, Up next card, skip intro/credits, episodes panel (js/player/series-controls.js)
+    if (typeof window.seriesControlsOnPlay === 'function') window.seriesControlsOnPlay();
 
     if (window.activeStreamingMedia) {
         window.activeStreamingMedia.streamUrl = url;

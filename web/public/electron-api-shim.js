@@ -392,6 +392,7 @@
     searchTorrents: inv('search-torrents'),
     streamRDTorrent: inv('rd-stream-torrent'),
     streamDeepbrid: inv('deepbrid-stream'),
+    keepStreamWarm: inv('stream-keep-warm'),
     getTorrentStatus: inv('rd-torrent-status'),
     debridURL: inv('rd-unrestrict-url'),
     downloadDebridFile: inv('rd-download-file'),

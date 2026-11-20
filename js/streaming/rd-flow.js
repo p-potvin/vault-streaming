@@ -134,6 +134,27 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     // where the details-modal DOM holds stale poster/year); fall back to the DOM.
     const posterEl = el('streaming-details-poster');
     const yearEl = el('streaming-details-year');
+    // A position kept for a quality / source switch belongs to that title (episode) only: another one (Play next, an
+    // episode picked while playing) starts at its own saved position, not where the previous episode was.
+    const prevMedia = window.activeStreamingMedia;
+    const sameItem = prevMedia && String(prevMedia.tmdbId || prevMedia.title) === String(tmdbId || movieTitle)
+        && (prevMedia.season || null) === (isTV ? (season || 1) : null) && (prevMedia.episode || null) === (isTV ? (episode || 1) : null);
+    if (!sameItem) {
+        window._resumePosAfterSwitch = null;
+        // leaving a playing title for another: its position is saved now (as itself) and it stops, so its clock is
+        // never saved under the new one while the new one's source is searched
+        const vpEl = el('video-player');
+        if (prevMedia && prevMedia.streamUrl && vpEl && vpEl.duration > 0 && !prevMedia.creditsDone) {
+            const at = vpEl.currentTime, dur = vpEl.duration;
+            if (window.isWatchedAt && window.isWatchedAt(at, dur)) {
+                window.electronAPI.markWatched({ mediaType: prevMedia.mediaType, tmdbId: prevMedia.tmdbId, title: prevMedia.title,
+                    season: prevMedia.season, episode: prevMedia.episode, poster: prevMedia.poster, year: prevMedia.year }).catch(() => {});
+            } else {
+                window.electronAPI.setWatchProgress({ ...prevMedia, positionSec: at, durationSec: dur }).catch(() => {});
+            }
+        }
+        if (prevMedia && vpEl && !vpEl.paused) vpEl.pause();
+    }
     window.activeStreamingMedia = {
         mediaType: mediaType || 'movie',
         tmdbId: tmdbId || null,

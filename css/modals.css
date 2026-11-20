@@ -366,6 +366,33 @@
   gap: 12px;
 }
 
+/* Skip intro / credits seconds for every episode of the series */
+.tv-skip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tv-skip-input {
+  width: 64px;
+  background: var(--vt-primary);
+  color: var(--vault-text);
+  border: 1px solid var(--vault-border);
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-skip-unit {
+  font-size: 11px;
+  color: var(--vault-slate);
+  margin-right: 8px;
+}
+
 .tv-season-label {
   font-size: 11px;
   font-weight: 600;
@@ -974,6 +1001,11 @@
   opacity: 0.8;
   margin-right: 4px;
   font-family: var(--vault-font-mono), monospace;
+  /* fixed width ("0:00:00 / 0:00:00") and even digits: the seek bar beside it no longer changes width every second */
+  font-variant-numeric: tabular-nums;
+  min-width: 17ch;
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* Speed dropdown */

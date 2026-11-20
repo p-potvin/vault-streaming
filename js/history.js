@@ -33,7 +33,22 @@ window.renderWatchHistoryTab = async function() {
         const closeSvg = window.icons ? window.icons.close('', 'width: 10px; height: 10px; display: inline-block;') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
         const playSvg = window.icons ? window.icons.play('', 'width: 11px; height: 11px; display: inline-block;') : '';
 
-        res.items.forEach(item => {
+        // One card per series (its most recent episode, which the list puts first); films and library files as they are.
+        const items = [];
+        const showCards = new Map();
+        for (const it of res.items) {
+            if (it.mediaType === 'tv') {
+                const key = String(it.tmdbId || it.title);
+                if (showCards.has(key)) { showCards.get(key)._episodes.push(it); continue; }
+                const card = { ...it, _episodes: [it] };
+                showCards.set(key, card);
+                items.push(card);
+            } else {
+                items.push(it);
+            }
+        }
+
+        items.forEach(item => {
             const card = document.createElement('div');
             card.className = 'file-card tmdb-movie-card';
             card.style.cssText = 'cursor: pointer; background: var(--vault-warm-card); border: 1px solid var(--vault-border); border-radius: 6px; position: relative;';
@@ -77,17 +92,23 @@ window.renderWatchHistoryTab = async function() {
             const deleteBtn = document.createElement('button');
             deleteBtn.onclick = async (e) => {
                 e.stopPropagation();
-                const confirmMsg = t.confirmRemoveFromHistory 
-                    ? t.confirmRemoveFromHistory.replace('{0}', item.title) 
-                    : `Are you sure you want to remove "${item.title}" from your watch history?`;
+                const entries = item._episodes || [item];
+                const fr = window.currentLang === 'fr';
+                const name = entries.length > 1
+                    ? `${item.title} (${entries.length} ${fr ? 'épisodes' : 'episodes'})` : item.title;
+                const confirmMsg = t.confirmRemoveFromHistory
+                    ? t.confirmRemoveFromHistory.replace('{0}', name)
+                    : `Are you sure you want to remove "${name}" from your watch history?`;
                 if (await window.showConfirmDialog(confirmMsg, t.removeFromHistory || 'Remove from History')) {
-                    await window.electronAPI.removeWatchHistory({
-                        mediaType: item.mediaType,
-                        tmdbId: item.tmdbId,
-                        title: item.title,
-                        season: item.season,
-                        episode: item.episode
-                    });
+                    for (const e of entries) {
+                        await window.electronAPI.removeWatchHistory({
+                            mediaType: e.mediaType,
+                            tmdbId: e.tmdbId,
+                            title: e.title,
+                            season: e.season,
+                            episode: e.episode
+                        });
+                    }
                     window.showToast(t.removedFromHistory || 'Removed from History', 'success');
                     window.renderWatchHistoryTab();
                 }
@@ -107,17 +128,25 @@ window.renderWatchHistoryTab = async function() {
                 </div>
             ` : '';
 
+            const fr = window.currentLang === 'fr';
+            const epCount = (item._episodes || []).length;
+            const metaParts = [];
+            if (isTV && epCount > 1) metaParts.push(`${epCount} ${fr ? 'épisodes' : 'episodes'}`);   // (the title line shows SxxEyy)
+            else if (item.year) metaParts.push(String(item.year));
+            metaParts.push(`${fr ? 'Vu le' : 'Last watched'} ${new Date(item.lastWatched).toLocaleDateString()}`);
             card.innerHTML = `
-                <div class="thumbnail-container" style="position:relative; background:#111; height: 160px; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
+                <div class="thumbnail-container" style="position:relative; background:#111; width: 100%; overflow: hidden;">
                    <img class="thumbnail" src="${item.poster || 'public/poster_placeholder.svg'}" alt="${window.escapeHtml(item.title)}" style="object-fit: cover; width:100%; height:100%; transition: opacity 0.25s ease;" onerror="this.src='public/poster_placeholder.svg'">
                    ${progressHtml}
-                   <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
-                      <span>${percent > 0 ? `${percent}%` : 'WATCHED'}</span>
-                   </div>
                 </div>
                 <div class="filename-container" style="padding:12px; text-align:left;">
+                   <div class="card-badge-row">
+                      <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
+                      <span>${percent > 0 ? `${percent}%` : 'WATCHED'}</span>
+                   </div>
+                   </div>
                    <div style="font-weight:700; font-size:13px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono);">${window.escapeHtml(item.title)} ${tvLabel ? `<span style="color:var(--vault-accent); font-size:11px; margin-left:4px;">${tvLabel}</span>` : ''}</div>
-                   <div style="font-size:10px; color:var(--vault-slate); margin-top:2px; font-weight:500;">${item.year || ''} • Last Watched: ${new Date(item.lastWatched).toLocaleDateString()}</div>
+                   <div style="font-size:10px; color:var(--vault-slate); margin-top:2px; font-weight:500;">${window.escapeHtml(metaParts.join(' • '))}</div>
                 </div>
             `;
 

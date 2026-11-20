@@ -84,6 +84,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   streamRDTorrent: (data) => ipcRenderer.invoke('rd-stream-torrent', data),
   // Deepbrid: the fallback when no Real-Debrid / Comet source plays (src/deepbrid/client.js)
   streamDeepbrid: (data) => ipcRenderer.invoke('deepbrid-stream', data),
+  keepStreamWarm: (data) => ipcRenderer.invoke('stream-keep-warm', data),
   getTorrentStatus: (torrentId) => ipcRenderer.invoke('rd-torrent-status', torrentId),
   debridURL: (data) => ipcRenderer.invoke('rd-unrestrict-url', data),
   downloadDebridFile: (data) => ipcRenderer.invoke('rd-download-file', data),
