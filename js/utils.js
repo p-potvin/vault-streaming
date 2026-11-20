@@ -95,7 +95,8 @@ window.watchedAtPercent = function (value) {
 
 /** True when playback at `positionSec` of `durationSec` counts as watched. */
 window.isWatchedAt = function (positionSec, durationSec) {
-  return durationSec > 0 && positionSec / durationSec >= window.watchedAtPercent() / 100;
+  // under a minute is a provider status video (an error clip), never the title: never "watched"
+  return durationSec >= 60 && positionSec / durationSec >= window.watchedAtPercent() / 100;
 };
 
 // ── Dev mode + toast noise filter ──────────────────────────────────────────

@@ -239,6 +239,16 @@ async function _setupTVModal(movie) {
     }
 
     const token = ++_tvModalToken;
+    // skip intro / credits seconds for every episode of this series (js/player/series-controls.js)
+    const skipIntro = el('tv-skip-intro'), skipOutro = el('tv-skip-outro');
+    if (skipIntro && skipOutro && window.seriesSkipFor) {
+        const cur = window.seriesSkipFor(movie.id);
+        skipIntro.value = String(cur.intro);
+        skipOutro.value = String(cur.outro);
+        const save = () => window.setSeriesSkip(movie.id, skipIntro.value, skipOutro.value);
+        skipIntro.onchange = save;
+        skipOutro.onchange = save;
+    }
     _showProgress = new Map();
     _resumeTarget = null;
     _renderResumeRow(movie.id);

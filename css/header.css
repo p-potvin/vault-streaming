@@ -25,13 +25,15 @@
    the whole poster shows, no crop, no bars. Columns of at least --card-min (about 8 across at 1920 px) keep a
    poster near 300 px tall; each card is trimmed by --card-trim and centred in its track. */
 .tmdb-grid,
-#library-grid {
+#library-grid,
+#history-grid {
   --card-trim: 20px;
   --card-min: 200px;
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr)) !important;
 }
 
-#library-grid .file-card {
+#library-grid .file-card,
+#history-grid .file-card {
   max-width: calc(100% - var(--card-trim));
   justify-self: center;
   width: 100%;
@@ -55,7 +57,7 @@
    as its poster (the hover card shows the full overview). Just above them, a badge row: the rating on the left, the
    watched check / in-progress ring on the right (js/utils.js applyWatchStatusCues). */
 .tmdb-movie-card .filename-container {
-  position: absolute !important;
+  position: absolute !important;  /* (Watch History's progress bar, z-index 10, stays above this fade) */
   left: 0;
   right: 0;
   bottom: 0;
@@ -121,6 +123,8 @@
   height: 4px;
   background: rgba(255, 255, 255, 0.2);
   z-index: 10;
+  border-radius: 0 0 5px 5px;
+  overflow: hidden;
 }
 
 .history-progress-bar {
@@ -449,6 +453,26 @@
   user-select: none;
   font-family: var(--font-mono);
   transition: all 0.2s;
+}
+
+/* The magnifier js/mobile.js adds to the search box (styled for phones in mobile.css): inside the box, before the
+   text, at every width. Its clear button is phone-only (the toolbar has its own clear button). */
+.tmdb-search-wrapper > .mobile-search-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 6px;
+  color: var(--vault-slate);
+  pointer-events: none;
+}
+
+.tmdb-search-wrapper > .mobile-search-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+body:not(.is-mobile) .tmdb-search-wrapper > .mobile-search-clear {
+  display: none !important;
 }
 
 .tmdb-search-input {

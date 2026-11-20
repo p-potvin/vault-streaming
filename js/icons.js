@@ -65,3 +65,25 @@ window.icons = {
   // Clip-editor "Trim" tool — likewise absent from the redesign set.
   scissors: (cls = '', style = '') => `<svg class="${cls}" style="${style}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>`
 };
+
+// ── Video player icons — the same drawings as vault-explorer (js/icons.js there, Vaultsqware set) ──────────────────
+(function () {
+  const make = (body) => (cls = '', style = '') =>
+    `<svg class="${cls}" style="${style}" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+  const SPEAKER = '<path d="M8.74 16.11 L7.5 15 L3.5 15 L3.5 9 L7.5 9 L12.5 4.5 L12.5 19.5 L11.26 18.39"/>';
+  const icons = window.icons;
+  icons.play = make('<path d="M5.5 9.45 L5.5 3.5 L20 12 L5.5 20.5 L5.5 14.55"/>');
+  icons.pause = make('<path d="M5.5 9.6 L5.5 5.5 A1.5 1.5 0 0 1 7 4 L8.5 4 A1.5 1.5 0 0 1 10 5.5 L10 18.5 A1.5 1.5 0 0 1 8.5 20 L7 20 A1.5 1.5 0 0 1 5.5 18.5 L5.5 14.4"/><path d="M15.5 4 H17 A1.5 1.5 0 0 1 18.5 5.5 V18.5 A1.5 1.5 0 0 1 17 20 H15.5 A1.5 1.5 0 0 1 14 18.5 V5.5 A1.5 1.5 0 0 1 15.5 4 Z"/>');
+  icons.skipForward = make('<path d="M4 9.75 L4 4.5 L15 12 L4 19.5 L4 14.25"/><path d="M19 4.5 L19 19.5"/>');
+  icons.skipBack = make('<path d="M20 9.75 L20 4.5 L9 12 L20 19.5 L20 14.25"/><path d="M5 4.5 L5 19.5"/>');
+  icons.fullscreen = make('<path d="M3.5 8.5 L3.5 3.5 L8.5 3.5"/><path d="M15.5 3.5 L20.5 3.5 L20.5 8.5"/><path d="M20.5 15.5 L20.5 20.5 L15.5 20.5"/><path d="M8.5 20.5 L3.5 20.5 L3.5 15.5"/>');
+  icons.pip = make('<path d="M2.5 9.6 L2.5 6 A2 2 0 0 1 4.5 4 L19.5 4 A2 2 0 0 1 21.5 6 L21.5 18 A2 2 0 0 1 19.5 20 L4.5 20 A2 2 0 0 1 2.5 18 L2.5 14.4"/><path d="M13 11.5 H18 A1 1 0 0 1 19 12.5 V16.5 A1 1 0 0 1 18 17.5 H13 A1 1 0 0 1 12 16.5 V12.5 A1 1 0 0 1 13 11.5 Z"/>');
+  icons.zap = make('<path d="M16.35 14.35 L19.5 10.5 L12.5 10.5 L13 2.5 L4.5 13.5 L11.5 13.5 L10.5 21.5 L13.65 17.65"/>');
+  icons.list = make('<path d="M9 6 L15 6 M18.4 6 L20 6"/><path d="M9 12 L20 12"/><path d="M9 18 L20 18"/><circle cx="4.5" cy="6" r="1.15" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.15" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.15" fill="currentColor" stroke="none"/>');
+  icons.volumeLow = make(SPEAKER + '<path d="M16 9a4 4 0 0 1 0 6"/>');
+  icons.volumeMute = make(SPEAKER + '<path d="M16 9.5 L21 14.5"/><path d="M21 9.5 L16 14.5"/>');
+  const volumeBody = SPEAKER + '<path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>';
+  // (cls, style, pathContent): pathContent kept for older callers
+  icons.volume = (cls = '', style = '', pathContent = '') =>
+    `<svg class="${cls}" style="${style}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${pathContent || volumeBody}</svg>`;
+})();

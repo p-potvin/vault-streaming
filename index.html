@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.8.0 -->
+<!-- v2.9.0 -->
 <html lang="en">
 
 <head>
@@ -31,6 +31,8 @@
   <script src="js/player/subtitles.js" defer></script>
   <script src="js/player/clip.js" defer></script>
   <script src="js/player/transcode.js" defer></script>
+  <script src="js/player/episodes.js" defer></script>
+  <script src="js/player/series-controls.js" defer></script>
   <script src="js/player/player.js" defer></script>
   <script src="js/progress.js" defer></script>
   <script src="js/streaming/ranking.js" defer></script>
@@ -80,7 +82,7 @@
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          <span id="settings-btn-text" style="font-size:13px;">Settings</span>
+          <span id="settings-btn-text" style="font-size:11px;">Settings</span>
         </button>
       </div>
     </div>
@@ -360,6 +362,15 @@
           </span>
         </div>
 
+        <div class="settings-toggle-row" data-i18n-title="settingUpNextHint"
+          title="Series: show the next episode's card this many seconds before the end (0 = never).">
+          <label for="settings-up-next" class="settings-toggle-label" data-i18n="settingUpNext">Up Next Card Before End:</label>
+          <span class="settings-percent">
+            <input type="number" id="settings-up-next" class="settings-select settings-number" min="0" max="600" step="5" value="40" />
+            <span aria-hidden="true">s</span>
+          </span>
+        </div>
+
         <div class="settings-toggle-row" title="Start trailers muted (they play at 80% volume otherwise).">
           <span class="settings-toggle-label" data-i18n="settingMuteTrailers">Mute Trailers by Default:</span>
           <input type="checkbox" id="settings-mute-trailers" class="settings-checkbox" />
@@ -636,6 +647,15 @@
         <span class="tv-resume-note" id="tv-resume-note"></span>
       </div>
 
+      <div class="tv-skip-row" title="Applies to every episode of this series">
+        <label class="tv-season-label" for="tv-skip-intro" data-i18n="skipIntroLabel">Skip intro:</label>
+        <input type="number" id="tv-skip-intro" class="tv-skip-input" min="0" max="900" step="5" value="0" />
+        <span class="tv-skip-unit">s</span>
+        <label class="tv-season-label" for="tv-skip-outro" data-i18n="skipOutroLabel">Skip credits:</label>
+        <input type="number" id="tv-skip-outro" class="tv-skip-input" min="0" max="900" step="5" value="0" />
+        <span class="tv-skip-unit">s</span>
+      </div>
+
       <div class="tv-season-row">
         <label for="tv-season-select" class="tv-season-label" data-i18n="selectSeason">Select Season:</label>
         <select id="tv-season-select"></select>
@@ -715,42 +735,20 @@
           <!-- Left controls: Prev, Play, Next, Volume -->
           <div class="controls-left">
             <button id="btn-prev" class="ctrl-btn" title="Previous" aria-label="Previous">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" style="width:16px; height:16px; display:block;">
-                <path d="M 18 5 L 7 12 L 18 19 Z" />
-                <line x1="4" y1="19" x2="4" y2="15" />
-                <line x1="4" y1="9" x2="4" y2="5" />
-              </svg>
+              <span data-icon="skipBack" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
             <button id="btn-playpause" class="ctrl-btn" title="Play/Pause (Space)" aria-label="Play or Pause">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" style="width:16px; height:16px; display:block;">
-                <rect x="6" y="4" width="4" height="16" />
-                <rect x="14" y="4" width="4" height="16" />
-              </svg>
+              <span data-icon="pause" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
             <button id="btn-next" class="ctrl-btn" title="Next" aria-label="Next">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" style="width:16px; height:16px; display:block;">
-                <path d="M 6 5 L 17 12 L 6 19 Z" />
-                <line x1="20" y1="19" x2="20" y2="15" />
-                <line x1="20" y1="9" x2="20" y2="5" />
-              </svg>
+              <span data-icon="skipForward" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
             <button id="btn-clip" class="ctrl-btn" title="Create Clip (C)" aria-label="Create Clip">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" style="width:16px; height:16px; display:block;">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
+              <span data-icon="zap" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
             <div class="volume-container">
               <button class="ctrl-btn" id="btn-volume-icon" title="Volume" aria-label="Volume">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                  stroke-linejoin="round" style="width:16px; height:16px; display:block;">
-                  <path d="M 7 11 L 7 9 L 11 9 L 15 5 L 15 19 L 11 15 L 7 15 L 7 13" />
-                  <path d="M 18 9 A 3 3 0 0 1 18 15" />
-                  <path d="M 21 7 A 6 6 0 0 1 21 17" />
-                </svg>
+              <span data-icon="volume" data-icon-style="width:16px; height:16px; display:block;"></span>
               </button>
               <div class="volume-slider-wrapper">
                 <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5" title="Volume (Up/Down)"
@@ -799,6 +797,12 @@
               </button>
               <div id="quality-menu"></div>
             </div>
+
+            <!-- Episodes panel (series only; js/player/series-controls.js) -->
+            <button id="btn-episodes" class="ctrl-btn-sm" title="Episodes" aria-label="Episodes" style="display:none;">
+                <span data-icon="list" data-icon-style="width:15px; height:15px; display:block;"></span>
+                <span class="ctrl-btn-label" data-i18n="playerEpisodes">Episodes</span>
+              </button>
 
             <!-- Audio track picker (shown only when a source has >1 audio track) -->
             <div id="audio-dropdown-container" class="quality-dropdown-container" style="display:none;">
@@ -856,13 +860,7 @@
             </button>
 
             <button id="btn-fullscreen" class="ctrl-btn" title="Fullscreen (F)" aria-label="Toggle Fullscreen">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" style="width:16px; height:16px; display:block;">
-                <path d="M 5 9 L 5 5 L 9 5" />
-                <path d="M 15 5 L 19 5 L 19 9" />
-                <path d="M 19 15 L 19 19 L 15 19" />
-                <path d="M 5 15 L 5 19" />
-              </svg>
+              <span data-icon="fullscreen" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
           </div>
 
