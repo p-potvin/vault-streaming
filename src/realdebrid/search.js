@@ -1,5 +1,5 @@
 // src/realdebrid/search.js - torrent source discovery (Comet primary, Torrentio/EZTV/YTS fallbacks)
-const { fetchWithTimeout, checkRealDebridCache, COMET_STREAM_BASE } = require("./client");
+const { fetchWithTimeout, checkRealDebridCache, COMET_STREAM_BASE, COMET_CACHED_PACKS_BASE } = require("./client");
 const { recordResolve, detectDebridProvider } = require("../telemetry/debrid-stats");
 const { filterAndDedupe, episodeFit } = require("./candidates");
 
@@ -23,9 +23,9 @@ function magnetOf(hash, name) {
     return `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(String(name || '').trim())}${tr}`;
 }
 
-async function fetchCometStreams(streamType, idParam, cleanTitle) {
+async function fetchCometStreams(streamType, idParam, cleanTitle, base = COMET_STREAM_BASE) {
     if (!COMET_STREAM_BASE) return null;
-    const url = `${COMET_STREAM_BASE}/stream/${streamType}/${idParam}.json`;
+    const url = `${base}/stream/${streamType}/${idParam}.json`;
 
     // Comet fans out to indexers + the debrid services in its config on a rotating IP; a cold,
     // uncached query routinely takes 15-40s (hence the 45s per-attempt timeout).
@@ -33,7 +33,7 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
     // it's still scraping server-side, then populates seconds later. So retry on
     // empty — otherwise a popular movie is wrongly reported "no sources" and, since
     // nothing was cached, stayed that way until an app restart.
-    const MAX_ATTEMPTS = 3;
+    const MAX_ATTEMPTS = base === COMET_STREAM_BASE ? 3 : 1;   // the cached-packs request: one try (empty is a normal answer)
     let streams = null;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
@@ -167,7 +167,16 @@ function registerSearchHandlers(ipcMain) {
                 const e = episode || 1;
                 const idParam = (itemMediaType === 'tv' || itemMediaType === 'series') ? `${imdbId}:${s}:${e}` : imdbId;
 
-                const cometList = await fetchCometStreams(streamType, idParam, cleanTitle);
+                // an episode: also the packs Real-Debrid has cached (see client.js, COMET_CACHED_PACKS_BASE); the
+                // cached entries come first so one torrent listed by both keeps its cached link
+                const [everyday, packs] = await Promise.all([
+                    fetchCometStreams(streamType, idParam, cleanTitle),
+                    streamType === 'series' && COMET_CACHED_PACKS_BASE
+                        ? fetchCometStreams(streamType, idParam, cleanTitle, COMET_CACHED_PACKS_BASE).catch(() => null)
+                        : null,
+                ]);
+                if (packs && packs.length) console.log(`[Comet] cached packs request: ${packs.length} entries`);
+                const cometList = [...(packs || []), ...(everyday || [])];
                 if (cometList && cometList.length > 0) {
                     // Comet already flags cached streams (they carry a resolved
                     // url). No direct Real-Debrid instantAvailability call.

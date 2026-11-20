@@ -83,6 +83,23 @@ function loadCometStreamBase() {
  * cartoons never played. `allowed` and `preferred` stay as configured (preferred still ranks multi/en/fr first).
  * Returns the base unchanged when it holds no readable config or nothing is required.
  */
+/** The Comet base URL with fields of its config replaced (`overrides`), or null when the base holds no config. */
+function cometBaseWith(base, overrides) {
+    try {
+        const u = new URL(base);
+        const segs = u.pathname.split('/');
+        const i = segs.findIndex(s => s.startsWith('eyJ'));
+        if (i < 0) return null;
+        const cfg = { ...JSON.parse(Buffer.from(segs[i], 'base64').toString('utf8')), ...overrides };
+        const json = JSON.stringify(cfg);
+        for (let pad = 0; pad < 6; pad++) {
+            const enc = Buffer.from(json + ' '.repeat(pad), 'utf8').toString('base64');
+            if (!enc.includes('/')) { segs[i] = enc; return `${u.origin}${segs.join('/')}`; }
+        }
+    } catch (_) { /* unreadable config */ }
+    return null;
+}
+
 function keepUntaggedReleases(base) {
     try {
         const u = new URL(base);
@@ -108,6 +125,12 @@ function keepUntaggedReleases(base) {
 }
 
 const COMET_STREAM_BASE = loadCometStreamBase();
+
+// For an episode Comet drops every season / series pack ("reject unknown episode files") unless the request is
+// cachedOnly with torrents off: then it keeps the packs Real-Debrid has cached, checking the episode is inside.
+// Measured Fri 20 Nov 2026, American Dad S06E14: the everyday config returned 1 cached source; this one returned 5
+// (the episode and four packs containing it), all on Real-Debrid already. search.js asks both for an episode.
+const COMET_CACHED_PACKS_BASE = COMET_STREAM_BASE ? cometBaseWith(COMET_STREAM_BASE, { cachedOnly: true, enableTorrent: false }) : null;
 
 // DISABLED: this used to call api.real-debrid.com/instantAvailability directly
 // from the account IP — a policy violation and a ban risk. Comet already tags
@@ -137,4 +160,4 @@ function cometUrl(p) {
 }
 
 module.exports = { fetchWithTimeout, checkRealDebridCache, RD_TOKEN, TMDB_BEARER_TOKEN, COMET_STREAM_BASE, cometPath, cometUrl,
-                   keepUntaggedReleases };
+                   keepUntaggedReleases, cometBaseWith, COMET_CACHED_PACKS_BASE };

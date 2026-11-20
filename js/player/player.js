@@ -957,6 +957,26 @@ function initPlayer() {
         const pipPlayBtn = el('pip-btn-play');
         if (pipPlayBtn) pipPlayBtn.innerHTML = window.icons.pause('', 'width:14px;height:14px;vertical-align:middle;');
     });
+    // Paused on a stream: one tiny range request a minute keeps Comet's link warm, so playback restarts in ~0.6 s
+    // instead of ~3.3 s after a long pause (measured Fri 20 Nov 2026). Stops on play, a new source or close.
+    const KEEP_WARM_MS = 60 * 1000;
+    const keepWarmUrl = () => {
+        const m = window.activeStreamingMedia;
+        const u = (m && m.streamUrl) || vp.currentSrc || '';
+        return /^https?:\/\//i.test(u) && !/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/i.test(u) ? u : null;
+    };
+    const stopKeepWarm = () => { clearInterval(window._keepWarmTimer); window._keepWarmTimer = null; };
+    vp.addEventListener('pause', () => {
+        stopKeepWarm();
+        if (!keepWarmUrl() || vp.ended) return;
+        window._keepWarmTimer = setInterval(() => {
+            const u = keepWarmUrl();
+            if (!u || !vp.paused || el('video-modal').style.display === 'none') { stopKeepWarm(); return; }
+            fetch(u, { headers: { Range: 'bytes=0-1' }, mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+        }, KEEP_WARM_MS);
+    });
+    vp.addEventListener('play', stopKeepWarm);
+    vp.addEventListener('emptied', stopKeepWarm);
     vp.addEventListener('pause', () => {
         btnPlay.innerHTML = PLAY_ICON_SVG;
         const pipPlayBtn = el('pip-btn-play');

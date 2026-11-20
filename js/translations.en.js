@@ -272,7 +272,7 @@ window.translationsEn = {
   aiTranscriptQueued: "Queued",
   aiTranscriptFailed: "Failed",
   aiTranscriptUnavailable: "Unavailable",
-  aiTranscriptSoon: "Starts after 2 min of playback",
+  aiTranscriptSoon: "Starts after 15 s of playback",
   aiTranscriptNone: "None for this file",
   tabHistory: "Watch History",
   settingStartTab: "Open the App On:",

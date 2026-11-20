@@ -274,7 +274,7 @@ window.translationsFr = {
   aiTranscriptQueued: "En file d’attente",
   aiTranscriptFailed: "Échec",
   aiTranscriptUnavailable: "Indisponible",
-  aiTranscriptSoon: "Commence après 2 min de lecture",
+  aiTranscriptSoon: "Commence après 15 s de lecture",
   aiTranscriptNone: "Aucune pour ce fichier",
   tabHistory: "Historique",
   settingStartTab: "Ouvrir l'app sur :",

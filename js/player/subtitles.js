@@ -383,7 +383,7 @@ async function searchSubtitlesFor(lang, gen = _subGen) {
 
 // ── The AI transcript ────────────────────────────────────────────────────────
 
-const TRANSCRIPT_POLL_MS = 2 * 60 * 1000;   // while it is being made; stops once ready / failed / player closed
+const TRANSCRIPT_POLL_MS = 30 * 1000;   // while it is being made (and while it is partial); stops once complete / failed / closed
 
 async function checkTranscript(gen = _subGen) {
     const ctx = window._subContext;
@@ -400,6 +400,7 @@ async function checkTranscript(gen = _subGen) {
     }
     if (gen !== _subGen || !res) return;
     const wasReady = _transcript.state === 'ready';
+    const prevCues = _transcript.cues || 0;
     _transcript = res;
     if (res.state === 'ready') {
         const entry = _addToCatalog({ id: 'ai', kind: 'transcript', path: res.path, lang: res.lang,
@@ -416,9 +417,13 @@ async function checkTranscript(gen = _subGen) {
             } else if (ctx.kind === 'stream') {
                 window.showToast(t_('aiTranscriptAvailable', 'AI transcript ready in the subtitles menu.', 'Transcription IA prête dans le menu des sous-titres.'), 'info');
             }
+        } else if (window._selectedSubtitleId === entry.id && (res.cues || 0) > prevCues) {
+            // the transcript grew (the read goes on): show the longer one
+            await activateSubtitle(entry);
         }
+        if (res.partial && ctx.kind === 'stream') _transcriptTimer = setTimeout(() => checkTranscript(gen), TRANSCRIPT_POLL_MS);
     } else if (ctx.kind === 'stream' && !['failed', 'unavailable'].includes(res.state)) {
-        // queued / reading / none yet (Moments takes the stream after two minutes of playback)
+        // queued / reading / none yet (Moments takes the stream after 15 seconds of playback)
         _transcriptTimer = setTimeout(() => checkTranscript(gen), TRANSCRIPT_POLL_MS);
     }
     renderSubtitleMenu();
@@ -438,7 +443,7 @@ function _transcriptStatusText() {
     if (s === 'idle') return '…';
     // none: Moments starts after two minutes of playback (streams); a library file without one has none
     return window._subContext && window._subContext.kind === 'stream'
-        ? t_('aiTranscriptSoon', 'Starts after 2 min of playback', 'Commence après 2 min de lecture')
+        ? t_('aiTranscriptSoon', 'Starts after 15 s of playback', 'Commence après 15 s de lecture')
         : t_('aiTranscriptNone', 'None for this file', 'Aucune pour ce fichier');
 }
 
