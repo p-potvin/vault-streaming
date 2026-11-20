@@ -103,7 +103,7 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
 async function imdbIdFor(tmdbId, mediaType = 'movie') {
     if (!tmdbId) return null;
     const sid = String(tmdbId).replace(/^imdb:/, '');
-    if (/^ttd+$/.test(sid)) return sid;
+    if (/^tt\d+$/.test(sid)) return sid;
     const category = mediaType === 'tv' || mediaType === 'series' ? 'tv' : 'movie';
     try {
         const { readThroughDetails, findCatalogItem } = require('../tmdb');

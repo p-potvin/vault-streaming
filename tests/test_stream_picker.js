@@ -131,6 +131,14 @@ test('Moments copy: only above 1080p; 720p before 480p; the same release group f
         ['u3', 'u2', 'u1'], 'same group (720p, then 480p), then others; never CAM or link-less');
 });
 
+test('IMDb id: an id given as one is used as is (no catalog or TMDB needed)', async () => {
+    const { imdbIdFor } = require('../src/realdebrid/search');
+    require.cache[require.resolve('../src/tmdb')] = { exports: new Proxy({}, { get: () => { throw new Error('catalog asked'); } }) };
+    assert.strictEqual(await imdbIdFor('tt0133093', 'movie'), 'tt0133093');
+    assert.strictEqual(await imdbIdFor('imdb:tt0944947', 'tv'), 'tt0944947');
+    delete require.cache[require.resolve('../src/tmdb')];
+});
+
 test('Deepbrid: a single episode before a pack; a link-less manual pick wins', () => {
     const { ranked } = pipeline(raw);
     assert.notStrictEqual(pickDeepbridSource(ranked).fit, 'pack');

@@ -233,13 +233,13 @@ async function activateSubtitle(entryOrId, { userPick = false } = {}) {
     return true;
 }
 
-function _afterSelectionChange(entry) {
+function _afterSelectionChange(entry, { remember = true } = {}) {
     const videoWrapper = document.querySelector('.video-wrapper');
     if (videoWrapper) videoWrapper.classList.toggle('subtitles-active', !!entry);
     const syncRow = el('subtitle-sync-row');
     if (syncRow) syncRow.style.display = entry ? '' : 'none';
     _updateSubtitleButton(entry);
-    _rememberChoice(entry);
+    if (remember) _rememberChoice(entry);
     renderSubtitleMenu();
 }
 
@@ -274,7 +274,9 @@ function resetSubtitles() {
     window._subContext = null;
     const vp = el('video-player');
     if (vp) _disableAllTracks(vp);
-    _afterSelectionChange(null);
+    // not a choice: closing the player must not save "Off" as this title's subtitle (the watch progress saved on
+    // close keeps the last real pick)
+    _afterSelectionChange(null, { remember: false });
 }
 
 /** Subtitles for a stream that just started: OpenSubtitles (by IMDb id) for the default, the AI transcript when it
@@ -292,8 +294,19 @@ async function loadStreamSubtitles(url, title, prog) {
     const savedLang = prog && prog.selectedSubtitleLang;
     if (savedKind === 'off') _userPicked = true;   // they turned subtitles off last time: keep it so
 
-    // the transcript is checked in the background (never started here)
-    checkTranscript(gen);
+    // the AI transcript chosen last time: show it again when it exists (checked first, never started here)
+    if (savedKind === 'transcript') {
+        await checkTranscript(gen);
+        if (gen !== _subGen) return;
+        if (_transcript.state === 'ready') {
+            if (window._selectedSubtitleId !== 'ai') await activateSubtitle('ai');
+            _userPicked = true;   // a restored choice: OpenSubtitles doesn't replace it
+            return;
+        }
+    } else {
+        // the transcript is checked in the background (never started here)
+        checkTranscript(gen);
+    }
 
     const want = savedLang && savedKind === 'os' ? savedLang : preferredSubtitleLang(window.appSettings);
     if (!want || _userPicked) { renderSubtitleMenu(); return; }

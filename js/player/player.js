@@ -1610,10 +1610,23 @@ async function momentsSource(playedUrl, media, lang) {
             const r = await window.electronAPI.streamRDTorrent({ magnet: t.magnet, hash: t.hash, url: t.url, name: t.name,
                                                                  cached: !!t.isRDCached });
             if (!r || !r.success || !r.streamUrl) continue;
+            // Each release orders (and has) its own audio tracks: the copy is used only when one of its tracks is in
+            // the language being heard — or, that language unknown, when it has a single track. Else the transcript
+            // would be of another language, filed under the played one.
+            const p = window.electronAPI.probeAudioTracks
+                ? await window.electronAPI.probeAudioTracks({ url: r.streamUrl, preferredLang: lang || 'en' }).catch(() => null)
+                : null;
+            const tracks = p && p.success && Array.isArray(p.tracks) ? p.tracks : [];
             let audioIndex = null;
-            if (lang && lang !== 'und' && window.electronAPI.probeAudioTracks) {
-                const p = await window.electronAPI.probeAudioTracks({ url: r.streamUrl, preferredLang: lang }).catch(() => null);
-                if (p && p.success && p.chosenAudioIndex != null) audioIndex = p.chosenAudioIndex;
+            if (lang && lang !== 'und') {
+                const match = tracks.find(x => x.lang === lang);
+                if (match) audioIndex = match.audioIndex;
+            } else if (tracks.length === 1) {
+                audioIndex = tracks[0].audioIndex;
+            }
+            if (audioIndex == null) {
+                console.log(`[moments] skipping a lighter copy without a ${lang || 'known'} audio track`);
+                continue;
             }
             const release = String(t.desc || '').replace(/^📄\s*/, '');
             console.log(`[moments] reading a lighter copy: ${t.quality || ''} ${release.slice(0, 80)}`);
