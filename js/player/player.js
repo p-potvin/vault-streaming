@@ -241,9 +241,8 @@ async function playItem(idx) {
     const qCont = el('quality-dropdown-container');
     if (qCont) qCont.style.display = 'none';
 
-    // A live subtitle session is bound to the previous file — end it before we
-    // swap sources so its cues don't bleed onto the new video.
-    if (typeof window.stopLiveSubtitles === 'function') window.stopLiveSubtitles(true);
+    // The previous file's subtitles must not carry over to the new video.
+    if (typeof window.resetSubtitles === 'function') window.resetSubtitles();
 
     window.currentPlayingIndex = idx;
     window.currentPlayingItem = itm;
@@ -279,62 +278,8 @@ async function playItem(idx) {
         tbTitle.style.display = 'inline-block';
     }
 
-    vp.querySelectorAll('track').forEach(t => t.remove());
     try {
-        const subs = await window.electronAPI.findSubtitles(itm.path, null, true);
-        if (subs && subs.length > 0) {
-            // Find the best matching subtitle for user's preferred language
-            const prefLang = (window.appSettings && window.appSettings.defaultSubLang) || 'original';
-            let bestSub = null;
-
-            // Priority order: 1. Exact match with prefLang, 2. Language starts with prefLang, 3. Original, 4. First available
-            for (const sub of subs) {
-                const subLang = sub.lang || '';
-                const subLabel = sub.label || '';
-
-                if (prefLang === 'original' && subLabel.toLowerCase() === 'original') {
-                    bestSub = sub;
-                    break;
-                } else if (prefLang !== 'und' && subLang.toLowerCase() === prefLang.toLowerCase()) {
-                    bestSub = sub;
-                    break;
-                } else if (prefLang !== 'und' && subLabel.toLowerCase().includes(`(${prefLang.toLowerCase()})`)) {
-                    bestSub = sub;
-                    break;
-                }
-            }
-
-            // If no exact match, fall back to first subtitle
-            if (!bestSub && subs.length > 0) {
-                bestSub = subs[0];
-            }
-
-            // Only load the best matching subtitle
-            if (bestSub) {
-                const track = document.createElement('track');
-                track.kind = 'subtitles';
-                track.label = bestSub.isOpenSubtitles ? bestSub.label : (bestSub.label === 'Original' ? 'original' : `Subtitles (${bestSub.label})`);
-                track.srclang = bestSub.lang;
-                if (bestSub.isOpenSubtitles) {
-                    track.dataset.opensubtitles = "true";
-                    track.dataset.fileId = bestSub.fileId;
-                    track.dataset.lang = bestSub.lang;
-                    track.dataset.videoPath = itm.path;
-                    track.dataset.downloaded = "false";
-                    track.src = "";
-                } else {
-                    track.src = window.sanitizePath(bestSub.path);
-                }
-                vp.appendChild(track);
-
-                window.refreshSubtitlesList();
-                window.selectSubtitleTrack(0);
-                window.showToast(`Loaded subtitle: ${track.label}`, 'success');
-            }
-        } else {
-            window.refreshSubtitlesList();
-            window.selectSubtitleTrack(-1);
-        }
+        await window.loadActiveSubtitles(itm.path);
     } catch (err) {
         console.error("Auto subtitle loading error:", err);
     }
@@ -420,7 +365,7 @@ function initPlayer() {
             if (window.electronAPI.stopLivestream) {
                 window.electronAPI.stopLivestream().catch(() => { });
             }
-            if (typeof window.stopLiveSubtitles === 'function') window.stopLiveSubtitles(true);
+            if (typeof window.resetSubtitles === 'function') window.resetSubtitles();
         });
     }
 
@@ -554,8 +499,8 @@ function initPlayer() {
         if (el('titlebar-video-title')) el('titlebar-video-title').style.display = 'none';
         if (window.autoplayTimer) { clearInterval(window.autoplayTimer); window.autoplayTimer = null; }
 
-        // Stop any running live ASR subtitle session and drop its track.
-        if (typeof window.stopLiveSubtitles === 'function') window.stopLiveSubtitles(true);
+        // Forget this playback's subtitles.
+        if (typeof window.resetSubtitles === 'function') window.resetSubtitles();
 
         // Remove all track elements from video element and clear subtitle list
         vp.querySelectorAll('track').forEach(t => t.remove());
@@ -1265,10 +1210,6 @@ function initPlayer() {
             { audioIndex, videoInfo: info.videoInfo },
         );
         if (ok && vpEl) {
-            // Keep live subtitles on the same track the user now hears.
-            if (window._liveSubActive && typeof window.restartLiveSubtitlesForAudio === 'function') {
-                window.restartLiveSubtitlesForAudio(audioIndex);
-            }
             vpEl.play().catch(() => { });
         }
         window.refreshAudioMenu();
@@ -1870,79 +1811,9 @@ async function playStream(url, title) {
         }
     }
 
-    vp.querySelectorAll('track').forEach(t => t.remove());
     try {
-        const subs = await window.electronAPI.findSubtitles(url, title);
-        // Bug fix: the streaming path never populated _allAvailableSubtitles,
-        // so the menu only showed the one auto-loaded sub. Set it so the menu
-        // exposes every OpenSubtitles result the search returned.
-        window._allAvailableSubtitles = subs || [];
-        let preferredSub = null;
-        let preferredTrackIdx = -1;
-
-        // Determine preferred language
-        const prefLang = (window.appSettings && window.appSettings.defaultSubLang) || 'original';
-
-        // If we have saved progress with subtitle info, use that
-        if (prog && prog.selectedSubtitleTrackIdx !== undefined) {
-            // Try to find the saved subtitle from the list
-            if (prog.selectedSubtitleLabel) {
-                preferredSub = subs.find(s => s.label === prog.selectedSubtitleLabel);
-            }
-            if (!preferredSub && prog.selectedSubtitleLang) {
-                preferredSub = subs.find(s => s.lang === prog.selectedSubtitleLang);
-            }
-            if (!preferredSub && prog.selectedSubtitleTrackIdx >= 0 && prog.selectedSubtitleTrackIdx < subs.length) {
-                preferredSub = subs[prog.selectedSubtitleTrackIdx];
-            }
-        }
-
-        // If no saved preference, find the best match for user's preferred language
-        if (!preferredSub && subs && subs.length > 0) {
-            if (prefLang === 'original') {
-                preferredSub = subs.find(s => s.label.toLowerCase() === 'original');
-            } else if (prefLang !== 'und') {
-                preferredSub = subs.find(s =>
-                    (s.lang && s.lang.toLowerCase().startsWith(prefLang.toLowerCase())) ||
-                    (s.label && s.label.toLowerCase().includes(`(${prefLang.toLowerCase()})`))
-                );
-            }
-            // If no match found, use the first available subtitle
-            if (!preferredSub) {
-                preferredSub = subs[0];
-            }
-        }
-
-        // Only load the preferred subtitle track (max 1)
-        if (preferredSub) {
-            const track = document.createElement('track');
-            track.kind = 'subtitles';
-            track.label = preferredSub.isOpenSubtitles ? preferredSub.label : (preferredSub.label === 'Original' ? 'original' : `Subtitles (${preferredSub.label})`);
-            track.srclang = preferredSub.lang;
-            if (preferredSub.isOpenSubtitles) {
-                track.dataset.opensubtitles = "true";
-                track.dataset.fileId = preferredSub.fileId;
-                track.dataset.lang = preferredSub.lang;
-                track.dataset.videoPath = url;
-                track.dataset.downloaded = "false";
-                track.src = "";
-            } else {
-                track.src = window.sanitizePath(preferredSub.path);
-            }
-            vp.appendChild(track);
-            preferredTrackIdx = 0; // Only one track, so index is 0
-
-            window.selectSubtitleTrack(preferredTrackIdx);
-            window.refreshSubtitlesList();
-
-            const t = window.translations[window.currentLang === 'fr' ? 'fr' : 'en'] || {};
-            window.showToast(preferredSub.isOpenSubtitles
-                ? (t.downloadingSubtitles || 'Downloading subtitles...')
-                : (t.subtitlesReady || 'Subtitles ready'), 'success');
-        } else {
-            window.refreshSubtitlesList();
-            window.selectSubtitleTrack(-1);
-        }
+        // the default OpenSubtitles match (by IMDb id) and, once vault-raggae has made it, the AI transcript
+        await window.loadStreamSubtitles(url, title, prog);
     } catch (err) {
         console.error("Auto subtitle loading error:", err);
     }

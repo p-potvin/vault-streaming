@@ -685,6 +685,8 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
         }
         if (window.activeStreamingMedia) {
             window.activeStreamingMedia.quality = (successfulTorrent || {}).quality || '';
+            // the release name: subtitles made for the same release (group, source) have the right timing
+            window.activeStreamingMedia.release = String((successfulTorrent || {}).desc || '').replace(/^📄\s*/, '');
         }
         window.playStream(response.streamUrl, movieTitle);
         if (response.provider === 'deepbrid') {

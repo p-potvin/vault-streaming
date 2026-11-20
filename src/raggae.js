@@ -133,6 +133,22 @@ async function queueStream(job) {
     return call('POST', '/v1/moments/stream', { body: job, timeoutMs: 10000, tripOnTimeout: false });
 }
 
+/** The Moments job of a played stream (GET /v1/moments/stream/{key}): { state: 'queued' | 'starting' | 'reading' |
+ *  'done' | 'failed', read_s?, duration?, transcript? } or null (no job yet / gateway down). */
+async function streamStatus(key) {
+    if (!key) return null;
+    return call('GET', `/v1/moments/stream/${encodeURIComponent(key)}`, { quiet404: true, tripOnTimeout: false });
+}
+
+/** The transcripts store's subtitle files for a path — a library video, or a stream's key (stream:imdb:tt…) — each
+ *  with its cue_list ({ idx, start_ms, end_ms, text }) and language (GET /v1/transcripts/by-path); [] when none. */
+async function transcriptsByPath(p) {
+    if (!p) return [];
+    const data = await call('GET', `/v1/transcripts/by-path?path=${encodeURIComponent(p)}`,
+        { quiet404: true, timeoutMs: 15000, tripOnTimeout: false });
+    return (data && Array.isArray(data.files)) ? data.files : [];
+}
+
 /**
  * Full-text search (GET /v1/catalog/search) in one category; resolves the hit list ([] on any failure).
  * @param {object} options - { category, year, mode, limit }
@@ -219,6 +235,8 @@ module.exports = {
     getList,
     setList,
     queueStream,
+    streamStatus,
+    transcriptsByPath,
     search,
     searchTitles,
     browse,

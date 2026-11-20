@@ -138,6 +138,10 @@ async function initApp() {
     }
 
     window.appSettings = await window.electronAPI.getSettings();
+    // Upscaling is off by default: hide the player's upscale button until the user turns it on in Settings.
+    if (typeof window.applyUpscalingSetting === 'function') {
+        window.applyUpscalingSetting(!!(window.appSettings && window.appSettings.upscaling === true));
+    }
     // One-shot migration: legacy {folders,folderContents} -> stable-id virtualFolders.
     // Safe no-op if already migrated.
     if (window.vf && typeof window.vf.migrateLegacy === 'function') {

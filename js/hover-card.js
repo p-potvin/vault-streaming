@@ -398,12 +398,14 @@ async function loadHoverTrailer(popup, movie, title, year) {
     // only the first time a title is hovered or opened; every later hover plays the file from disk.
     let trailerKey = '';
     let directUrl = '';
+    let startAt = 0;
     if (movie.id && window.electronAPI && window.electronAPI.getTrailer) {
         try {
             const res = await window.electronAPI.getTrailer({ id: movie.id, mediaType: movie.media_type,
                 language: window.tmdbLanguage(), title: movie.title || movie.name || '' });
             if (res && res.key) trailerKey = res.key;
             if (res && res.success) directUrl = window.trailerSrc(res);
+            startAt = window.trailerStartAt ? window.trailerStartAt(res) : 0;
         } catch (e) {
             console.error('[HoverCard] Trailer lookup failed:', e);
         }
@@ -425,7 +427,11 @@ async function loadHoverTrailer(popup, movie, title, year) {
         vid.muted = _muteTrailers;
         vid.volume = 0.8;
         vid.autoplay = true;
-        vid.loop = true;
+        // Loops back to the start offset, not 0, so a KinoCheck bumper is skipped on every loop too.
+        vid.loop = !(startAt > 0);
+        if (startAt > 0) {
+            vid.addEventListener('ended', () => { vid.currentTime = startAt; vid.play().catch(() => {}); });
+        }
         vid.playsInline = true;
         vid.preload = 'auto';
         const hideSpinner = () => { if (spinner) spinner.style.display = 'none'; };
@@ -442,7 +448,7 @@ async function loadHoverTrailer(popup, movie, title, year) {
     // old YouTube *search* embed queried YouTube on every hover, which the cache exists to stop.
     if (!trailerKey) { if (spinner) spinner.style.display = 'none'; return; }
     const embedUrl = trailerKey
-        ? `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${(window.appSettings&&window.appSettings.muteTrailers)?1:0}&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1`
+        ? `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${(window.appSettings&&window.appSettings.muteTrailers)?1:0}&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1${startAt > 0 ? `&start=${startAt}` : ''}`
         : `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(title + ' ' + (year || '') + ' official trailer')}&autoplay=1&mute=${(window.appSettings&&window.appSettings.muteTrailers)?1:0}&controls=0&modestbranding=1&rel=0`;
 
     window.stopAllTrailerPreviews(); // clear any straggler before attaching
