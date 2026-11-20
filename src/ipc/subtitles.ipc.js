@@ -213,7 +213,13 @@ async function searchOpenSubtitles(apiKey, { imdbId, season, episode, query, yea
 async function downloadOpenSubtitles(apiKey, fileId) {
     if (!apiKey || !fileId) return { success: false, error: 'Missing API key or file ID' };
     try {
-        const res = await osRequest('/download', apiKey, 'POST', { file_id: fileId });
+        // a 5xx (often 521: their server unreachable behind Cloudflare) usually passes on a second try
+        let res = await osRequest('/download', apiKey, 'POST', { file_id: fileId });
+        for (let retry = 1; retry <= 2 && res.status >= 500; retry++) {
+            console.warn(`[subtitles] OpenSubtitles download HTTP ${res.status}, retry ${retry}/2`);
+            await new Promise(r => setTimeout(r, 1500 * retry));
+            res = await osRequest('/download', apiKey, 'POST', { file_id: fileId });
+        }
         if (res.status !== 200 || !res.data || !res.data.link) {
             return { success: false, error: `OpenSubtitles download failed (status ${res.status})` };
         }

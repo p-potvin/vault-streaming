@@ -107,7 +107,13 @@ function registerStreamHandlers(ipcMain) {
             // instantAvailability check. Reject placeholder-sized streams so the
             // caller can fall back to the next ranked source.
             // An uncached source makes Comet add it to Real-Debrid on this first hit: give it longer to answer.
-            const totalBytes = await probeStreamBytes(streamUrl, markedCached ? 12000 : 20000);
+            let totalBytes = await probeStreamBytes(streamUrl, markedCached ? 12000 : 20000);
+            // A ⚡ source used to be trusted when its probe timed out; American Dad S06E14 (Fri 20 Nov 2026) then played
+            // a Comet error video. Ask once more with a longer wait: a slow link generation answers by then.
+            if (totalBytes === null && markedCached) {
+                console.warn('[Comet] size probe timed out — probing once more');
+                totalBytes = await probeStreamBytes(streamUrl, 25000);
+            }
             if (totalBytes !== null && totalBytes < MIN_REAL_BYTES) {
                 const kind = placeholderKind(totalBytes);
                 console.warn(`[Comet] Placeholder detected (${totalBytes} B, ${kind}) — not playable now.`);

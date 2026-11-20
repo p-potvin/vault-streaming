@@ -1721,6 +1721,29 @@ async function playStream(url, title) {
         return;
     }
 
+    // A Comet / debrid status video ("Requested stream was not found", a copyright block…) is a clip of a few seconds.
+    // A movie or episode never is: treat it as a failed source, forget it as the title's last source, search again.
+    const media = window.activeStreamingMedia;
+    if (media && /^https?:\/\//i.test(String(url || ''))) {
+        vp.addEventListener('loadedmetadata', function statusVideoGuard() {
+            if (window.activeStreamingMedia !== media || !isFinite(vp.duration) || vp.duration >= 60) return;
+            console.warn(`[streaming] the source played a ${vp.duration.toFixed(1)} s clip (a provider status video) — searching again`);
+            media.lastSource = null;
+            // forget it on disk too (position kept), or the next play would reopen the same error video
+            if (window.electronAPI && window.electronAPI.getWatchProgress && window.electronAPI.setWatchProgress) {
+                const key = { mediaType: media.mediaType, tmdbId: media.tmdbId, title: media.title, season: media.season, episode: media.episode };
+                window.electronAPI.getWatchProgress(key).then((prog) => {
+                    if (!prog || !prog.lastSource || (media.mediaType === 'tv' && (prog.season !== media.season || prog.episode !== media.episode))) return;
+                    return window.electronAPI.setWatchProgress({ ...prog, lastSource: null });
+                }).catch(() => {});
+            }
+            vp.pause();
+            window.showToast(window.currentLang === 'fr'
+                ? 'Cette source a renvoyé une vidéo d\'erreur du fournisseur. Recherche d\'une autre source…'
+                : 'That source returned a provider error video. Finding another source…', 'info');
+            if (typeof window.findOtherSources === 'function') window.findOtherSources();
+        }, { once: true });
+    }
     vp.src = url;
 
     // Arm the overlay teardown HERE, immediately after the source is assigned.
