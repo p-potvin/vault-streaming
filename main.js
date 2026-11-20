@@ -295,6 +295,13 @@ function createWindow() {
                 mainWindow.hide();
                 return;
             }
+            // A real close: send the Moments pause first, then close for real — the cleanup below ends with a
+            // taskkill of this app (packaged builds), which would otherwise beat the pause.
+            if (!momentsPauseSent && process.env.VAULT_STREAMING_E2E !== '1') {
+                e.preventDefault();
+                sendMomentsPause().finally(() => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close(); });
+                return;
+            }
         }
         performFullAppCleanup();
     });
@@ -326,7 +333,7 @@ app.whenReady().then(async () => {
 
         // Moments reads paused when the app last closed continue where they stopped (after start-up has settled).
         if (!isE2E && loadSettings().indexPlayback !== false) {
-            setTimeout(() => {
+            momentsResumeTimer = setTimeout(() => {
                 require('./src/raggae').resumeStreams()
                     .then(r => { if (r && r.resumed && r.resumed.length) console.log('[moments] resumed:', r.resumed.join(', ')); })
                     .catch(() => { });
@@ -349,16 +356,22 @@ app.whenReady().then(async () => {
     });
 
 // Moments reads (vault-raggae) pause when the app closes and resume when it starts again, from where they stopped.
-// before-quit can't await, so the first quit is held until the pause has been sent (2.5 s at most), then repeated.
+// Sent once, from the window's close (a real close) or before-quit (the tray's Quit), whichever comes first; neither
+// can await, so each holds its close / quit until the pause has gone (2.5 s at most) and then repeats it.
 let momentsPauseSent = false;
+let momentsResumeTimer = null;   // the start-up resume; cancelled once quitting starts, so it can't follow the pause
+function sendMomentsPause() {
+    momentsPauseSent = true;
+    if (momentsResumeTimer) { clearTimeout(momentsResumeTimer); momentsResumeTimer = null; }
+    return require('./src/raggae').pauseStreams()
+        .then(r => console.log('[moments] pause on quit:', r ? (r.paused && r.paused.length ? r.paused.join(', ') : 'nothing running') : 'no answer'))
+        .catch(() => { });
+}
 app.on('before-quit', (event) => {
+    if (momentsResumeTimer) { clearTimeout(momentsResumeTimer); momentsResumeTimer = null; }
     if (!momentsPauseSent && process.env.VAULT_STREAMING_E2E !== '1') {
-        momentsPauseSent = true;
         event.preventDefault();
-        require('./src/raggae').pauseStreams()
-            .then(r => { if (r && r.paused && r.paused.length) console.log('[moments] paused on quit:', r.paused.join(', ')); })
-            .catch(() => { })
-            .finally(() => app.quit());
+        sendMomentsPause().finally(() => app.quit());
         return;
     }
     isQuitting = true;

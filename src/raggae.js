@@ -55,22 +55,25 @@ async function call(method, route, { body, timeoutMs = DEFAULT_TIMEOUT_MS, quiet
             console.warn(`[raggae] ${method} ${route.split('?')[0]} timed out after ${timeoutMs / 1000} s`);
             return null;
         }
+        clearTimeout(timer);
         markOffline(err);
         return null;
-    } finally {
-        clearTimeout(timer);
     }
     markOnline();
     if (!res.ok) {
+        clearTimeout(timer);
         if (!(quiet404 && res.status === 404)) {
             console.warn(`[raggae] ${method} ${route.split('?')[0]} -> HTTP ${res.status}`);
         }
         return null;
     }
+    // the deadline covers the body too: headers then a stalled body must not hold a caller (the quit-time pause)
     try {
         return await res.json();
     } catch (_) {
         return null;
+    } finally {
+        clearTimeout(timer);
     }
 }
 
