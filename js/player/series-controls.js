@@ -200,7 +200,11 @@
 
     // ── Episodes panel ─────────────────────────────────────────────────────────
     let panel = null;
-    function closePanel() { if (panel) panel.classList.remove('open'); }
+    function closePanel() {
+        if (!panel) return;
+        panel.classList.remove('open');
+        if (vp && vp.parentElement) vp.parentElement.scrollLeft = 0;   // never leave the player scrolled sideways
+    }
 
     async function renderPanelSeason(season) {
         const m = window.activeStreamingMedia;
@@ -231,7 +235,11 @@
                 </span>`;
             row.addEventListener('click', (e) => { e.stopPropagation(); if (!current) playEpisode(Number(season), ep.episode_number); });
             list.appendChild(row);
-            if (current) requestAnimationFrame(() => row.scrollIntoView({ block: 'center' }));
+            // the list's own scroll only: scrollIntoView would also scroll the video wrapper (the panel sits off its
+            // right edge while closed) and leave the whole player shifted sideways after closing
+            if (current) requestAnimationFrame(() => {
+                list.scrollTop = Math.max(0, row.offsetTop - list.clientHeight / 2 + row.offsetHeight / 2);
+            });
         }
     }
 
@@ -258,6 +266,7 @@
         sel.innerHTML = seasons.map(s => `<option value="${s.season_number}">${window.escapeHtml(s.name || `${tx('Season', 'Saison')} ${s.season_number}`)}</option>`).join('');
         sel.value = String(m.season);
         panel.classList.add('open');
+        if (vp.parentElement) vp.parentElement.scrollLeft = 0;
         await renderPanelSeason(Number(m.season));
     }
 

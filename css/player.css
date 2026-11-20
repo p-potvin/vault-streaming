@@ -723,6 +723,7 @@ video::cue {
 }
 
 #episodes-panel .ep-panel-list {
+  position: relative;   /* rows' offsetTop is measured from here (series-controls.js scrolls the list itself) */
   flex: 1;
   overflow-y: auto;
   padding: 6px;
