@@ -31,9 +31,11 @@
 //
 // Category mismatches (Thu, 19 Nov 2026: 1,917 of the first run's 1,918 misses): IMDb files TV specials and some TV
 // movies differently from TMDB (a tvSpecial is a TMDB movie). /find's other list is taken when the expected one is
-// empty, and a stored TMDB id that 404s is tried once as the other type; the catalog keeps its own category, TMDB's is
+// empty; a stored TMDB id is fetched as its stored tmdb_type, and an untyped one that 404s is checked with /find (taken
+// as the other type only when /find gives the same number); the catalog keeps its own category, TMDB's is
 // kept in raw_enrichment.tmdb.meta.tmdb_type. Each miss line carries its cause after a tab: find-empty,
-// find-season:<show id> / find-episode:<show id> (TMDB merged the title into that series), find-404, details-404:<type>/<id>.
+// find-season:<show id> / find-episode:<show id> (TMDB merged the title into that series), find-404, details-404:<type>/<id>, details-404-stale:<stored>-><found> (a stored id TMDB
+// no longer gives for that IMDb id).
 // IMDb `video` titles (bonus features, deleted scenes) are left out (title.basics dump); --keep-video takes them.
 //
 //   node scripts/backfill-catalog.js --dry-run [--movie-votes 600] [--tv-votes 1000] [--episodes-top 1000]
@@ -336,32 +338,48 @@ async function main() {
             const imdb = cid.slice(5);
             const other = q.category === 'tv' ? 'movie' : 'tv';
             const storedId = q.item.external_ids && q.item.external_ids.tmdb;
-            let tmdbId = storedId;
-            let tmdbType = q.category;
-            if (!tmdbId) {
+            const storedType = storedId ? q.item.external_ids.tmdb_type : null;
+            // TMDB's answer for the IMDb id: { id, type }, { miss: cause }, or null when TMDB did not answer
+            const findRef = async () => {
                 const found = await tmdb(`/find/${imdb}?external_source=imdb_id`);
-                if (!found) continue;                       // not answered: stays to do
-                if (found.notFound) { miss(cid, 'find-404'); continue; }
+                if (!found) return null;
+                if (found.notFound) return { miss: 'find-404' };
                 const list = type => (type === 'tv' ? found.tv_results : found.movie_results) || [];
-                if (list(q.category)[0]) tmdbId = list(q.category)[0].id;
-                else if (list(other)[0]) { tmdbId = list(other)[0].id; tmdbType = other; }
-                else {
-                    // TMDB folded the title into a series (as a season or an episode): not a title of its own there
-                    const season = (found.tv_season_results || [])[0];
-                    const episode = (found.tv_episode_results || [])[0];
-                    miss(cid, season ? `find-season:${season.show_id}` : episode ? `find-episode:${episode.show_id}` : 'find-empty');
-                    continue;
-                }
+                if (list(q.category)[0]) return { id: list(q.category)[0].id, type: q.category };
+                if (list(other)[0]) return { id: list(other)[0].id, type: other };
+                // TMDB folded the title into a series (as a season or an episode): not a title of its own there
+                const season = (found.tv_season_results || [])[0];
+                const episode = (found.tv_episode_results || [])[0];
+                return { miss: season ? `find-season:${season.show_id}` : episode ? `find-episode:${episode.show_id}` : 'find-empty' };
+            };
+            // a stored id is fetched as its stored type: the same number in the other type is another title
+            let tmdbId = storedId;
+            let tmdbType = storedType || q.category;
+            if (!tmdbId) {
+                const ref = await findRef();
+                if (!ref) continue;                         // not answered: stays to do
+                if (ref.miss) { miss(cid, ref.miss); continue; }
+                tmdbId = ref.id;
+                tmdbType = ref.type;
             }
             // the season list comes with the details; ask for seasons 1..15 up front and the rest after
             const seasonsFor = type => (type === 'tv' && episodeSet.has(cid) ? Array.from({ length: 15 }, (_, k) => k + 1) : []);
             let seasonNumbers = seasonsFor(tmdbType);
             let got = await details(tmdbType, tmdbId, seasonNumbers);
-            if (got && got.notFound && storedId) {
-                // a stored id of the other type (the app's /find takes either list): one try as that type
-                tmdbType = other;
-                seasonNumbers = seasonsFor(tmdbType);
-                got = await details(tmdbType, tmdbId, seasonNumbers);
+            if (got && got.notFound && storedId && !storedType) {
+                // an untyped stored id (from before tmdb_type) that 404s: /find says what the IMDb id is. Only the
+                // same number of the other type is taken; the catalog fills empty keys only, so a different id
+                // would sit beside the old one
+                const ref = await findRef();
+                if (!ref) continue;
+                if (!ref.miss && Number(ref.id) === Number(tmdbId) && ref.type !== tmdbType) {
+                    tmdbType = ref.type;
+                    seasonNumbers = seasonsFor(tmdbType);
+                    got = await details(tmdbType, tmdbId, seasonNumbers);
+                } else if (!ref.miss) {
+                    miss(cid, `details-404-stale:${tmdbType}/${tmdbId}->${ref.type}/${ref.id}`);
+                    continue;
+                }
             }
             if (!got) continue;
             if (got.notFound) { miss(cid, `details-404:${tmdbType}/${tmdbId}`); continue; }

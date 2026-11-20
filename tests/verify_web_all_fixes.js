@@ -15,7 +15,7 @@ async function testAllFixes() {
     const page = await context.newPage();
 
     const clientUrl = `http://127.0.0.1:8722/?token=${token}`;
-    console.log(`[Browser] Loading ${clientUrl}...`);
+    console.log(`[Browser] Loading ${clientUrl.replace(/token=[^&]*/, "token=<redacted>")}...`);
     await page.goto(clientUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
 

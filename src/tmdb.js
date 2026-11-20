@@ -209,6 +209,47 @@ function hasPoster(card) {
     return !!(card && card.poster && card.poster !== PLACEHOLDER_POSTER);
 }
 
+// Pages of a catalog browse after local filtering (posters, genre, release). A fixed offset per page would give an
+// empty page wherever a stretch of rows is filtered out, and the renderer stops "Load more" at the first empty page.
+// So each page is filled by reading batches from where the previous page stopped; where every page starts in the
+// raw rows is remembered per browse, so page N is the same titles each time it is asked for.
+const FILTER_BATCH = 50;
+const FILTER_MAX_SCAN = 500;             // rows read for one page at most: a page may stay short, never loops
+const pageStarts = new Map();            // browse key (without the page) -> [raw offset where page 1, 2, … starts]
+
+/** Page `page` (1-based) of `size` kept cards: `fetchRows(offset, limit)` reads raw rows, `keep(row)` returns the card
+ *  to show or null. */
+async function filteredPage(key, page, size, fetchRows, keep) {
+    let starts = pageStarts.get(key);
+    if (!starts) {
+        starts = [0];
+        pageStarts.set(key, starts);
+        if (pageStarts.size > 200) pageStarts.delete(pageStarts.keys().next().value);
+    }
+    // from the furthest page whose start is known, walk forward to the one asked for
+    for (let p = Math.min(page, starts.length); ; p++) {
+        let raw = starts[p - 1];
+        const out = [];
+        let scanned = 0;
+        let exhausted = false;
+        while (out.length < size && scanned < FILTER_MAX_SCAN) {
+            const rows = await fetchRows(raw, FILTER_BATCH);
+            if (!rows.length) { exhausted = true; break; }
+            for (const row of rows) {
+                raw++;
+                scanned++;
+                const card = keep(row);
+                if (card) out.push(card);
+                if (out.length >= size) break;
+            }
+            if (rows.length < FILTER_BATCH && out.length < size) { exhausted = true; break; }
+        }
+        starts[p] = raw;
+        if (p >= page) return out;
+        if (exhausted) return [];
+    }
+}
+
 /** A URL as it may be logged: API keys and tokens replaced. */
 function redact(url) {
     return String(url).replace(/([?&](?:apikey|api_key|token)=)[^&]+/gi, '$1***');
@@ -272,7 +313,7 @@ async function toTmdbId(id, mediaType = 'movie') {
 /** Like toTmdbId, with TMDB's own type for the id: { id, type: 'movie' | 'tv' }. IMDb and TMDB file some titles
  *  differently (an IMDb TV special is a TMDB movie), so /find's other list is taken when the asked one is empty, and
  *  the id is then fetched as that type (Thu, 19 Nov 2026: a catalog series holding a TMDB movie id 404'd as /tv/). */
-async function toTmdbRef(id, mediaType = 'movie') {
+async function toTmdbRef(id, mediaType = 'movie', { remember = true } = {}) {
     if (id === null || id === undefined || id === '') return null;
     if (/^\d+$/.test(String(id))) return { id: Number(id), type: mediaType };
     const imdb = String(id).replace(/^imdb:/, '');
@@ -289,7 +330,7 @@ async function toTmdbRef(id, mediaType = 'movie') {
         const hit = asked || other;
         const ref = hit ? { id: hit.id, type: asked ? (mediaType === 'tv' ? 'tv' : 'movie') : (mediaType === 'tv' ? 'movie' : 'tv') } : null;
         tmdbIdCache.set(cacheKey, ref);
-        if (ref) {
+        if (ref && remember) {
             // the catalog item keeps the category it was asked under; tmdb_type says how to fetch the id
             ingestOutside({ category: mediaType === 'tv' ? 'tv' : 'movie', title: hit.title || hit.name,
                             external_ids: { imdb, tmdb: ref.id, tmdb_type: ref.type }, source: 'tmdb' });
@@ -448,16 +489,16 @@ async function fetchOmdbDetails({ imdbId, title, year }) {
 /** The catalog's "popular" page (most voted films and series), when TMDB trending is not available. */
 async function localPopular(page = 1) {
     const per = 10;
-    const [movies, shows] = await Promise.all([
-        raggae.browse({ category: 'movie', sort: 'votes', limit: per, offset: (page - 1) * per, minVotes: minVotesFor('movie') }),
-        raggae.browse({ category: 'tv', sort: 'votes', limit: per, offset: (page - 1) * per, minVotes: minVotesFor('tv') })
-    ]);
+    const pageOf = category => filteredPage(`popular:${category}`, page, per,
+        (offset, limit) => raggae.browse({ category, sort: 'votes', limit, offset, minVotes: minVotesFor(category) }),
+        row => { const card = catalogToCard(row); return hasPoster(card) ? card : null; });
+    const [movies, shows] = await Promise.all([pageOf('movie'), pageOf('tv')]);
     const out = [];
     for (let i = 0; i < per; i++) {
-        if (movies[i]) out.push(catalogToCard(movies[i]));
-        if (shows[i]) out.push(catalogToCard(shows[i]));
+        if (movies[i]) out.push(movies[i]);
+        if (shows[i]) out.push(shows[i]);
     }
-    return out.filter(hasPoster);
+    return out;
 }
 
 /** A local catalog item in the TMDB movie / tv details shape the modal reads, for titles TMDB cannot give. */
@@ -668,16 +709,26 @@ async function readThroughDetails(id, category, language = 'en-US') {
 
     // catalog miss (or its TMDB copy is stale): TMDB once, then the catalog's copy
     const ext = (item && item.external_ids) || {};
-    const ref = /^\d+$/.test(String(id)) ? { id: Number(id), type: category }
-        : ext.tmdb ? { id: ext.tmdb, type: ext.tmdb_type || category } : await toTmdbRef(id, category);
-    const tmdbId = ref && ref.id;
+    // A numeric id is the card's TMDB id: when the catalog item holding it says which TMDB type it is (a TV special
+    // stored on a series is a TMDB movie), fetch that type: the same number in the other type is another title
+    const numeric = /^\d+$/.test(String(id));
+    const storedType = ext.tmdb && (!numeric || Number(ext.tmdb) === Number(id)) ? ext.tmdb_type : null;
+    const ref = numeric ? { id: Number(id), type: storedType || category }
+        : ext.tmdb ? { id: ext.tmdb, type: storedType || category } : await toTmdbRef(id, category);
+    let tmdbId = ref && ref.id;
     let tmdbType = (ref && ref.type) || category;
     let data = tmdbId ? await fetchTmdbDetails(tmdbId, tmdbType, language) : null;
-    if (data === null && ext.tmdb && !ext.tmdb_type && !/^\d+$/.test(String(id))) {
-        // an id stored before tmdb_type existed may be of the other type: one try as that type
-        const other = category === 'tv' ? 'movie' : 'tv';
-        const retry = await fetchTmdbDetails(tmdbId, other, language);
-        if (retry) { data = retry; tmdbType = other; }
+    const imdbOfItem = item && (ext.imdb || (String(item.catalog_id || '').startsWith('imdb:') ? item.catalog_id.slice(5) : null));
+    if (data === null && ext.tmdb && !ext.tmdb_type && imdbOfItem) {
+        // an id stored before tmdb_type existed may be of the other type: ask TMDB which title the IMDb id is
+        // (/find) rather than trusting whatever the same number is in the other type
+        // only the same number of the other type is taken: the catalog fills empty keys only, so a different id
+        // would leave the old id beside the new id's type
+        const found = await toTmdbRef(`imdb:${imdbOfItem}`, category, { remember: false });
+        if (found && Number(found.id) === Number(tmdbId) && found.type !== tmdbType) {
+            const retry = await fetchTmdbDetails(found.id, found.type, language);
+            if (retry) { data = retry; tmdbId = found.id; tmdbType = found.type; }
+        }
     }
     if (!data) {
         // TMDB unknown / down: whatever the catalog has (a stale copy included)
@@ -876,18 +927,22 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres
     const browseKey = JSON.stringify([category, browseSort, page, genreNames, range]);
     const hit = browseCache.get(browseKey);
     if (hit && Date.now() - hit.ts < LIST_CACHE_MS) return { success: true, source: 'raggae', list: false, results: hit.results };
-    const rows = await raggae.browse({
-        category, sort: browseSort, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
-        // every sort keeps to the backfill's floor (src/catalog-coverage.js: films 600, series 1,000 votes): below it
-        // titles have no poster, and a rating or newest-first sort over every title is all obscure entries
-        // (operator, Fri 20 Nov 2026: 600 / 1,000 rather than the earlier 5,000 for those sorts)
-        minVotes: minVotesFor(category),
-        genre: genreNames ? genreNames[0] : undefined,
-        yearMin: range ? range.min || undefined : undefined,
-        yearMax: range ? range.max : (browseSort === 'year' ? new Date().getUTCFullYear() : undefined)
-    });
-    const results = rows.filter(it => listItemMatches(it, { genreNames, range: null, origin: null })
-        && (!bySort || isReleased(it, todayIso))).map(catalogToCard).filter(hasPoster);
+    const results = await filteredPage(JSON.stringify([category, browseSort, genreNames, range]), page, PAGE_SIZE,
+        (offset, limit) => raggae.browse({
+            category, sort: browseSort, limit, offset,
+            // every sort keeps to the backfill's floor (src/catalog-coverage.js: films 600, series 1,000 votes):
+            // below it titles have no poster, and a rating or newest-first sort over every title is all obscure
+            // entries (operator, Fri 20 Nov 2026: 600 / 1,000 rather than the earlier 5,000 for those sorts)
+            minVotes: minVotesFor(category),
+            genre: genreNames ? genreNames[0] : undefined,
+            yearMin: range ? range.min || undefined : undefined,
+            yearMax: range ? range.max : (browseSort === 'year' ? new Date().getUTCFullYear() : undefined)
+        }),
+        it => {
+            if (!listItemMatches(it, { genreNames, range: null, origin: null }) || (bySort && !isReleased(it, todayIso))) return null;
+            const card = catalogToCard(it);
+            return hasPoster(card) ? card : null;
+        });
     if (results.length) browseCache.set(browseKey, { ts: Date.now(), results });
     if (browseCache.size > 200) browseCache.delete(browseCache.keys().next().value);
     return { success: true, source: 'raggae', list: false, results };
@@ -971,7 +1026,8 @@ function registerTmdbHandlers(ipcMain) {
                     source = 'omdb';
                 }
                 const merged = mergeAfterLocal(local, outside);
-                const results = page === 1 ? withBare(merged) : merged.slice(local.length);
+                // later pages leave out every local hit, the posterless ones page 1 showed included
+                const results = page === 1 ? withBare(merged) : mergeAfterLocal(hits, outside).slice(hits.length);
                 console.log(`[Search] "${query}" page ${page}: ${page === 1 ? local.length : 0} local + ${results.length - (page === 1 ? local.length : 0)} from ${source}`);
                 return { success: true, source: page === 1 && local.length ? `raggae+${source}` : source, results };
             }
