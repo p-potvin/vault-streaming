@@ -26,11 +26,20 @@
 // Bounded (REQUEST_RATE_LIMITING): one request start every --interval-ms (default 100 ms: 10/s, TMDB allows ~40/s),
 // a hard --max-requests cap (default 200000) per run. A 429 waits its Retry-After; 3 in a row (no success between)
 // start a 5-minute cooldown, after which the run goes on; the 4th cooldown stops the run. No other retries. Resumable: done and missed titles are kept in %LOCALAPPDATA%\VaultWares\vault-streaming\
-// (backfill-done.txt, backfill-misses.txt) and skipped by the next run. --dry-run asks only the local gateway and
-// prints the plan.
+// (backfill-done.txt, backfill-misses.txt) and skipped by the next run (--retry-misses asks the misses again).
+// --dry-run asks only the local gateway and prints the plan.
+//
+// Category mismatches (Thu, 19 Nov 2026: 1,917 of the first run's 1,918 misses): IMDb files TV specials and some TV
+// movies differently from TMDB (a tvSpecial is a TMDB movie). /find's other list is taken when the expected one is
+// empty; a stored TMDB id is fetched as its stored tmdb_type, and an untyped one that 404s is checked with /find (taken
+// as the other type only when /find gives the same number); the catalog keeps its own category, TMDB's is
+// kept in raw_enrichment.tmdb.meta.tmdb_type. Each miss line carries its cause after a tab: find-empty,
+// find-season:<show id> / find-episode:<show id> (TMDB merged the title into that series), find-404, details-404:<type>/<id>, details-404-stale:<stored>-><found> (a stored id TMDB
+// no longer gives for that IMDb id).
+// IMDb `video` titles (bonus features, deleted scenes) are left out (title.basics dump); --keep-video takes them.
 //
 //   node scripts/backfill-catalog.js --dry-run [--movie-votes 600] [--tv-votes 1000] [--episodes-top 1000]
-//   node scripts/backfill-catalog.js --execute [--limit N] [--category movie|tv] [--max-requests 200000]
+//   node scripts/backfill-catalog.js --execute [--limit N] [--category movie|tv] [--max-requests 200000] [--retry-misses]
 
 const fs = require('fs');
 const os = require('os');
@@ -55,11 +64,16 @@ function arg(name, fallback) {
 }
 const int = (name, def) => Math.max(0, parseInt(arg(name, String(def)), 10) || 0) || def;
 const EXECUTE = process.argv.includes('--execute');
-const MOVIE_VOTES = int('movie-votes', 600);
-const TV_VOTES = int('tv-votes', 1000);
+const RETRY_MISSES = process.argv.includes('--retry-misses');
+// defaults shared with the app's lists (src/catalog-coverage.js): change them there, not here
+const { MIN_VOTES } = require('../src/catalog-coverage');
+const MOVIE_VOTES = int('movie-votes', MIN_VOTES.movie);
+const TV_VOTES = int('tv-votes', MIN_VOTES.tv);
 const EPISODES_TOP = parseInt(arg('episodes-top', '3000'), 10) || 0;  // 0: every series under the cap
 const MAX_EPISODES = int('max-episodes', 500);
 const EPISODE_DUMP = process.env.IMDB_EPISODE_DUMP || 'G:/Catalogs/Sources/films/title.episode.tsv.gz';
+const BASICS_DUMP = process.env.IMDB_BASICS_DUMP || 'G:/Catalogs/Sources/films/title.basics.tsv.gz';
+const KEEP_VIDEO = process.argv.includes('--keep-video');   // IMDb `video` titles are left out by default (operator, Fri 20 Nov 2026)
 const LIMIT = parseInt(arg('limit', '0'), 10) || 0;
 const ONLY = arg('category', '');
 const MAX_REQUESTS = int('max-requests', 200000);
@@ -150,8 +164,24 @@ async function episodeCounts(ids) {
     return counts;
 }
 
+/** IMDb tconsts of the given ids whose title type is `video` (bonus features, deleted scenes, shorts: TMDB rarely
+ *  has them, 329 of the first run's misses), from the local title.basics dump. */
+async function videoTitles(ids) {
+    const zlib = require('zlib');
+    const readline = require('readline');
+    const out = new Set();
+    if (!fs.existsSync(BASICS_DUMP)) throw new Error(`IMDb title dump not found: ${BASICS_DUMP} (or pass --keep-video)`);
+    const rl = readline.createInterface({ input: fs.createReadStream(BASICS_DUMP).pipe(zlib.createGunzip()), crlfDelay: Infinity });
+    for await (const line of rl) {
+        const [tconst, type] = line.split('\t', 2);
+        if (type === 'video' && ids.has(tconst)) out.add(tconst);
+    }
+    return out;
+}
+
 function readSet(file) {
-    try { return new Set(fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean)); } catch (_) { return new Set(); }
+    // a line is a catalog id, optionally followed by a tab and a cause (misses)
+    try { return new Set(fs.readFileSync(file, 'utf8').split(/\r?\n/).map(l => l.split('\t')[0]).filter(Boolean)); } catch (_) { return new Set(); }
 }
 
 // ── what is stored ───────────────────────────────────────────────────────────
@@ -173,19 +203,25 @@ function certificationOf(data, category) {
     return c ? { country: r.iso_3166_1, rating: c.certification } : null;
 }
 
-function buildIngest(item, data, category, seasons) {
-    const en = T.slimDetails(data, category);
+/** `category` is TMDB's type for the data (movie | tv); `catalogCategory` the catalog item's, kept as is. */
+function buildIngest(item, data, category, seasons, catalogCategory = category) {
+    const cross = category !== catalogCategory;
+    // a TMDB movie stored on a catalog series (or the reverse) answers to both name and title
+    const alias = blob => { if (cross) { blob.name = blob.name || blob.title; blob.title = blob.title || blob.name; } return blob; };
+    const en = alias(T.slimDetails(data, category));
     if (seasons && Object.keys(seasons).length) en.season_details = seasons;
     const fr = frenchOf(data.translations);
     const frBlob = { ...en };
     delete frBlob.season_details;
     if (fr) {
-        if (category === 'tv') { if (fr.name) frBlob.name = fr.name; } else if (fr.title) frBlob.title = fr.title;
+        const frTitle = category === 'tv' ? fr.name : fr.title;
+        if (frTitle) { frBlob[category === 'tv' ? 'name' : 'title'] = frTitle; if (cross) frBlob[category === 'tv' ? 'title' : 'name'] = frTitle; }
         if (fr.overview) frBlob.overview = fr.overview;
         if (fr.tagline) frBlob.tagline = fr.tagline;
     }
     const keywords = data.keywords && (data.keywords.keywords || data.keywords.results);
     const ingest = T.detailsToIngest(data, en, category, 'en-US', item.catalog_id);
+    ingest.category = catalogCategory;
     ingest.poster_url = T.tmdbImage(data.poster_path, 'w780');
     ingest.raw_enrichment = {
         tmdb: {
@@ -195,7 +231,7 @@ function buildIngest(item, data, category, seasons) {
                 keywords: Array.isArray(keywords) ? keywords.map(k => k.name).slice(0, 30) : [],
                 certification: certificationOf(data, category),
                 origin_country: data.origin_country || (data.production_countries || []).map(c => c.iso_3166_1),
-                popularity: data.popularity || null, backfilled_at: new Date().toISOString(),
+                popularity: data.popularity || null, tmdb_type: category, backfilled_at: new Date().toISOString(),
             },
         },
     };
@@ -241,13 +277,16 @@ async function main() {
     const skippedLong = shows.length - underCap.length;
     const episodeTotal = [...episodeSet].reduce((a, cid) => a + (eps.get(cid.slice(5)) || 0), 0);
     let queue = [...shows.map(i => ({ item: i, category: 'tv' })), ...movies.map(i => ({ item: i, category: 'movie' }))]
-        .filter(q => !done.has(q.item.catalog_id) && !misses.has(q.item.catalog_id));
+        .filter(q => !done.has(q.item.catalog_id) && (RETRY_MISSES || !misses.has(q.item.catalog_id)));
+    const videos = KEEP_VIDEO || !queue.length ? new Set() : await videoTitles(new Set(queue.map(q => q.item.catalog_id.slice(5))));
+    if (videos.size) queue = queue.filter(q => !videos.has(q.item.catalog_id.slice(5)));
     if (LIMIT) queue = queue.slice(0, LIMIT);
 
     const needFind = queue.filter(q => !(q.item.external_ids && q.item.external_ids.tmdb)).length;
     console.log(`[backfill] films >= ${MOVIE_VOTES} votes: ${movies.length}; series >= ${TV_VOTES}: ${shows.length};` +
         ` episodes for ${episodeSet.size} series (${episodeTotal} episodes; ${skippedLong} over ${MAX_EPISODES} episodes` +
-        ` skipped); already done ${done.size}, misses ${misses.size}`);
+        ` skipped); already done ${done.size}, misses ${misses.size}${RETRY_MISSES ? ' (asked again: --retry-misses)' : ''}; ${videos.size} IMDb video titles left out` +
+        `${KEEP_VIDEO ? ' (--keep-video: none)' : ''}`);
     // episodes ride in the details request (15 seasons); a series past 15 seasons takes one more request per 20
     console.log(`[backfill] to do: ${queue.length} titles; ~${needFind + queue.length} requests (+1 per 20 seasons past` +
         ` the 15th), one per ${INTERVAL_MS} ms: ~${((needFind + queue.length) * INTERVAL_MS / 3600000).toFixed(1)} h;` +
@@ -285,33 +324,66 @@ async function main() {
         stored += batch.filter(b => saved.has(b.cid)).length;
         if (saved.size < batch.length) console.warn(`  the gateway skipped ${batch.length - saved.size} of ${batch.length} titles`);
     };
+    const missCauses = {};
+    const miss = (cid, cause) => {
+        fs.appendFileSync(MISS_FILE, `${cid}\t${cause}\n`);
+        missed++;
+        const kind = cause.split(':')[0];
+        missCauses[kind] = (missCauses[kind] || 0) + 1;
+    };
+    let crossed = 0;
     for (const [i, q] of queue.entries()) {
         try {
-            const imdb = q.item.catalog_id.slice(5);
-            let tmdbId = q.item.external_ids && q.item.external_ids.tmdb;
-            if (!tmdbId) {
+            const cid = q.item.catalog_id;
+            const imdb = cid.slice(5);
+            const other = q.category === 'tv' ? 'movie' : 'tv';
+            const storedId = q.item.external_ids && q.item.external_ids.tmdb;
+            const storedType = storedId ? q.item.external_ids.tmdb_type : null;
+            // TMDB's answer for the IMDb id: { id, type }, { miss: cause }, or null when TMDB did not answer
+            const findRef = async () => {
                 const found = await tmdb(`/find/${imdb}?external_source=imdb_id`);
-                if (!found) continue;                       // not answered: stays to do
-                const hit = (q.category === 'tv' ? found.tv_results : found.movie_results) || [];
-                tmdbId = hit[0] && hit[0].id;
-            }
+                if (!found) return null;
+                if (found.notFound) return { miss: 'find-404' };
+                const list = type => (type === 'tv' ? found.tv_results : found.movie_results) || [];
+                if (list(q.category)[0]) return { id: list(q.category)[0].id, type: q.category };
+                if (list(other)[0]) return { id: list(other)[0].id, type: other };
+                // TMDB folded the title into a series (as a season or an episode): not a title of its own there
+                const season = (found.tv_season_results || [])[0];
+                const episode = (found.tv_episode_results || [])[0];
+                return { miss: season ? `find-season:${season.show_id}` : episode ? `find-episode:${episode.show_id}` : 'find-empty' };
+            };
+            // a stored id is fetched as its stored type: the same number in the other type is another title
+            let tmdbId = storedId;
+            let tmdbType = storedType || q.category;
             if (!tmdbId) {
-                fs.appendFileSync(MISS_FILE, `${q.item.catalog_id}\n`);
-                missed++;
-                continue;
+                const ref = await findRef();
+                if (!ref) continue;                         // not answered: stays to do
+                if (ref.miss) { miss(cid, ref.miss); continue; }
+                tmdbId = ref.id;
+                tmdbType = ref.type;
             }
-            let seasonNumbers = [];
-            if (episodeSet.has(q.item.catalog_id)) {
-                // the season list comes with the details; ask for seasons 1..20 up front and the rest after
-                seasonNumbers = Array.from({ length: 15 }, (_, k) => k + 1);
+            // the season list comes with the details; ask for seasons 1..15 up front and the rest after
+            const seasonsFor = type => (type === 'tv' && episodeSet.has(cid) ? Array.from({ length: 15 }, (_, k) => k + 1) : []);
+            let seasonNumbers = seasonsFor(tmdbType);
+            let got = await details(tmdbType, tmdbId, seasonNumbers);
+            if (got && got.notFound && storedId && !storedType) {
+                // an untyped stored id (from before tmdb_type) that 404s: /find says what the IMDb id is. Only the
+                // same number of the other type is taken; the catalog fills empty keys only, so a different id
+                // would sit beside the old one
+                const ref = await findRef();
+                if (!ref) continue;
+                if (!ref.miss && Number(ref.id) === Number(tmdbId) && ref.type !== tmdbType) {
+                    tmdbType = ref.type;
+                    seasonNumbers = seasonsFor(tmdbType);
+                    got = await details(tmdbType, tmdbId, seasonNumbers);
+                } else if (!ref.miss) {
+                    miss(cid, `details-404-stale:${tmdbType}/${tmdbId}->${ref.type}/${ref.id}`);
+                    continue;
+                }
             }
-            const got = await details(q.category, tmdbId, seasonNumbers);
             if (!got) continue;
-            if (got.notFound) {
-                fs.appendFileSync(MISS_FILE, `${q.item.catalog_id}\n`);
-                missed++;
-                continue;
-            }
+            if (got.notFound) { miss(cid, `details-404:${tmdbType}/${tmdbId}`); continue; }
+            if (tmdbType !== q.category) crossed++;
             // a series with more seasons than asked for up front
             if (seasonNumbers.length && got.data.number_of_seasons > seasonNumbers.length) {
                 const rest = Array.from({ length: got.data.number_of_seasons - seasonNumbers.length }, (_, k) => k + 16);
@@ -322,8 +394,8 @@ async function main() {
                     else got.incomplete = true;
                 }
             }
-            pending.push({ cid: q.item.catalog_id, incomplete: !!got.incomplete,
-                           ingest: buildIngest(q.item, got.data, q.category, got.seasons) });
+            pending.push({ cid, incomplete: !!got.incomplete,
+                           ingest: buildIngest(q.item, got.data, tmdbType, got.seasons, q.category) });
             if (pending.length >= 50) await flush();
         } catch (e) {
             if (!(e instanceof Stop)) throw e;
@@ -336,7 +408,8 @@ async function main() {
         }
     }
     await flush();
-    console.log(`[backfill] stored ${stored}, missed ${missed}, ${requests} TMDB requests, ` +
+    console.log(`[backfill] stored ${stored} (${crossed} under TMDB's other type), missed ${missed}` +
+        `${missed ? ` (${Object.entries(missCauses).map(([k, n]) => `${k} ${n}`).join(', ')})` : ''}, ${requests} TMDB requests, ` +
         `${((Date.now() - t0) / 60000).toFixed(1)} min${stop ? `; stopped: ${stop}` : ''}`);
     if (stop) process.exitCode = 2;
 }
