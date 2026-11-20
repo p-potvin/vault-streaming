@@ -9,11 +9,17 @@ window._currentModalImdbId = null;
 let _currentModalTitle = null;
 let _currentModalMediaType = null;
 
+// Series progress for the open show: saved episodes by "s<S>e<E>", and the episode to resume or play next.
+let _tvModalToken = 0;          // bumps on every series opened; stale async results are dropped
+let _seasonLoadToken = 0;       // bumps on every season list load (a quick season switch keeps the last one)
+let _showProgress = new Map();
+let _resumeTarget = null;       // { kind: 'resume' | 'next', season, episode, positionSec? }
+
 /**
  * Open the streaming-details-modal for a media item from the TMDB card grid.
  * @param {object} movie - The media object from the card grid (has id, title, media_type, etc.)
  */
-window.showMediaDetails = async function(movie, startAtTime = 0) {
+window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted = null } = {}) {
     const modal = el('streaming-details-modal');
     if (!modal) return;
 
@@ -27,6 +33,8 @@ window.showMediaDetails = async function(movie, startAtTime = 0) {
     _currentModalMediaType = movie.media_type;
     window._currentTrailerKey = null;
     window._persistedTrailerTime = startAtTime;
+    // The hover preview's sound state carries into the modal's trailer (null = the "Mute trailers" setting).
+    window._persistedTrailerMuted = typeof trailerMuted === 'boolean' ? trailerMuted : null;
 
     // Show modal immediately with available data
     modal.style.display = 'flex';
@@ -142,6 +150,7 @@ window.showMediaDetails = async function(movie, startAtTime = 0) {
 };
 
 async function _setupMovieModal(movie) {
+    _tvModalToken++;   // a series still loading in the background no longer fills the modal
     const movieActions = el('movie-actions-container');
     if (!movieActions) return;
     movieActions.style.display = 'flex';
@@ -229,11 +238,17 @@ async function _setupTVModal(movie) {
         };
     }
 
+    const token = ++_tvModalToken;
+    _showProgress = new Map();
+    _resumeTarget = null;
+    _renderResumeRow(movie.id);
+
     seasonSelect.innerHTML = '<option value="">Loading seasons...</option>';
     episodesList.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--vault-slate); padding:20px;">Loading...</td></tr>';
 
     try {
         const tvRes = await window.electronAPI.getTMDBTV({ id: movie.id, language: window.tmdbLanguage() });
+        if (token !== _tvModalToken) return;   // another title was opened meanwhile
         if (!tvRes || !tvRes.success || !tvRes.data) {
             seasonSelect.innerHTML = '<option value="">No seasons found</option>';
             return;
@@ -264,22 +279,26 @@ async function _setupTVModal(movie) {
             `<option value="${s.season_number}">${window.escapeHtml(s.name || `Season ${s.season_number}`)} (${s.episode_count} ep.)</option>`
         ).join('');
 
-        // Remember the last-watched season for this show and default the picker to it.
+        // Where the show stands: every saved episode, then the one to resume (or the next after a finished one).
         let defaultSeason = seasons[0].season_number;
         try {
-            const prog = await window.electronAPI.getWatchProgress({
-                mediaType: 'tv',
-                tmdbId: movie.id,
-                title: movie.title || movie.name
-            });
-            if (prog && prog.season != null && seasons.some(s => s.season_number === prog.season)) {
-                defaultSeason = prog.season;
-                seasonSelect.value = String(prog.season);
+            const res = window.electronAPI.getShowProgress
+                ? await window.electronAPI.getShowProgress({ tmdbId: movie.id, title: movie.title || movie.name })
+                : null;
+            if (token !== _tvModalToken) return;   // another title was opened meanwhile
+            const items = (res && res.success && Array.isArray(res.items)) ? res.items : [];
+            for (const it of items) _showProgress.set(_epKey(it.season, it.episode), it);
+            _resumeTarget = _pickResumeTarget(items, seasons);
+            const wanted = _resumeTarget ? _resumeTarget.season : (items[0] && items[0].season);
+            if (wanted != null && seasons.some(s => s.season_number === wanted)) {
+                defaultSeason = wanted;
+                seasonSelect.value = String(wanted);
             }
         } catch (e) {
             // Non-fatal: fall back to the first season.
-            console.warn('[streaming] Could not resolve remembered season:', e);
+            console.warn('[streaming] Could not resolve the show progress:', e);
         }
+        _renderResumeRow(movie.id);
 
         // Load episodes for the remembered (or first) season
         await _loadSeasonEpisodes(movie.id, defaultSeason);
@@ -300,12 +319,86 @@ async function _setupTVModal(movie) {
     }
 }
 
+function _epKey(season, episode) {
+    return `s${Number(season)}e${Number(episode)}`;
+}
+
+function _epLabel(season, episode) {
+    return `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+}
+
+function _clock(sec) {
+    const s = Math.max(0, Math.floor(sec || 0));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    const mm = h ? String(m).padStart(2, '0') : String(m);
+    return `${h ? `${h}:` : ''}${mm}:${String(r).padStart(2, '0')}`;
+}
+
+/**
+ * The episode to offer from the show's saved episodes (most recent first) and its TMDB seasons:
+ * the last one watched when it is not finished, else the next one (same season +1, else episode 1 of the
+ * next season). Null when nothing was watched or the last finished episode is the show's last.
+ */
+function _pickResumeTarget(items, seasons) {
+    const last = items && items[0];
+    if (!last || last.season == null || last.episode == null) return null;
+    const season = Number(last.season), episode = Number(last.episode);
+    if (!last.completed) return { kind: 'resume', season, episode, positionSec: last.positionSec || 0 };
+    const ordered = [...seasons].sort((a, b) => a.season_number - b.season_number);
+    const done = new Set(items.filter(it => it.completed).map(it => _epKey(it.season, it.episode)));
+    const after = (sn, en) => {
+        const cur = ordered.find(s => s.season_number === sn);
+        if (cur && en < cur.episode_count) return { season: sn, episode: en + 1 };
+        const nextSeason = ordered.find(s => s.season_number > sn);
+        return nextSeason ? { season: nextSeason.season_number, episode: 1 } : null;
+    };
+    // the first episode after the last one finished that is not finished already (a rewatch of an older one
+    // does not send the show back to an episode seen since)
+    let next = after(season, episode);
+    for (let guard = 0; next && done.has(_epKey(next.season, next.episode)) && guard < 1000; guard++) {
+        next = after(next.season, next.episode);
+    }
+    return next ? { kind: 'next', ...next } : null;
+}
+
+/** The "Resume S02E05 (12:40)" / "Next: S02E06" button above the season picker (hidden when there is nothing). */
+function _renderResumeRow(tvId) {
+    const row = el('tv-resume-row');
+    const btn = el('btn-tv-resume');
+    const note = el('tv-resume-note');
+    if (!row || !btn) return;
+    const fr = window.currentLang === 'fr';
+    const target = _resumeTarget;
+    if (!target) {
+        row.style.display = 'none';
+        btn.onclick = null;
+        return;
+    }
+    const label = _epLabel(target.season, target.episode);
+    const bolt = window.icons ? window.icons.lightning('', 'width:11px;height:11px;vertical-align:middle;margin-right:4px;') : '';
+    if (target.kind === 'resume') {
+        const at = target.positionSec > 30 ? ` (${_clock(target.positionSec)})` : '';
+        btn.innerHTML = `${bolt}${window.escapeHtml(`${fr ? 'Reprendre' : 'Resume'} ${label}${at}`)}`;
+        if (note) note.textContent = fr ? 'Dernier épisode regardé' : 'Last episode watched';
+    } else {
+        btn.innerHTML = `${bolt}${window.escapeHtml(fr ? `Suivant : ${label}` : `Next: ${label}`)}`;
+        const prev = [..._showProgress.values()][0];
+        if (note) note.textContent = prev
+            ? `${_epLabel(prev.season, prev.episode)} ${fr ? 'terminé' : 'finished'}`
+            : '';
+    }
+    btn.onclick = () => window._streamEpisode(tvId, target.season, target.episode);
+    row.style.display = 'flex';
+}
+
 async function _loadSeasonEpisodes(tvId, seasonNumber) {
     const episodesList = el('tv-episodes-list');
     if (!episodesList) return;
+    const loadToken = ++_seasonLoadToken;
 
     try {
         const seasonRes = await window.electronAPI.getTMDBTVSeason({ id: tvId, seasonNumber, language: window.tmdbLanguage() });
+        if (loadToken !== _seasonLoadToken) return;   // another season (or show) was asked for meanwhile
         if (!seasonRes || !seasonRes.success || !seasonRes.data) {
             episodesList.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--vault-slate);padding:16px;">No episodes found.</td></tr>';
             return;
@@ -317,24 +410,38 @@ async function _loadSeasonEpisodes(tvId, seasonNumber) {
             return;
         }
 
+        const fr = window.currentLang === 'fr';
+        const target = _resumeTarget && _resumeTarget.season === Number(seasonNumber) ? _resumeTarget.episode : null;
         episodesList.innerHTML = episodes.map(ep => {
             const num = ep.episode_number;
             const title = window.escapeHtml(ep.name || `Episode ${num}`);
             const airDate = ep.air_date ? ep.air_date.substring(0, 7) : '';
             const rating = ep.vote_average ? `${window.icons.star('', 'width:10px;height:10px;vertical-align:middle;')} ${ep.vote_average.toFixed(1)}` : '';
+            const prog = _showProgress.get(_epKey(seasonNumber, num));
+            const pct = prog && prog.durationSec > 0 ? Math.min(100, Math.round((prog.positionSec / prog.durationSec) * 100)) : 0;
+            let state = '';
+            if (prog && prog.completed) {
+                state = `<span class="tv-ep-watched-mark">✓ ${fr ? 'Vu' : 'Watched'}</span>`;
+            } else if (prog && prog.positionSec > 30) {
+                state = `<span>${window.escapeHtml(`${fr ? 'Arrêté à' : 'Stopped at'} ${_clock(prog.positionSec)}`)}</span>`;
+            }
+            const bar = prog && (prog.completed || pct > 0)
+                ? `<span class="tv-ep-progress" aria-hidden="true"><span style="width:${prog.completed ? 100 : pct}%"></span></span>` : '';
+            const cls = ['tv-ep-row', prog && prog.completed ? 'tv-ep-watched' : '', num === target ? 'tv-ep-target' : '']
+                .filter(Boolean).join(' ');
             return `
-                <tr style="border-bottom:1px solid var(--vault-border); transition:background 0.15s;" 
-                    onmouseenter="this.style.background='rgba(255,255,255,0.03)'"
-                    onmouseleave="this.style.background='transparent'">
+                <tr class="${cls}" data-episode="${num}">
                     <td style="padding:10px 12px; color:var(--vault-accent); font-family:var(--font-mono); font-weight:700; font-size:12px;">
                         E${num}
                     </td>
                     <td style="padding:10px 12px;">
-                        <div style="font-weight:600; color:#fff; font-size:12px; margin-bottom:2px;">${title}</div>
+                        <div class="tv-ep-title" style="font-weight:600; font-size:12px; margin-bottom:2px;">${title}</div>
                         <div style="font-size:10px; color:var(--vault-slate); display:flex; gap:10px;">
                             ${airDate ? `<span>${airDate}</span>` : ''}
                             ${rating ? `<span style="color:var(--vault-gold);">${rating}</span>` : ''}
+                            ${state}
                         </div>
+                        ${bar}
                     </td>
                     <td style="padding:10px 12px; text-align:right;">
                         <button 
@@ -346,6 +453,13 @@ async function _loadSeasonEpisodes(tvId, seasonNumber) {
                     </td>
                 </tr>`;
         }).join('');
+
+        // Bring the episode to resume (or the next one) into view inside the list, not the whole modal.
+        const targetRow = target != null ? episodesList.querySelector(`tr[data-episode="${target}"]`) : null;
+        const box = episodesList.closest('.tv-episodes-container');
+        if (targetRow && box) {
+            box.scrollTop = Math.max(0, targetRow.offsetTop - box.clientHeight / 2 + targetRow.offsetHeight / 2);
+        }
 
     } catch (e) {
         console.error('[streaming] Failed to load season episodes:', e);

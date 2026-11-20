@@ -290,6 +290,23 @@ function pickDeepbridSource(ranked, { pick = null } = {}) {
 }
 
 /**
+ * Waiting for Real-Debrid. Real-Debrid no longer says what it has cached, so Comet marks almost nothing ⚡; a source
+ * that is not on Real-Debrid yet answers its first try with a placeholder, and that try is what makes Comet add it to
+ * Real-Debrid. Popular episodes then finish within a minute or two, so the flow asks again for the likeliest of those
+ * sources before giving up: single episodes / films before packs (a pack is a far longer download), at most
+ * RD_WAIT_SOURCES of them, every RD_WAIT_INTERVAL_MS for RD_WAIT_ROUNDS rounds (≤ 12 requests to our Comet).
+ */
+const RD_WAIT_SOURCES = 2;
+const RD_WAIT_ROUNDS = 6;
+const RD_WAIT_INTERVAL_MS = 15000;
+
+function pickWaitSources(placeholderSources, max = RD_WAIT_SOURCES) {
+    const list = (Array.isArray(placeholderSources) ? placeholderSources : []).filter(t => t && t.url && t.fit !== 'other');
+    const singles = list.filter(t => t.fit !== 'pack');
+    return [...singles, ...list.filter(t => t.fit === 'pack')].slice(0, Math.max(0, max));
+}
+
+/**
  * Moments (vault-raggae) reads the whole stream once for its transcript and search vectors: a 4K remux means tens of
  * GB downloaded a second time and a heavy decode. Above 1080p it reads a 720p / 480p copy instead (operator, Fri 20
  * Nov 2026): the same release group first (closest timing to what plays, since the transcript doubles as subtitles),
@@ -321,10 +338,12 @@ window.rankTorrents = rankTorrents;
 window.buildPlayQueue = buildPlayQueue;
 window.pickDeepbridSource = pickDeepbridSource;
 window.PLAY_QUEUE_BUDGET_MS = PLAY_QUEUE_BUDGET_MS;
+window.pickWaitSources = pickWaitSources;
+window.RD_WAIT = { rounds: RD_WAIT_ROUNDS, intervalMs: RD_WAIT_INTERVAL_MS };
 
 // Node (tests): the same functions without a browser.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { scoreTorrent, rankTorrents, isRejectedForAutoPlay, buildPlayQueue, pickDeepbridSource, momentsCopyCandidates,
-                       PLAY_QUEUE_MAX, PLAY_QUEUE_BUDGET_MS };
+                       pickWaitSources, PLAY_QUEUE_MAX, PLAY_QUEUE_BUDGET_MS, RD_WAIT_ROUNDS, RD_WAIT_INTERVAL_MS };
 }
 

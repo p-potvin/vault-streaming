@@ -107,6 +107,8 @@ window.translationsFr = {
   settingDefaultSubtitle: "Sous-titres par défaut :",
   settingSubtitleFontSize: "Taille des sous-titres :",
   settingRememberPlayback: "Retenir la position de lecture :",
+  settingWatchedAt: "Marquer comme vu à :",
+  settingWatchedAtHint: "Un film ou un épisode compte comme vu (Reprendre l'écoute, la liste des épisodes, Épisode suivant) une fois la lecture rendue à cette part de sa durée.",
   settingMuteTrailers: "Couper le son des bandes-annonces :",
   settingMinimizeToTray: "Réduire dans la barre d'état :",
   settingDevMode: "Mode développeur (journaux détaillés) :",

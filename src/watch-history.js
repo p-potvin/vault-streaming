@@ -87,6 +87,30 @@ function makeKey(mediaType, tmdbId, title, season, episode) {
     return `${mediaType || 'movie'}:${tmdbId || title}`;
 }
 
+// Settings → "Mark as Watched at" (appSettings.watchedAtPercent, 50–100, default 95), read from the settings file the
+// renderer saves; re-read only when the file changes. Same rule as js/utils.js (window.watchedAtPercent).
+const WATCHED_AT_DEFAULT = 95;
+let _watchedAt = { mtimeMs: -1, pct: WATCHED_AT_DEFAULT };
+function watchedAtPercent() {
+    try {
+        const p = path.join(_app.getPath('userData'), 'vault-settings.json');
+        const { mtimeMs } = fs.statSync(p);
+        if (mtimeMs !== _watchedAt.mtimeMs) {
+            const raw = JSON.parse(fs.readFileSync(p, 'utf8')).watchedAtPercent;
+            const n = Math.round(Number(raw));
+            _watchedAt = { mtimeMs, pct: raw != null && raw !== '' && Number.isFinite(n) ? Math.min(100, Math.max(50, n)) : WATCHED_AT_DEFAULT };
+        }
+    } catch (_) { /* no settings file yet: the default */ }
+    return _watchedAt.pct;
+}
+
+/** Same show: ids compared as strings (a show saved with 1399 and asked with "1399" is the same one), else the title. */
+function sameShow(item, tmdbId, title) {
+    if (item.mediaType !== 'tv') return false;
+    if (tmdbId != null && tmdbId !== '' && item.tmdbId != null && String(item.tmdbId) === String(tmdbId)) return true;
+    return title != null && item.title === title;
+}
+
 function registerWatchHistoryHandlers(ipcMain, app) {
     _app = app;
 
@@ -108,8 +132,8 @@ function registerWatchHistoryHandlers(ipcMain, app) {
             episode: episode || null,
             positionSec: positionSec || 0,
             durationSec: durationSec || 0,
-            // Completed if watched >90% of runtime
-            completed: durationSec > 0 && (positionSec / durationSec) >= 0.9,
+            // Completed once playback reaches Settings → "Mark as Watched at" (95 % by default)
+            completed: durationSec > 0 && (positionSec / durationSec) >= watchedAtPercent() / 100,
             poster: realPoster(poster) || realPoster(existing.poster) || null,
             year: year || existing.year || null,
             lastWatched: new Date().toISOString(),
@@ -125,10 +149,7 @@ function registerWatchHistoryHandlers(ipcMain, app) {
     ipcMain.handle('watch-history:get-progress', (_e, { mediaType, tmdbId, title, season, episode }) => {
         const history = loadHistory();
         if (mediaType === 'tv' && (season == null || episode == null)) {
-            const tvItems = Object.values(history.items).filter(item =>
-                item.mediaType === 'tv' &&
-                ((tmdbId != null && item.tmdbId === tmdbId) || (title != null && item.title === title))
-            );
+            const tvItems = Object.values(history.items).filter(item => sameShow(item, tmdbId, title));
             if (tvItems.length > 0) {
                 tvItems.sort((a, b) => new Date(b.lastWatched) - new Date(a.lastWatched));
                 return tvItems[0];
@@ -137,6 +158,15 @@ function registerWatchHistoryHandlers(ipcMain, app) {
         }
         const key = makeKey(mediaType, tmdbId, title, season, episode);
         return history.items[key] || null;
+    });
+
+    // ── Every saved episode of a show (the details modal marks them), most recent first ──
+    ipcMain.handle('watch-history:show-progress', (_e, { tmdbId, title } = {}) => {
+        const history = loadHistory();
+        const items = Object.values(history.items)
+            .filter(item => sameShow(item, tmdbId, title) && item.season != null && item.episode != null)
+            .sort((a, b) => new Date(b.lastWatched) - new Date(a.lastWatched));
+        return { success: true, items };
     });
 
     // ── Get "Continue Watching" list (incomplete, sorted by recency) ─────────

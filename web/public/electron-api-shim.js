@@ -420,6 +420,7 @@
     // Watch history
     setWatchProgress: inv('watch-history:set-progress'),
     getWatchProgress: inv('watch-history:get-progress'),
+    getShowProgress: inv('watch-history:show-progress'),
     getContinueWatching: inv('watch-history:continue-watching'),
     getWatchHistory: inv('watch-history:get-all'),
     markWatched: inv('watch-history:mark-watched'),

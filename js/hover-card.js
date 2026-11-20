@@ -103,6 +103,13 @@ window.attachPremiumHoverCard = function(card, movie) {
     });
 };
 
+/** Where the hover preview is and whether it is muted (null when no preview video is playing). */
+function previewState(popup) {
+    const vid = popup.querySelector('.trailer-iframe-container video');
+    if (!vid) return { currentTime: 0, trailerMuted: null };
+    return { currentTime: vid.currentTime || 0, trailerMuted: !!(vid.muted || vid.volume === 0) };
+}
+
 window.showPremiumHoverCard = function(card, movie) {
     let popup = document.getElementById('premium-hover-card');
     if (!popup) {
@@ -141,14 +148,9 @@ window.showPremiumHoverCard = function(card, movie) {
         e.preventDefault();
         e.stopPropagation();
         
-        // Save current trailer playback time if playing
-        const vid = popup.querySelector('video');
-        let currentTime = 0;
-        if (vid) {
-            currentTime = vid.currentTime;
-        }
-        
-        window.showMediaDetails(movie, currentTime);
+        // Carry the preview's position and sound state into the details modal's trailer
+        const { currentTime, trailerMuted } = previewState(popup);
+        window.showMediaDetails(movie, currentTime, { trailerMuted });
         window.hidePremiumHoverCard();
     };
     
@@ -278,15 +280,9 @@ window.showPremiumHoverCard = function(card, movie) {
         e.stopPropagation();
         e.preventDefault();
         
-        // Save current trailer playback time if playing
-        const vid = popup.querySelector('video');
-        let currentTime = 0;
-        if (vid) {
-            currentTime = vid.currentTime;
-        }
-        
+        const { currentTime, trailerMuted } = previewState(popup);
         window.hidePremiumHoverCard();
-        window.showMediaDetails(movie, currentTime);
+        window.showMediaDetails(movie, currentTime, { trailerMuted });
     });
     
     const rect = card.getBoundingClientRect();

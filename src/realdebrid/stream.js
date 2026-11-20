@@ -33,6 +33,18 @@ async function resolveCometUrl(url) {
 // but can't actually serve (RD's optimistic URLs since instantAvailability died).
 const MIN_REAL_BYTES = 50 * 1024 * 1024; // 50 MB
 
+// Comet answers a failed playback with one of its status videos (comet/assets/status_videos/<KEY>.mp4), with no header
+// naming the status: only the size tells them apart. Measured on our Comet, Fri 20 Nov 2026:
+//   433,923 B = MEDIA_NOT_CACHED_YET: Real-Debrid accepted the torrent and is downloading it — asking again later works.
+//   410,511 B = UNAVAILABLE_FOR_LEGAL_REASONS (Real-Debrid "infringing_file", HTTP 451: a copyright block on that
+//               release), also SERVER_ERROR / DOWNLOAD_SERVER_ERROR / NO_SERVER / MAINTENANCE: refused, waiting is useless.
+//               American Dad S06E14 and Family Guy S04E02 got this for every uncached release.
+// Other sizes (or a new Comet with other videos) stay a plain placeholder: no wait, next source.
+const STATUS_VIDEO_BYTES = { 433923: 'notCachedYet', 410511: 'refused' };
+function placeholderKind(totalBytes) {
+    return STATUS_VIDEO_BYTES[totalBytes] || 'unknown';
+}
+
 // Probe the resolved stream's real total size with ONE tiny GET range request
 // to the COMET PROXY url (same origin the player hits — stays on Comet's IP,
 // never touches the RD CDN directly). Returns total bytes, or null if unknown.
@@ -95,9 +107,16 @@ function registerStreamHandlers(ipcMain) {
             // instantAvailability check. Reject placeholder-sized streams so the
             // caller can fall back to the next ranked source.
             // An uncached source makes Comet add it to Real-Debrid on this first hit: give it longer to answer.
-            const totalBytes = await probeStreamBytes(streamUrl, markedCached ? 12000 : 20000);
+            let totalBytes = await probeStreamBytes(streamUrl, markedCached ? 12000 : 20000);
+            // A ⚡ source used to be trusted when its probe timed out; American Dad S06E14 (Fri 20 Nov 2026) then played
+            // a Comet error video. Ask once more with a longer wait: a slow link generation answers by then.
+            if (totalBytes === null && markedCached) {
+                console.warn('[Comet] size probe timed out — probing once more');
+                totalBytes = await probeStreamBytes(streamUrl, 25000);
+            }
             if (totalBytes !== null && totalBytes < MIN_REAL_BYTES) {
-                console.warn(`[Comet] Placeholder detected (${(totalBytes / 1048576).toFixed(1)} MB) — not actually cached.`);
+                const kind = placeholderKind(totalBytes);
+                console.warn(`[Comet] Placeholder detected (${totalBytes} B, ${kind}) — not playable now.`);
                 // The single most useful signal for cutting a service: it
                 // claimed a cache hit and served a stub.
                 recordOutcome(name, 'placeholder');
@@ -105,7 +124,13 @@ function registerStreamHandlers(ipcMain) {
                     success: false,
                     notCached: true,
                     placeholder: true,
-                    error: 'Provider returned a placeholder (not actually cached). Trying the next source.'
+                    notCachedYet: kind === 'notCachedYet',
+                    refused: kind === 'refused',
+                    error: kind === 'refused'
+                        ? 'Real-Debrid refused this release (most often a copyright block). Trying the next source.'
+                        : kind === 'notCachedYet'
+                            ? 'Real-Debrid is downloading this release (not cached yet). Trying the next source.'
+                            : 'Provider returned a placeholder (not actually cached). Trying the next source.'
                 };
             }
             // A source Comet did not mark cached (⬇️) is often on Real-Debrid anyway, which is why it is tried at
@@ -143,4 +168,4 @@ function registerStreamHandlers(ipcMain) {
     });
 }
 
-module.exports = { registerStreamHandlers };
+module.exports = { registerStreamHandlers, placeholderKind };

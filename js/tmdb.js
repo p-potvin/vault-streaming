@@ -262,7 +262,7 @@ window.renderTMDB = async function (query = '', append = false) {
             const movieSvg = window.icons ? window.icons.movie('', 'width:11px; height:11px; display:inline-block;') : '';
 
             card.innerHTML = `
-                <div class="thumbnail-container" style="position:relative; background:#111; height: 180px; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
+                <div class="thumbnail-container" style="position:relative; background:#111; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
                    <!-- Informational only. These were <button>s, but hovering a card
                         sets visibility:hidden on it and swaps in the hover popup, so
                         neither could ever be clicked. The popup already carries play,
@@ -273,12 +273,14 @@ window.renderTMDB = async function (query = '', append = false) {
                    </div>
                    ${isCurrentlySaved ? `<div class="card-lib-badge" title="${(window.translations[window.currentLang]||{}).addedToLibrary || 'In your library'}" style="position:absolute; top:8px; right:8px; border:1px solid var(--vault-gold); background:var(--vault-gold); color:var(--vt-primary); width:24px; height:24px; border-radius:4px; display:flex; align-items:center; justify-content:center; z-index:10; padding:0; pointer-events:none;">${window.icons ? window.icons.checkmark('', 'width:12px;height:12px;') : ''}</div>` : ''}
                    <img class="thumbnail" src="${movie.poster}" alt="${window.escapeHtml(movie.title)}" style="object-fit: cover; width:100%; height:100%; transition: opacity 0.25s ease;" onerror="this.src='public/poster_placeholder.svg'">
-                   <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; width: 28px; height: 28px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8.5px; line-height: 1.1; padding: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
-                      <span>${window.icons.star('', 'width:10px;height:10px;', 'currentColor', 'currentColor')}</span>
-                      <span style="margin-top:-1px;">${movie.rating}</span>
-                   </div>
                 </div>
                 <div class="filename-container" style="padding:12px; text-align:left;">
+                   <div class="card-badge-row">
+                      <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; width: 28px; height: 28px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8.5px; line-height: 1.1; padding: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
+                      <span>${window.icons.star('', 'width:10px;height:10px;', 'currentColor', 'currentColor')}</span>
+                      <span style="margin-top:-1px;">${movie.rating}</span>
+                      </div>
+                   </div>
                    <div style="font-weight:700; font-size:13px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono);">${window.escapeHtml(movie.title)}</div>
                    <div style="font-size:10px; color:var(--vault-slate); margin-top:2px; font-weight:500;">${movie.year} • ${window.escapeHtml(movie.genres)}</div>
                    <div style="font-size:11px; color:#bbb; margin-top:6px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; font-family:var(--font-body);">${window.escapeHtml(movie.overview)}</div>

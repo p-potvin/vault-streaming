@@ -130,8 +130,10 @@ const _fmtCount = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}
 // ── Showing a subtitle ───────────────────────────────────────────────────────
 
 function _disableAllTracks(vp) {
-    vp.querySelectorAll('track').forEach(t => t.remove());
+    // Off first, then removed: a removed <track> is no longer in vp.textTracks, so disabling afterwards missed it and
+    // its cues kept showing (subtitles from earlier picks stacked over the new ones).
     for (let i = 0; i < vp.textTracks.length; i++) vp.textTracks[i].mode = 'disabled';
+    vp.querySelectorAll('track').forEach(t => { if (t.track) t.track.mode = 'disabled'; t.remove(); });
 }
 
 function _shiftCues(track, delta) {

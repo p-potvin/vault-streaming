@@ -71,7 +71,40 @@ function loadCometStreamBase() {
         }
     }
     if (!raw) return '';
-    return raw.replace(/\/manifest\.json\/*$/i, '').replace(/\/+$/, '');
+    return keepUntaggedReleases(raw.replace(/\/manifest\.json\/*$/i, '').replace(/\/+$/, ''));
+}
+
+/**
+ * Clear `languages.required` in the Comet config of a base URL (the base64 JSON path segment).
+ *
+ * With required = ["multi","en","fr"], Comet drops every release that names no language, which is how most English
+ * releases are named. Measured Fri 20 Nov 2026 on American Dad S06E14: 7 streams (2 torrents, none cached, both
+ * tagged "ENG"/"Eng") instead of 15, and the one Real-Debrid already had cached was among those dropped. Popular
+ * cartoons never played. `allowed` and `preferred` stay as configured (preferred still ranks multi/en/fr first).
+ * Returns the base unchanged when it holds no readable config or nothing is required.
+ */
+function keepUntaggedReleases(base) {
+    try {
+        const u = new URL(base);
+        const segs = u.pathname.split('/');
+        const i = segs.findIndex(s => s.startsWith('eyJ'));
+        if (i < 0) return base;
+        const cfg = JSON.parse(Buffer.from(segs[i], 'base64').toString('utf8'));
+        if (!cfg || !cfg.languages || !Array.isArray(cfg.languages.required) || !cfg.languages.required.length) return base;
+        cfg.languages = { ...cfg.languages, required: [] };
+        // Comet decodes standard base64 from a path segment, so the encoding must not contain "/": trailing
+        // whitespace (valid JSON) changes the last characters until it does not.
+        const json = JSON.stringify(cfg);
+        for (let pad = 0; pad < 6; pad++) {
+            const enc = Buffer.from(json + ' '.repeat(pad), 'utf8').toString('base64');
+            if (!enc.includes('/')) {
+                segs[i] = enc;
+                console.log('[Comet] config: language requirement cleared (releases without a language tag are kept)');
+                return `${u.origin}${segs.join('/')}`;
+            }
+        }
+    } catch (_) { /* not a config we can read: use it as given */ }
+    return base;
 }
 
 const COMET_STREAM_BASE = loadCometStreamBase();
@@ -103,4 +136,5 @@ function cometUrl(p) {
     return s.startsWith('comet:') && COMET_STREAM_BASE ? COMET_STREAM_BASE + s.slice('comet:'.length) : s;
 }
 
-module.exports = { fetchWithTimeout, checkRealDebridCache, RD_TOKEN, TMDB_BEARER_TOKEN, COMET_STREAM_BASE, cometPath, cometUrl };
+module.exports = { fetchWithTimeout, checkRealDebridCache, RD_TOKEN, TMDB_BEARER_TOKEN, COMET_STREAM_BASE, cometPath, cometUrl,
+                   keepUntaggedReleases };

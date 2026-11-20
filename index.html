@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.7.0 -->
+<!-- v2.8.0 -->
 <html lang="en">
 
 <head>
@@ -351,6 +351,15 @@
           <input type="checkbox" id="settings-remember-position" class="settings-checkbox" />
         </div>
 
+        <div class="settings-toggle-row" data-i18n-title="settingWatchedAtHint"
+          title="A movie or episode counts as watched (Continue Watching, the episode list, Next episode) once playback reaches this share of its runtime.">
+          <label for="settings-watched-at" class="settings-toggle-label" data-i18n="settingWatchedAt">Mark as Watched at:</label>
+          <span class="settings-percent">
+            <input type="number" id="settings-watched-at" class="settings-select settings-number" min="50" max="100" step="1" value="95" />
+            <span aria-hidden="true">%</span>
+          </span>
+        </div>
+
         <div class="settings-toggle-row" title="Start trailers muted (they play at 80% volume otherwise).">
           <span class="settings-toggle-label" data-i18n="settingMuteTrailers">Mute Trailers by Default:</span>
           <input type="checkbox" id="settings-mute-trailers" class="settings-checkbox" />
@@ -622,6 +631,11 @@
 
     <!-- TV Series Season & Episode Selector (shown only for TV shows) -->
     <div id="tv-actions-container">
+      <div class="tv-resume-row" id="tv-resume-row">
+        <button type="button" class="tv-resume-btn" id="btn-tv-resume"></button>
+        <span class="tv-resume-note" id="tv-resume-note"></span>
+      </div>
+
       <div class="tv-season-row">
         <label for="tv-season-select" class="tv-season-label" data-i18n="selectSeason">Select Season:</label>
         <select id="tv-season-select"></select>
