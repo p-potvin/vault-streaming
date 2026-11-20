@@ -177,6 +177,8 @@
           { type: 'separator' },
           { label: 'AI Enhancements 🪄', submenu: aiSubmenu },
           { type: 'separator' },
+          // a fresh link at the same position (js/player/player.js, reloadStream); F5 too
+          ...(isLocal ? [] : [{ label: 'Reload Stream (F5)', action: 'reload-stream' }]),
           {
             label: isLocal ? 'Copy Path' : 'Copy Stream URL',
             action: 'copied',

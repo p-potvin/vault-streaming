@@ -183,17 +183,48 @@ window.reloadStream = function ({ auto = false } = {}) {
     console.log(`[streaming] reloading the stream at ${Math.round(at)} s${auto ? ' (after a playback error)' : ''}`);
     window.showToast(window.currentLang === 'fr' ? 'Rechargement du flux…' : 'Reloading the stream…', 'info');
 
-    if (window.isTranscodeActive && window.isTranscodeActive() && window.transcodeRestart && window.transcodeRestart(at)) return true;
+    if (window.isTranscodeActive && window.isTranscodeActive() && window.transcodeRestart
+        && window.transcodeRestart(at, { paused: !resume })) return true;
 
     // a new address so the browser does not reuse the old (expired) redirect target; media.streamUrl stays the same
-    const fresh = `${url}${url.includes('?') ? '&' : '?'}reload=${Date.now()}`;
-    vp.addEventListener('loadedmetadata', () => {
+    const fresh = new URL(`${url}${url.includes('?') ? '&' : '?'}reload=${Date.now()}`).href;   // as vp.src reports it
+    // one pending reload at a time, and only for its own load: a reload that failed before its metadata must not
+    // seek whatever plays next
+    if (_reloadOnMeta) vp.removeEventListener('loadedmetadata', _reloadOnMeta);
+    _reloadOnMeta = () => {
+        if (vp.src !== fresh || window.activeStreamingMedia !== media) return;
+        vp.removeEventListener('loadedmetadata', _reloadOnMeta);
+        _reloadOnMeta = null;
+        // Comet can answer the new request with a provider status clip: search another source, as on first play
+        if (isFinite(vp.duration) && vp.duration < 60) { statusVideoFound(media); return; }
         try { if (at > 1 && (!isFinite(vp.duration) || at < vp.duration - 1)) vp.currentTime = at; } catch (_) { /* not seekable */ }
         if (resume) vp.play().catch(() => {});
-    }, { once: true });
+    };
+    vp.addEventListener('loadedmetadata', _reloadOnMeta);
     vp.src = fresh;
     return true;
 };
+let _reloadOnMeta = null;
+
+/** A Comet / debrid status video ("Requested stream was not found", a copyright block…) played instead of the title:
+ *  forget it as the title's last source (in memory and on disk, position kept) and search another one. */
+function statusVideoFound(media) {
+    console.warn(`[streaming] the source played a ${vp.duration.toFixed(1)} s clip (a provider status video) — searching again`);
+    media.lastSource = null;
+    // forget it on disk too (position kept), or the next play would reopen the same error video
+    if (window.electronAPI && window.electronAPI.getWatchProgress && window.electronAPI.setWatchProgress) {
+        const key = { mediaType: media.mediaType, tmdbId: media.tmdbId, title: media.title, season: media.season, episode: media.episode };
+        window.electronAPI.getWatchProgress(key).then((prog) => {
+            if (!prog || !prog.lastSource || (media.mediaType === 'tv' && (prog.season !== media.season || prog.episode !== media.episode))) return;
+            return window.electronAPI.setWatchProgress({ ...prog, lastSource: null });
+        }).catch(() => {});
+    }
+    vp.pause();
+    window.showToast(window.currentLang === 'fr'
+        ? 'Cette source a renvoyé une vidéo d\'erreur du fournisseur. Recherche d\'une autre source…'
+        : 'That source returned a provider error video. Finding another source…', 'info');
+    if (typeof window.findOtherSources === 'function') window.findOtherSources();
+}
 
 let vp = null;
 let seekArea = null;
@@ -1825,21 +1856,7 @@ async function playStream(url, title) {
     if (media && /^https?:\/\//i.test(String(url || ''))) {
         vp.addEventListener('loadedmetadata', function statusVideoGuard() {
             if (window.activeStreamingMedia !== media || !isFinite(vp.duration) || vp.duration >= 60) return;
-            console.warn(`[streaming] the source played a ${vp.duration.toFixed(1)} s clip (a provider status video) — searching again`);
-            media.lastSource = null;
-            // forget it on disk too (position kept), or the next play would reopen the same error video
-            if (window.electronAPI && window.electronAPI.getWatchProgress && window.electronAPI.setWatchProgress) {
-                const key = { mediaType: media.mediaType, tmdbId: media.tmdbId, title: media.title, season: media.season, episode: media.episode };
-                window.electronAPI.getWatchProgress(key).then((prog) => {
-                    if (!prog || !prog.lastSource || (media.mediaType === 'tv' && (prog.season !== media.season || prog.episode !== media.episode))) return;
-                    return window.electronAPI.setWatchProgress({ ...prog, lastSource: null });
-                }).catch(() => {});
-            }
-            vp.pause();
-            window.showToast(window.currentLang === 'fr'
-                ? 'Cette source a renvoyé une vidéo d\'erreur du fournisseur. Recherche d\'une autre source…'
-                : 'That source returned a provider error video. Finding another source…', 'info');
-            if (typeof window.findOtherSources === 'function') window.findOtherSources();
+            statusVideoFound(media);
         }, { once: true });
     }
     window._streamLastGood = 0;
