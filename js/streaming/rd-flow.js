@@ -5,6 +5,14 @@
 
 let _torrentRequestCounter = 0;
 
+/** Search for the active title's sources even though a last source exists (another release than the one saved). */
+window.findOtherSources = function () {
+    const m = window.activeStreamingMedia;
+    if (!m) return;
+    window.triggerRDStream(m.title, m.tmdbId, m.mediaType || 'movie', m.season, m.episode,
+        { poster: m.poster, year: m.year, skipLastSource: true });
+};
+
 /**
  * Play the source that worked last time for the active title (saved as `lastSource` with its watch progress).
  * Resolves true when it is playing; false (after a short notice) when there is none or it no longer resolves.
@@ -21,6 +29,12 @@ async function playLastSource(requestNum, movieTitle, epLabel, statusText) {
     const src = prog && prog.lastSource;
     if (!src || !src.url || (m.mediaType === 'tv' && (prog.season !== m.season || prog.episode !== m.episode))) return false;
     if (requestNum !== _torrentRequestCounter) return true;   // superseded: nothing to do here
+    // while it opens, "Choose Manually" runs the normal search instead (another release)
+    const chooseBtn = el('btn-rd-choose-manually');
+    if (chooseBtn) {
+        chooseBtn.style.display = 'block';
+        chooseBtn.onclick = () => window.findOtherSources();
+    }
     statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} ${window.currentLang === 'fr' ? 'Ouverture de la dernière source' : 'Opening the last source'}:<br><strong>${window.escapeHtml(`${movieTitle}${epLabel}`)}</strong><br><span style="font-size:10px; color:var(--vault-slate);">${window.escapeHtml(`${src.quality || ''} ${src.desc || ''}`)}</span>`;
     let r = null;
     try {
@@ -143,7 +157,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
 
         // The source this title (episode) played from last time: open it directly — no search, no picking. Only if
         // it no longer resolves (dropped from the debrid account, …) does the normal search run.
-        if (await playLastSource(currentRequestNum, movieTitle, epLabel, statusText)) return;
+        if (!(meta && meta.skipLastSource) && await playLastSource(currentRequestNum, movieTitle, epLabel, statusText)) return;
         if (currentRequestNum !== _torrentRequestCounter) return;
 
         let torrents = [];

@@ -6,6 +6,7 @@
 
 (function () {
     const COUNT = 4;
+    let searchingNow = false;   // the last state Discover reported (a search hides the row)
 
     function enabled() {
         return !(window.appSettings && window.appSettings.continueWatchingRow === false);
@@ -24,8 +25,11 @@
             item.episode || null, { poster: item.poster, year: item.year });
     }
 
-    /** Show (or hide) the row; `searching` = a search query is active (the row is for the plain Discover page). */
-    window.renderContinueWatching = async function (searching = false) {
+    /** Show (or hide) the row; `searching` = a search query is active (the row is for the plain Discover page);
+     *  left out, the last state Discover reported is kept (a Settings save, the player closing). */
+    window.renderContinueWatching = async function (searching) {
+        if (typeof searching === 'boolean') searchingNow = searching;
+        searching = searchingNow;
         const section = document.getElementById('continue-watching');
         if (!section) return;
         if (!enabled() || searching || !window.electronAPI || !window.electronAPI.getWatchHistory) {

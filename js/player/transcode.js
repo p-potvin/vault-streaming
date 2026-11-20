@@ -46,7 +46,10 @@
     let ms = null, sb = null, queue = [], appending = false, active = false;
     let session = null;          // { url, height, opts, start, id, copied, reencoded }
     let restarting = false;
-    let recovering = false;      // a copy-failure recovery is starting (the <video> errors it causes are expected)
+    // a copy-failure recovery is starting: errors of the session it replaces (and <video> errors before the new
+    // session exists) are expected; the new session's own errors are not
+    let pendingRecovery = false;
+    const retired = new WeakSet();
 
     function flush() {
         if (!sb || appending || sb.updating || queue.length === 0) return;
@@ -96,11 +99,12 @@
      * The copied video failed (SourceBuffer / decode error): restart as an H.264 re-encode where playback was. True
      * when a recovery started (callers then skip their own error handling), false when there is nothing to retry.
      */
-    window.transcodeRecover = function (reason) {
-        if (recovering) return true;                     // already restarting: this is the same failure, reported twice
+    window.transcodeRecover = function (reason, from = null) {
+        if (from && retired.has(from)) return true;      // the replaced session reporting again: already handled
+        if (pendingRecovery && !from) return true;       // the <video> erroring while the replacement starts
         if (!active || !session || !session.copied || session.reencoded) return false;
-        recovering = true;
-        setTimeout(() => { recovering = false; }, 4000);
+        retired.add(session);
+        pendingRecovery = true;
         const vp = el('video-player');
         const at = vp && Number.isFinite(vp.currentTime) && vp.currentTime > 0 ? vp.currentTime : session.start;
         console.warn(`[transcode] copied video not playable (${reason}) — re-encoding from ${Math.round(at)} s`);
@@ -135,6 +139,7 @@
             return false;
         }
         if (!res || !res.success) {
+            pendingRecovery = false;
             fallbackDirect(url, res && res.error);
             return false;
         }
@@ -148,6 +153,7 @@
         session = { url, height: targetHeight, opts, start, id: res.session, copied: !!res.copiedVideo,
                     reencoded: !!(opts && opts.forceReencode) };
         const thisSession = session;
+        pendingRecovery = false;      // from here, errors are this session's own
         ms = new MediaSource();
         vp.src = URL.createObjectURL(ms);
         let positioned = false;
@@ -172,11 +178,11 @@
                 });
                 sb.addEventListener('error', (e) => {
                     console.error('[transcode] SourceBuffer error', e && e.type);
-                    if (!window.transcodeRecover('SourceBuffer error')) fallbackDirect(url, 'SourceBuffer error');
+                    if (!window.transcodeRecover('SourceBuffer error', thisSession)) fallbackDirect(url, 'SourceBuffer error');
                 });
                 flush();
             } catch (e) {
-                if (!window.transcodeRecover('addSourceBuffer: ' + e.message)) fallbackDirect(url, 'addSourceBuffer failed: ' + e.message);
+                if (!window.transcodeRecover('addSourceBuffer: ' + e.message, thisSession)) fallbackDirect(url, 'addSourceBuffer failed: ' + e.message);
             }
         }, { once: true });
 
@@ -191,7 +197,7 @@
         window.electronAPI.onTranscodeStatus(({ type, error, session: id }) => {
             if (!active || (id != null && id !== thisSession.id)) return;
             if (type === 'error') {
-                if (!window.transcodeRecover('ffmpeg: ' + (error || 'unknown'))) fallbackDirect(url, 'ffmpeg: ' + (error || 'unknown'));
+                if (!window.transcodeRecover('ffmpeg: ' + (error || 'unknown'), thisSession)) fallbackDirect(url, 'ffmpeg: ' + (error || 'unknown'));
             } else if (type === 'done') { try { if (ms && ms.readyState === 'open') ms.endOfStream(); } catch (_) {} }
         });
 

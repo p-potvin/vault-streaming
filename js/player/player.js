@@ -519,6 +519,11 @@ function initPlayer() {
             btnUpscale.style.cursor = 'not-allowed';
         }
 
+        // Discover's Continue Watching row shows what was just watched once the save below has landed
+        if (window.currentStreamingSubtab === 'discover' && typeof window.renderContinueWatching === 'function') {
+            setTimeout(() => window.renderContinueWatching(), 600);
+        }
+
         // Final position save to persistent Watch History
         if (vp.duration > 0) {
             if (window.activeStreamingMedia) {
@@ -1098,6 +1103,20 @@ function initPlayer() {
         if (txt) txt.innerText = currentLabel ? currentLabel.toUpperCase() : 'AUTO';
 
         menu.innerHTML = '';
+        // a replayed last source lists only itself: offer the search for the other releases
+        if (list.length <= 1 && window.activeStreamingMedia && typeof window.findOtherSources === 'function') {
+            const other = document.createElement('div');
+            other.style.cssText = 'padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-mono); font-size:11px; color:var(--vault-slate); border-bottom:1px solid var(--vault-border);';
+            other.textContent = window.currentLang === 'fr' ? 'Autres sources…' : 'Other sources…';
+            other.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.style.display = 'none';
+                const vpEl = el('video-player');
+                window._resumePosAfterSwitch = vpEl ? vpEl.currentTime : 0;
+                window.findOtherSources();
+            });
+            menu.appendChild(other);
+        }
         ordered.forEach(entry => {
             const opt = document.createElement('div');
             const isActive = currentLabel === entry.label;

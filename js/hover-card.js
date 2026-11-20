@@ -235,7 +235,8 @@ window.showPremiumHoverCard = function(card, movie) {
     // The card's own corner buttons sit under this card while it shows: its actions are offered here too.
     const btnCollection = popup.querySelector('.btn-hover-collection');
     if (btnCollection) {
-        if (typeof window.showAddToFolderDialogForStreaming !== 'function') btnCollection.style.display = 'none';
+        // collections need window.showAddToFolderDialog (showAddToFolderDialogForStreaming only wraps it)
+        if (typeof window.showAddToFolderDialog !== 'function') btnCollection.style.display = 'none';
         btnCollection.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
