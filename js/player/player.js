@@ -763,6 +763,9 @@ function initPlayer() {
             console.log('[Video Player] Ignoring error during close/reset:', err && err.code);
             return;
         }
+        // A copied video the browser can't decode: the transcoder restarts it as H.264 at the same spot.
+        if (window.isTranscodeActive && window.isTranscodeActive() && window.transcodeRecover
+            && window.transcodeRecover('MediaError ' + (err && err.code))) return;
         let errMsg = 'Unknown playback error.';
         if (err) {
             switch (err.code) {
@@ -772,7 +775,7 @@ function initPlayer() {
                     return;
                 case 2: errMsg = 'Network error occurred while loading video.'; break;
                 case 3: errMsg = 'Video decoding failed or format is not supported.'; break;
-                case 4: errMsg = 'Video source could not be loaded (invalid or expired link).'; break;
+                case 4: errMsg = 'This video could not be played (format not supported, or the link stopped working).'; break;
             }
         }
         console.error('[Video Player Error]', err || e);
@@ -1207,7 +1210,7 @@ function initPlayer() {
             url,
             window.qualityToHeight ? (window.qualityToHeight(window._activeStreamLabel) || 1080) : 1080,
             at,
-            { audioIndex, videoInfo: info.videoInfo },
+            { audioIndex, videoInfo: info.videoInfo, durationSec: info.durationSeconds || null },
         );
         if (ok && vpEl) {
             vpEl.play().catch(() => { });
@@ -1825,6 +1828,7 @@ async function playStream(url, title) {
         const audioIdx = needAudioFix ? audioProbe.chosenAudioIndex : null;
         if (needAudioFix) {
             window._activeAudioIndex = audioIdx;
+            if (typeof window.refreshAudioMenu === 'function') window.refreshAudioMenu();
             if (audioProbe.remuxReason === 'language') {
                 window.showToast(
                     `Audio: using ${String(audioProbe.chosenLang).toUpperCase()} track` +
@@ -1846,8 +1850,10 @@ async function playStream(url, title) {
             // No quality ceiling but an audio fix? Then the video is copied, so
             // the height is only a fallback for codecs we can't express for MSE.
             const h = tHeight || (window.qualityToHeight ? (window.qualityToHeight(window._activeStreamLabel) || 1080) : 1080);
+            const durationSec = audioProbe && audioProbe.durationSeconds ? audioProbe.durationSeconds : null;
             window.startTranscodePlayback(url, h, resumeAt,
-                needAudioFix ? { audioIndex: audioIdx, videoInfo: audioProbe.videoInfo } : {});
+                needAudioFix ? { audioIndex: audioIdx, videoInfo: audioProbe.videoInfo, durationSec }
+                    : { durationSec, videoInfo: audioProbe ? audioProbe.videoInfo : null });
         } else {
             window._transcodePlay = false;
             if (window.stopTranscode) window.stopTranscode(); // tear down any prior session

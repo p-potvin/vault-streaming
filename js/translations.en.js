@@ -267,5 +267,10 @@ window.translationsEn = {
   aiTranscriptFailed: "Failed",
   aiTranscriptUnavailable: "Unavailable",
   aiTranscriptSoon: "Starts after 2 min of playback",
-  aiTranscriptNone: "None for this file"
+  aiTranscriptNone: "None for this file",
+  tabHistory: "Watch History",
+  settingStartTab: "Open the App On:",
+  settingContinueWatching: "Continue Watching on Discover:",
+  settingContinueWatchingHint: "Show your 4 most recent titles at the top of Discover.",
+  continueWatching: "Continue Watching"
 };

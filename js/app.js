@@ -342,7 +342,7 @@ async function initApp() {
     // Boot straight into Discover — must run AFTER initTMDBListeners so the
     // TMDB state (providers, search) is initialized before the first render.
     if (typeof window.switchStreamingSubtab === 'function') {
-        window.switchStreamingSubtab('discover');
+        window.switchStreamingSubtab(window.startTabOf(window.appSettings));
     }
 
 }

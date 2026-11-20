@@ -205,6 +205,9 @@ window.showPremiumHoverCard = function(card, movie) {
           <button class="btn-hover-library" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); color:#fff; width:28px; height:28px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; padding:0;" title="${isSaved ? (t.removeFromLibrary || 'Remove from Library') : (t.addToLibrary || 'Add to Library')}">
             ${libraryIcon}
           </button>
+          <button class="btn-hover-collection" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); color:#fff; width:28px; height:28px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; padding:0;" title="${t.addToCollection || 'Add to Collection'}">
+            ${window.icons ? window.icons.plus('', 'width:12px; height:12px;') : '+'}
+          </button>
           <button class="btn-hover-details" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); color:#fff; width:28px; height:28px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; padding:0;" title="${t.moreDetails || 'More Details'}">
             ${window.icons ? window.icons.info('', 'width:12px; height:12px;') : ''}
           </button>
@@ -229,6 +232,17 @@ window.showPremiumHoverCard = function(card, movie) {
         }, 300);
     });
     
+    // The card's own corner buttons sit under this card while it shows: its actions are offered here too.
+    const btnCollection = popup.querySelector('.btn-hover-collection');
+    if (btnCollection) {
+        if (typeof window.showAddToFolderDialogForStreaming !== 'function') btnCollection.style.display = 'none';
+        btnCollection.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            window.hidePremiumHoverCard();
+            window.showAddToFolderDialogForStreaming(movie);
+        });
+    }
     const btnLib = popup.querySelector('.btn-hover-library');
     btnLib.addEventListener('click', async (e) => {
         e.stopPropagation();

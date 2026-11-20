@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.6.0 -->
+<!-- v2.7.0 -->
 <html lang="en">
 
 <head>
@@ -44,6 +44,7 @@
   <script src="js/tmdb.js" defer></script>
   <script src="js/navigation/tabs.js" defer></script>
   <script src="js/navigation/keybindings.js" defer></script>
+  <script src="js/continue-watching.js" defer></script>
   <script src="js/app.js" defer></script>
   <script src="js/mobile.js" defer></script>
   <script src="js/tooltip.js" defer></script>
@@ -232,6 +233,11 @@
         <button id="btn-clear-advanced-filters" data-i18n="reset" class="btn-clear-filters">Reset</button>
       </div>
 
+      <section id="continue-watching" class="continue-watching" style="display:none;" aria-labelledby="continue-watching-heading">
+        <h2 id="continue-watching-heading" class="continue-watching-heading" data-i18n="continueWatching">Continue Watching</h2>
+        <div class="continue-watching-list"></div>
+      </section>
+
       <div id="tmdb-results-grid" class="file-grid tmdb-grid tmdb-results-grid">
         <!-- Trending movies displayed here -->
       </div>
@@ -323,6 +329,21 @@
             <option value="24px" data-i18n="sizeLarge">24px (Large)</option>
             <option value="28px" data-i18n="sizeXLarge">28px (Extra Large)</option>
           </select>
+        </div>
+
+        <div>
+          <label for="settings-default-home-tab" class="settings-label" data-i18n="settingStartTab">Open the App On:</label>
+          <select id="settings-default-home-tab" class="settings-select">
+            <option value="discover" data-i18n="tabDiscover">Discover</option>
+            <option value="library" data-i18n="tabLibrary">Library</option>
+            <option value="history" data-i18n="tabHistory">Watch History</option>
+          </select>
+        </div>
+
+        <div class="settings-toggle-row" data-i18n-title="settingContinueWatchingHint"
+          title="Show your 4 most recent titles at the top of Discover.">
+          <span class="settings-toggle-label" data-i18n="settingContinueWatching">Continue Watching on Discover:</span>
+          <input type="checkbox" id="settings-continue-watching" class="settings-checkbox" checked />
         </div>
 
         <div class="settings-toggle-row">

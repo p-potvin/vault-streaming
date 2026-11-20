@@ -269,5 +269,10 @@ window.translationsFr = {
   aiTranscriptFailed: "Échec",
   aiTranscriptUnavailable: "Indisponible",
   aiTranscriptSoon: "Commence après 2 min de lecture",
-  aiTranscriptNone: "Aucune pour ce fichier"
+  aiTranscriptNone: "Aucune pour ce fichier",
+  tabHistory: "Historique",
+  settingStartTab: "Ouvrir l'app sur :",
+  settingContinueWatching: "Reprendre le visionnement dans Découvrir :",
+  settingContinueWatchingHint: "Afficher vos 4 titres les plus récents en haut de Découvrir.",
+  continueWatching: "Reprendre le visionnement"
 };

@@ -161,7 +161,9 @@ function registerAudioTracksIpc(ipcMain) {
             // No -select_streams: one probe returns both the audio tracks AND the
             // video codec/profile/level, which step 2 needs to build the
             // MediaSource codec string for a `-c:v copy` remux.
-            '-show_entries', 'stream=index,codec_type,codec_name,profile,level,channels,disposition:stream_tags=language,title:format=duration',
+            // (side data: a Dolby Vision configuration record, whose profile decides whether the video can be copied)
+            '-show_entries', 'stream=index,codec_type,codec_name,profile,level,channels,pix_fmt,color_transfer,disposition'
+                + ':stream_tags=language,title:stream_side_data=side_data_type,dv_profile:format=duration',
             '-of', 'json',
             url,
         );
@@ -209,10 +211,15 @@ function registerAudioTracksIpc(ipcMain) {
 
         const allStreams = parsed.streams || [];
         const videoStream = allStreams.find((s) => s.codec_type === 'video') || null;
+        const dovi = videoStream && Array.isArray(videoStream.side_data_list)
+            ? videoStream.side_data_list.find((d) => /dovi|dolby vision/i.test(String(d.side_data_type || ''))) : null;
         const videoInfo = videoStream ? {
             codec: videoStream.codec_name || null,
             profile: videoStream.profile || null,
             level: typeof videoStream.level === 'number' ? videoStream.level : null,
+            pixFmt: videoStream.pix_fmt || null,
+            hdr: /smpte2084|arib-std-b67/i.test(String(videoStream.color_transfer || '')),
+            dvProfile: dovi && Number.isFinite(Number(dovi.dv_profile)) ? Number(dovi.dv_profile) : null,
         } : null;
 
         // Audio streams in file order, so the array index IS the audio-relative
@@ -390,8 +397,15 @@ function mseCodecForCopy(videoInfo) {
     if (codec === 'hevc' || codec === 'h265') {
         const level = videoInfo.level;
         if (!level) return null;
-        // hvc1.<profile_space><profile_idc>.<compat>.L<level>.<constraints>
-        return `video/mp4; codecs="hvc1.1.6.L${level}.B0, mp4a.40.2"`;
+        // Dolby Vision profile 7 carries an enhancement layer and profile 5 has no HDR10 base: copied as plain HEVC
+        // they break the decoder (MSE "SourceBuffer error" a few seconds in) or show wrong colours. Re-encode.
+        if (videoInfo.dvProfile === 7 || videoInfo.dvProfile === 5) return null;
+        // hvc1.<profile_idc>.<compat flags>.L<level>.<constraints>: Main = 1.6, Main 10 = 2.4. Every HEVC used to be
+        // labelled Main (1.6), so a 10-bit HDR stream configured the decoder for 8-bit and failed mid-play.
+        const p = String(videoInfo.profile || '').toLowerCase();
+        const tenBit = /10/.test(p) || /10le|p010/i.test(String(videoInfo.pixFmt || ''));
+        if (p && p !== 'main' && !/main 10/.test(p)) return null;     // Rext etc.: no dependable mapping
+        return `video/mp4; codecs="${tenBit ? 'hvc1.2.4' : 'hvc1.1.6'}.L${level}.B0, mp4a.40.2"`;
     }
 
     // AV1/VP9/etc: no dependable mapping here — re-encode instead.

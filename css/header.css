@@ -897,3 +897,101 @@
 }
 
 
+
+/* ── Continue Watching (top of Discover; js/continue-watching.js) ─────────── */
+.continue-watching {
+  padding: 16px 16px 0;
+}
+
+.continue-watching-heading {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vault-slate);
+  margin: 0 0 8px;
+}
+
+.continue-watching-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .continue-watching-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.continue-watching-card {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  min-width: 0;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--vault-text);
+  background: var(--vault-warm-card);
+  border: 1px solid var(--vault-border);
+  border-radius: 6px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.continue-watching-card:hover,
+.continue-watching-card:focus-visible {
+  border-color: var(--vault-accent);
+  background: var(--vault-hover);
+  outline: none;
+}
+
+.cw-poster {
+  width: 42px;
+  height: 63px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 3px;
+  background: var(--vt-surface);
+}
+
+.cw-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cw-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cw-meta {
+  font-size: 10px;
+  color: var(--vault-slate);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cw-progress {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--vault-border);
+  overflow: hidden;
+}
+
+.cw-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--vault-accent);
+}

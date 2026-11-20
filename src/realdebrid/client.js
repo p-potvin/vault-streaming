@@ -84,4 +84,23 @@ async function checkRealDebridCache(torrentList) {
     return torrentList;
 }
 
-module.exports = { fetchWithTimeout, checkRealDebridCache, RD_TOKEN, TMDB_BEARER_TOKEN, COMET_STREAM_BASE };
+/**
+ * A Comet URL without its config segment — the base64 JSON that holds the debrid API keys: "comet:/playback/…".
+ * What is written to disk (watch history, the last source of a title); cometUrl() puts the current config back.
+ * Anything that is not a Comet URL is returned unchanged.
+ */
+function cometPath(url) {
+    const s = String(url || '');
+    if (!s || s.startsWith('comet:')) return s;
+    if (COMET_STREAM_BASE && s.startsWith(COMET_STREAM_BASE + '/')) return 'comet:' + s.slice(COMET_STREAM_BASE.length);
+    const m = s.match(/^https?:\/\/[^/]+\/eyJ[A-Za-z0-9_\-+=/]*?(\/(?:playback|stream)\/.*)$/);
+    return m ? 'comet:' + m[1] : s;
+}
+
+/** The playable URL of a cometPath() (with the config Comet is configured with now). */
+function cometUrl(p) {
+    const s = String(p || '');
+    return s.startsWith('comet:') && COMET_STREAM_BASE ? COMET_STREAM_BASE + s.slice('comet:'.length) : s;
+}
+
+module.exports = { fetchWithTimeout, checkRealDebridCache, RD_TOKEN, TMDB_BEARER_TOKEN, COMET_STREAM_BASE, cometPath, cometUrl };
