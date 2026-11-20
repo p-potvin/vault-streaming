@@ -343,6 +343,8 @@
     findSubtitles: (videoPath, queryTitle, skipOpenSubtitles, langs) =>
       invoke('find-subtitles', videoPath, queryTitle, skipOpenSubtitles, langs),
     downloadSubtitleTrack: inv('download-subtitle-track'),
+    searchSubtitles: inv('subtitles:search'),
+    getSubtitleTranscript: inv('subtitles:transcript'),
     onWebmProgress: (cb) => on('generate-webm-progress', cb),
     offWebmProgress: () => off('generate-webm-progress'),
     normalizeAudio: (videoPath, vaultRoot, transcribe, translateTo, options = {}) =>

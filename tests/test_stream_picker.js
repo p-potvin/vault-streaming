@@ -112,6 +112,33 @@ test('ranking: unknown seeders cost nothing', () => {
     assert.ok(scoreTorrent({ ...base, seeds: '0' }, 'en') < scoreTorrent({ ...base, seeds: '—' }, 'en'));
 });
 
+test('Moments copy: only above 1080p; 720p before 480p; the same release group first', () => {
+    const { momentsCopyCandidates } = require('../js/streaming/ranking');
+    const { ranked } = pipeline(raw);
+    assert.deepStrictEqual(momentsCopyCandidates(ranked, '1080p', 'x'), [], '1080p and below: read the played stream');
+    const c = momentsCopyCandidates(ranked, '2160p', 'Game.Of.Thrones.S01E01-02.UHDRip.2160p.HEVC-PirateMKV');
+    assert.ok(c.length > 0 && c.every(t => t.url && t.fit !== 'other'));
+    assert.ok(c.every(t => /720p|480p/i.test(`${t.quality} ${t.desc}`)));
+    assert.ok(/720p/i.test(c[0].quality), 'a 720p first');
+    const same = [
+        { quality: '720p', desc: 'Show.S01E01.720p.WEB-DL-OTHER', url: 'u1', fit: 'exact' },
+        { quality: '480p', desc: 'Show.S01E01.480p.WEB-DL-NTb', url: 'u2', fit: 'exact' },
+        { quality: '720p', desc: 'Show.S01E01.720p.WEB-DL-NTb.mkv', url: 'u3', fit: 'exact' },
+        { quality: '720p', desc: 'Show.S01E01.720p.HDCAM-NTb', url: 'u4', fit: 'exact' },
+        { quality: '720p', desc: 'Show.S01E01.720p.WEB-DL-NTb', url: null, fit: 'exact' },
+    ];
+    assert.deepStrictEqual(momentsCopyCandidates(same, 'remux', 'Show.S01E01.2160p.WEB-DL.DV-NTb').map(t => t.url),
+        ['u3', 'u2', 'u1'], 'same group (720p, then 480p), then others; never CAM or link-less');
+});
+
+test('IMDb id: an id given as one is used as is (no catalog or TMDB needed)', async () => {
+    const { imdbIdFor } = require('../src/realdebrid/search');
+    require.cache[require.resolve('../src/tmdb')] = { exports: new Proxy({}, { get: () => { throw new Error('catalog asked'); } }) };
+    assert.strictEqual(await imdbIdFor('tt0133093', 'movie'), 'tt0133093');
+    assert.strictEqual(await imdbIdFor('imdb:tt0944947', 'tv'), 'tt0944947');
+    delete require.cache[require.resolve('../src/tmdb')];
+});
+
 test('Deepbrid: a single episode before a pack; a link-less manual pick wins', () => {
     const { ranked } = pipeline(raw);
     assert.notStrictEqual(pickDeepbridSource(ranked).fit, 'pack');

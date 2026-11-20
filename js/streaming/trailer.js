@@ -155,6 +155,8 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
                 origin: spoofedOrigin,
                 widget_referrer: spoofedOrigin,
             });
+            const introSkip = window.trailerStartAt(res);
+            if (introSkip > 0) params.set('start', introSkip);
 
             if (window._persistedTrailerTime) {
                 const secs = Math.floor(window._persistedTrailerTime);
@@ -237,7 +239,17 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
  *  web client (which cannot read the host's disk). */
 window.trailerSrc = function (res) {
     if (!res) return null;
-    return window.__VW_WEB__ ? res.httpPath : res.fileUrl;
+    const src = window.__VW_WEB__ ? res.httpPath : res.fileUrl;
+    const at = window.trailerStartAt(res);
+    // A media fragment starts the first play there (a later restore or seek still wins).
+    return src && at > 0 ? `${src}#t=${at}` : src;
+};
+
+/** Seconds to start a trailer at: KinoCheck trailers open on a ~3 s channel bumper, skipped unless the user turned
+ *  that off (Settings, "Skip KinoCheck intro"; on by default). `res.provider` comes from the trailer index. */
+window.trailerStartAt = function (res) {
+    const skip = !(window.appSettings && window.appSettings.trailerSkipIntro === false);
+    return skip && res && res.provider === 'kinocheck' ? 3 : 0;
 };
 
 window.destroyTrailer = function () {

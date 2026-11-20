@@ -1,4 +1,23 @@
 // js/settings/core.js - settings panel wiring (open/save/dismiss) + sub-module bootstrapping
+
+/**
+ * Upscaling (AI / RTX VSR) on or off, everywhere at once: the player's upscale button and the RTX VSR settings group
+ * are shown only when it is on (off by default). Turning it off stops an upscale that is running. The VSR group stays
+ * hidden on iOS / the web client, which cannot upscale.
+ */
+window.applyUpscalingSetting = function applyUpscalingSetting(on) {
+    const isIOS = /iPhone|iPad|iPod|VaultStreaming-iOS/i.test(navigator.userAgent) || window.location.search.includes('platform=ios');
+    const canUpscale = !isIOS && !window.__VW_WEB__;
+    const show = !!on && canUpscale;
+    const btn = document.getElementById('btn-upscale');
+    if (btn) btn.style.display = show ? '' : 'none';
+    document.querySelectorAll('.settings-vsr-group').forEach(node => { node.style.display = show ? '' : 'none'; });
+    if (!show && typeof window.isUpscaleActive === 'function' && window.isUpscaleActive()) {
+        window.setUpscaleActive(false);
+        if (typeof window.stopUpscaleMode === 'function') window.stopUpscaleMode();
+        if (btn) btn.classList.remove('active');
+    }
+};
 function initSettingsListeners() {
   const inputGlob = document.getElementById('pill-tag-input-glob');
   if (inputGlob) {
@@ -15,6 +34,14 @@ function initSettingsListeners() {
     });
     inputGlob.addEventListener('blur', (e) => {
         if (e.target.value.trim()) { pillTagAdd(e.target.value); e.target.value = ''; }
+    });
+  }
+
+  const upscalingToggle = el('settings-upscaling');
+  if (upscalingToggle) {
+    // Show / hide the RTX VSR settings as the box is ticked; the player follows on Save.
+    upscalingToggle.addEventListener('change', () => {
+        document.querySelectorAll('.settings-vsr-group').forEach(node => { node.style.display = upscalingToggle.checked ? '' : 'none'; });
     });
   }
 
@@ -55,8 +82,9 @@ function initSettingsListeners() {
             if (el('settings-mute-trailers')) el('settings-mute-trailers').checked = window.appSettings.muteTrailers === true;
             el('settings-minimize-to-tray').checked = window.appSettings.minimizeToTray === true;
             if (el('settings-dev-mode')) el('settings-dev-mode').checked = window.appSettings.devMode === true;
-            if (el('settings-ai-separate')) el('settings-ai-separate').checked = window.appSettings.aiSeparate !== false;
-            if (el('settings-save-ai-subtitles')) el('settings-save-ai-subtitles').checked = window.appSettings.saveAiSubtitles === true;
+            if (el('settings-trailer-skip-intro')) el('settings-trailer-skip-intro').checked = window.appSettings.trailerSkipIntro !== false;
+            if (el('settings-upscaling')) el('settings-upscaling').checked = window.appSettings.upscaling === true;
+            window.applyUpscalingSetting(window.appSettings.upscaling === true);
             if (el('settings-subs-include-es')) el('settings-subs-include-es').checked = window.appSettings.subsIncludeSpanish === true;
             if (el('settings-opensubtitles-key')) {
                 el('settings-opensubtitles-key').value = window.appSettings.openSubtitlesKey || '';
@@ -170,7 +198,9 @@ function initSettingsListeners() {
         if (el('settings-mute-trailers')) window.appSettings.muteTrailers = el('settings-mute-trailers').checked;
         window.appSettings.minimizeToTray = el('settings-minimize-to-tray').checked;
         if (el('settings-dev-mode')) window.appSettings.devMode = el('settings-dev-mode').checked;
-        if (el('settings-ai-separate')) window.appSettings.aiSeparate = el('settings-ai-separate').checked;
+        if (el('settings-trailer-skip-intro')) window.appSettings.trailerSkipIntro = el('settings-trailer-skip-intro').checked;
+        if (el('settings-upscaling')) window.appSettings.upscaling = el('settings-upscaling').checked;
+        window.applyUpscalingSetting(window.appSettings.upscaling === true);
         if (el('settings-subs-include-es')) window.appSettings.subsIncludeSpanish = el('settings-subs-include-es').checked;
         if (el('settings-opensubtitles-key')) {
             window.appSettings.openSubtitlesKey = el('settings-opensubtitles-key').value.trim();
@@ -204,7 +234,6 @@ function initSettingsListeners() {
         // all: no save, no toast, panel stayed open.
         if (el('debrid-proxy-enable')) window.appSettings.debridProxyEnable = el('debrid-proxy-enable').checked;
         if (el('debrid-proxy-address-input')) window.appSettings.debridProxyAddress = el('debrid-proxy-address-input').value.trim();
-        if (el('settings-save-ai-subtitles')) window.appSettings.saveAiSubtitles = el('settings-save-ai-subtitles').checked;
         await window.electronAPI.saveSettings(window.appSettings);
         showToast(window.currentLang === 'fr' ? 'Paramètres enregistrés' : 'Settings saved', 'success');
         el('settings-panel').style.display = 'none';

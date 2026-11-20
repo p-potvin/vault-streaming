@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.5.0 -->
+<!-- v2.6.0 -->
 <html lang="en">
 
 <head>
@@ -335,6 +335,12 @@
           <input type="checkbox" id="settings-mute-trailers" class="settings-checkbox" />
         </div>
 
+        <div class="settings-toggle-row" data-i18n-title="settingTrailerSkipIntroHint"
+          title="KinoCheck trailers open with a short channel intro; start them at 0:03 instead.">
+          <span class="settings-toggle-label" data-i18n="settingTrailerSkipIntro">Skip KinoCheck Trailer Intro:</span>
+          <input type="checkbox" id="settings-trailer-skip-intro" class="settings-checkbox" checked />
+        </div>
+
         <div class="settings-toggle-row">
           <span class="settings-toggle-label" data-i18n="settingMinimizeToTray">Minimize to System Tray:</span>
           <input type="checkbox" id="settings-minimize-to-tray" class="settings-checkbox" />
@@ -346,17 +352,6 @@
           <input type="checkbox" id="settings-dev-mode" class="settings-checkbox" />
         </div>
 
-        <div class="settings-toggle-row"
-          title="Isolate vocal stem with BS-RoFormer to eliminate background music/noise before live ASR subtitles and translation.">
-          <span class="settings-toggle-label" data-i18n="settingAiSeparate">AI Vocal Separation (BS-RoFormer):</span>
-          <input type="checkbox" id="settings-ai-separate" class="settings-checkbox" checked />
-        </div>
-
-        <div class="settings-toggle-row"
-          title="Save generated .srt subtitles permanently in default Windows location (%USERPROFILE%\Videos\Subtitles). When off, subtitles are kept only for the session and cleaned on exit.">
-          <span class="settings-toggle-label" data-i18n="settingSaveAiSubtitles">Save AI Subtitles Permanently:</span>
-          <input type="checkbox" id="settings-save-ai-subtitles" class="settings-checkbox" />
-        </div>
 
         <div>
           <label for="settings-opensubtitles-key" data-i18n="settingOpenSubtitlesKey" class="settings-label">OpenSubtitles API Key:</label>
@@ -396,6 +391,12 @@
               <option value="US">United States</option>
             </select>
           </div>
+        </div>
+
+        <div class="settings-toggle-row" data-i18n-title="settingUpscalingHint"
+          title="AI upscaling (RTX VSR) in the player. When off, the player's upscale button and these settings are hidden.">
+          <span class="settings-toggle-label" data-i18n="settingUpscaling">Upscaling (AI / RTX VSR):</span>
+          <input type="checkbox" id="settings-upscaling" class="settings-checkbox" />
         </div>
 
         <div class="settings-vsr-group">
@@ -789,28 +790,15 @@
                 </svg>
                 <span id="subtitles-btn-text">CC</span> ▾
               </button>
-              <div id="subtitles-menu">
-                <div class="subtitle-option active" data-idx="-1">Off</div>
+              <div id="subtitles-menu" role="menu" aria-label="Subtitles">
+                <div id="subtitle-off-row"></div>
                 <div class="subtitle-divider"></div>
+                <div id="subtitle-ai-row"></div>
                 <div id="subtitle-tracks-list"></div>
                 <div class="subtitle-divider"></div>
-                <div id="opt-more-subs" title="Search OpenSubtitles by language"><span data-i18n="moreSubtitles">More subtitles…</span><span
-                    id="more-subs-caret">▸</span></div>
-                <div id="subtitles-more-panel">
-                  <div class="subtitle-more-search-label">Search OpenSubtitles</div>
-                  <div class="subtitle-quick-lang" data-lang="en">
-                    <span><span class="fi fi-gb" style="border-radius:2px;"></span> English</span><span
-                      class="subtitle-quick-lang-code">EN</span>
-                  </div>
-                  <div class="subtitle-quick-lang" data-lang="fr-CA">
-                    <span><span class="fi fi-qc" style="border-radius:2px;"></span> French (Canadian)</span><span
-                      class="subtitle-quick-lang-code">FR-CA</span>
-                  </div>
-                  <div class="subtitle-quick-lang" data-lang="fr">
-                    <span><span class="fi fi-fr" style="border-radius:2px;"></span> French</span><span
-                      class="subtitle-quick-lang-code">FR</span>
-                  </div>
-                </div>
+                <div class="subtitle-more-search-label" data-i18n="subSearchOpenSubtitles">Search OpenSubtitles</div>
+                <div id="subtitle-search-langs"></div>
+                <div id="subtitle-search-results"></div>
                 <div class="subtitle-divider"></div>
                 <div id="subtitle-sync-row">
                   <span title="Shift subtitle timing to fix A/V sync" data-i18n="syncDelay">Sync delay</span>
@@ -820,16 +808,7 @@
                     <button id="subtitle-offset-plus" title="Subtitles later by 0.25s">+0.25</button>
                   </div>
                 </div>
-                <div class="subtitle-divider"></div>
-                <div class="subtitle-option-upload" id="opt-upload-subtitle">Upload SRT/VTT...</div>
-                <div class="subtitle-option-upload" id="opt-generate-subtitle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                    stroke-linejoin="round" style="width:12px; height:12px; display:block; flex-shrink:0;">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                  </svg><span data-i18n="liveSubtitlesAi">Live Subtitles (AI)</span>
-                </div>
-                <label id="opt-srt-toggle"><input type="checkbox" id="chk-write-srt"> Save subtitles to .srt
-                  file</label>
+                <div class="subtitle-option-upload" id="opt-upload-subtitle" data-i18n="subUploadFile">Upload SRT/VTT…</div>
               </div>
             </div>
 

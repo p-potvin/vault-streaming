@@ -289,6 +289,32 @@ function pickDeepbridSource(ranked, { pick = null } = {}) {
     return ok.find(t => t.fit !== 'pack') || ok[0] || null;
 }
 
+/**
+ * Moments (vault-raggae) reads the whole stream once for its transcript and search vectors: a 4K remux means tens of
+ * GB downloaded a second time and a heavy decode. Above 1080p it reads a 720p / 480p copy instead (operator, Fri 20
+ * Nov 2026): the same release group first (closest timing to what plays, since the transcript doubles as subtitles),
+ * then the best-ranked 720p, then 480p. Only entries with a Comet link, of the requested episode, never CAM/3D/promo.
+ * Returns the candidates in order ([] = read the played stream itself).
+ */
+function momentsCopyCandidates(list, playedLabel, playedRelease) {
+    const label = String(playedLabel || '').toLowerCase();
+    if (!/^(2160p|4k|uhd|source|remux)$/.test(label)) return [];
+    const qual = (t) => {
+        const text = `${t.quality || ''} ${t.desc || ''} ${t.name || ''}`.toLowerCase();
+        if (/\b720p?\b/.test(text)) return 720;
+        if (/\b480p?\b/.test(text)) return 480;
+        return 0;
+    };
+    const groupOf = (s) => ((String(s || '').replace(/\.(mkv|mp4|avi|m4v)$/i, '').match(/-([A-Za-z0-9]+)\s*$/) || [])[1] || '').toLowerCase();
+    const group = groupOf(playedRelease);
+    return (Array.isArray(list) ? list : [])
+        .map((t, i) => ({ t, i, q: qual(t), same: !!group && groupOf(t.desc) === group }))
+        .filter(x => x.q && x.t.url && x.t.fit !== 'other' && !isRejectedForAutoPlay(x.t))
+        .sort((a, b) => (b.same - a.same) || (b.q - a.q) || (a.i - b.i))
+        .map(x => x.t);
+}
+
+window.momentsCopyCandidates = momentsCopyCandidates;
 window.isRejectedForAutoPlay = isRejectedForAutoPlay;
 window.scoreTorrent = scoreTorrent;
 window.rankTorrents = rankTorrents;
@@ -298,7 +324,7 @@ window.PLAY_QUEUE_BUDGET_MS = PLAY_QUEUE_BUDGET_MS;
 
 // Node (tests): the same functions without a browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { scoreTorrent, rankTorrents, isRejectedForAutoPlay, buildPlayQueue, pickDeepbridSource,
+    module.exports = { scoreTorrent, rankTorrents, isRejectedForAutoPlay, buildPlayQueue, pickDeepbridSource, momentsCopyCandidates,
                        PLAY_QUEUE_MAX, PLAY_QUEUE_BUDGET_MS };
 }
 

@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   decryptFiles: (data) => ipcRenderer.invoke('decrypt-files', data),
   findSubtitles: (videoPath, queryTitle, skipOpenSubtitles, langs) => ipcRenderer.invoke('find-subtitles', videoPath, queryTitle, skipOpenSubtitles, langs),
   downloadSubtitleTrack: (data) => ipcRenderer.invoke('download-subtitle-track', data),
+  searchSubtitles: (data) => ipcRenderer.invoke('subtitles:search', data),
+  getSubtitleTranscript: (data) => ipcRenderer.invoke('subtitles:transcript', data),
   onWebmProgress: (cb) => ipcRenderer.on('generate-webm-progress', (_, data) => cb(data)),
   offWebmProgress: () => ipcRenderer.removeAllListeners('generate-webm-progress'),
   normalizeAudio: (videoPath, vaultRoot, transcribe, translateTo, options = {}) => ipcRenderer.invoke('normalize-audio', { videoPath, vaultRoot, transcribe, translateTo, volumeBoost: options.volumeBoost }),

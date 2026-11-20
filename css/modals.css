@@ -982,19 +982,67 @@
   border-radius: 4px;
   padding: 4px 0;
   z-index: 210;
-  min-width: 180px;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
 }
 
+/* One choice. Neutral by default; the chosen one alone is marked (accent text, raised background, accent bar). */
 .subtitle-option {
   padding: 6px 12px;
   cursor: pointer;
   text-align: left;
   font-family: var(--font-body);
   font-size: 12px;
+  color: var(--vault-text);
+  font-weight: 400;
+  transition: background 0.2s;
+  border-left: 3px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.subtitle-option.active {
   color: var(--vault-accent);
   font-weight: 600;
-  transition: background 0.2s;
+  background: var(--vault-hover);
+  border-left-color: var(--vault-accent);
+}
+
+.subtitle-option.disabled,
+.subtitle-result-status.disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+#subtitles-menu .subtitle-option.disabled:hover {
+  background: transparent !important;
+  color: var(--vault-text) !important;
+}
+
+.subtitle-option:focus-visible,
+.subtitle-quick-lang:focus-visible {
+  outline: 1px solid var(--vault-accent);
+  outline-offset: -1px;
+}
+
+.subtitle-option-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtitle-option-meta {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--vault-slate);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .subtitle-divider {
@@ -1006,27 +1054,6 @@
 #subtitle-tracks-list {
   max-height: 160px;
   overflow-y: auto;
-}
-
-#opt-more-subs {
-  padding: 6px 12px;
-  cursor: pointer;
-  text-align: left;
-  font-family: var(--font-body);
-  font-size: 11px;
-  color: var(--vault-slate);
-  transition: background 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-#more-subs-caret {
-  font-size: 10px;
-}
-
-#subtitles-more-panel {
-  display: none;
 }
 
 .subtitle-more-search-label {
@@ -1052,9 +1079,43 @@
   justify-content: space-between;
 }
 
+.subtitle-quick-lang:hover {
+  background: var(--vault-hover);
+}
+
+.subtitle-quick-lang.active {
+  color: var(--vault-accent);
+  font-weight: 600;
+}
+
 .subtitle-quick-lang-code {
   font-size: 10px;
   color: var(--vault-slate);
+  margin-right: 6px;
+}
+
+.subtitle-quick-lang-caret {
+  font-size: 10px;
+}
+
+/* A language's OpenSubtitles results, under the language row */
+#subtitle-search-results {
+  max-height: 260px;
+  overflow-y: auto;
+  border-left: 1px solid var(--vault-border);
+  margin-left: 12px;
+}
+
+.subtitle-result {
+  padding-left: 10px;
+}
+
+.subtitle-result-status {
+  padding: 6px 12px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--vault-slate);
+  cursor: pointer;
 }
 
 #subtitle-sync-row {
@@ -1103,33 +1164,6 @@
   font-size: 12px;
   color: var(--vault-text);
   transition: background 0.2s;
-}
-
-#opt-generate-subtitle {
-  color: var(--vault-accent);
-  font-weight: 600;
-  border-top: 1px dashed var(--vault-border);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-#opt-srt-toggle {
-  padding: 4px 12px 8px 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-body);
-  font-size: 11px;
-  color: var(--vault-slate);
-  cursor: pointer;
-}
-
-#chk-write-srt {
-  accent-color: var(--vault-accent);
-  cursor: pointer;
 }
 
 /* Volume slider */

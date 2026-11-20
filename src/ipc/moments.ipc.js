@@ -29,20 +29,29 @@ async function catalogIdFor(id, category) {
     return null;
 }
 
+/** The Moments key of a played title: stream:<catalog id>[:sNNeNN], or null without a catalog id. */
+async function streamKeyFor({ tmdbId, mediaType, season, episode } = {}) {
+    const category = mediaType === 'tv' ? 'tv' : 'movie';
+    const catalogId = await catalogIdFor(tmdbId, category);
+    if (!catalogId) return null;
+    return { key: `stream:${catalogId}${category === 'tv' ? episodeSuffix(season, episode) : ''}`, catalogId, category };
+}
+
 function registerMomentsIpc(ipcMain) {
     ipcMain.handle('moments:index-playback', async (_e, p = {}) => {
         try {
             const url = String(p.url || '');
             if (!/^https?:\/\//i.test(url)) return { success: false, skipped: 'not a stream (library files are indexed by Moments itself)' };
-            const category = p.mediaType === 'tv' ? 'tv' : 'movie';
-            const catalogId = await catalogIdFor(p.tmdbId, category);
-            if (!catalogId) return { success: false, skipped: 'no catalog id for this title' };
-            const key = `stream:${catalogId}${category === 'tv' ? episodeSuffix(p.season, p.episode) : ''}`;
+            const sk = await streamKeyFor(p);
+            if (!sk) return { success: false, skipped: 'no catalog id for this title' };
+            const { key, catalogId } = sk;
             const res = await raggae.queueStream({
                 key, url, catalog_id: catalogId, title: p.title || null,
                 audio_index: Number.isInteger(p.audioIndex) ? p.audioIndex : 0,
                 language: p.language || 'und', language_source: p.languageSource || 'none',
                 duration: Number(p.durationSec) || null,
+                // a lighter copy read instead of the played source (above 1080p): which release it was
+                source_release: p.sourceRelease ? String(p.sourceRelease).slice(0, 200) : null,
             });
             if (!res) return { success: false, error: 'vault-raggae did not take the job' };
             console.log(`[moments] ${key}: ${res.state}${res.position ? ` (#${res.position} in the queue)` : ''}`);
@@ -54,4 +63,4 @@ function registerMomentsIpc(ipcMain) {
     });
 }
 
-module.exports = { registerMomentsIpc, _episodeSuffix: episodeSuffix };
+module.exports = { registerMomentsIpc, streamKeyFor, _episodeSuffix: episodeSuffix };

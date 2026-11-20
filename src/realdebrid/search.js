@@ -95,38 +95,41 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
     });
 }
 
+/**
+ * The IMDb id of a title, from the catalog: the item carrying this TMDB id, or (first time) the catalog's
+ * read-through details, which fill it from TMDB once. An IMDb id passed as the id is used as is. Null when unknown.
+ * Shared by the torrent search (Comet) and the subtitle search (OpenSubtitles).
+ */
+async function imdbIdFor(tmdbId, mediaType = 'movie') {
+    if (!tmdbId) return null;
+    const sid = String(tmdbId).replace(/^imdb:/, '');
+    if (/^tt\d+$/.test(sid)) return sid;
+    const category = mediaType === 'tv' || mediaType === 'series' ? 'tv' : 'movie';
+    try {
+        const { readThroughDetails, findCatalogItem } = require('../tmdb');
+        const item = await findCatalogItem(tmdbId, category, false);
+        let imdbId = (item && item.external_ids && item.external_ids.imdb)
+            || (item && String(item.catalog_id || '').startsWith('imdb:') ? item.catalog_id.slice(5) : null);
+        if (!imdbId) {
+            const details = await readThroughDetails(tmdbId, category);
+            imdbId = details && details.data && (details.data.imdb_id
+                || (details.data.external_ids && details.data.external_ids.imdb_id)) || null;
+        }
+        console.log(`[Search] IMDb id for ${category} ${tmdbId}: ${imdbId || 'unknown'} (catalog)`);
+        return imdbId;
+    } catch (err) {
+        console.error('[Search] IMDb id lookup failed:', err.message);
+        return null;
+    }
+}
+
 function registerSearchHandlers(ipcMain) {
     ipcMain.handle('search-torrents', async (event, arg) => {
         try {
             const opts = typeof arg === 'string' ? { movieTitle: arg } : (arg || {});
             const { movieTitle = '', tmdbId, mediaType, season, episode } = opts;
-            let imdbId = null;
             const itemMediaType = mediaType || 'movie';
-
-            // The IMDb id Comet needs, from the catalog: the item carrying this TMDB id, or (first time) the
-            // catalog's read-through details, which fill it from TMDB once. An IMDb id passed as the id is used as is.
-            if (tmdbId) {
-                const sid = String(tmdbId).replace(/^imdb:/, '');
-                if (/^tt\d+$/.test(sid)) {
-                    imdbId = sid;
-                } else {
-                    const category = itemMediaType === 'tv' || itemMediaType === 'series' ? 'tv' : 'movie';
-                    try {
-                        const { readThroughDetails, findCatalogItem } = require('../tmdb');
-                        const item = await findCatalogItem(tmdbId, category, false);
-                        imdbId = (item && item.external_ids && item.external_ids.imdb)
-                            || (item && String(item.catalog_id || '').startsWith('imdb:') ? item.catalog_id.slice(5) : null);
-                        if (!imdbId) {
-                            const details = await readThroughDetails(tmdbId, category);
-                            imdbId = details && details.data && (details.data.imdb_id
-                                || (details.data.external_ids && details.data.external_ids.imdb_id)) || null;
-                        }
-                        console.log(`[Search] IMDb id for ${category} ${tmdbId}: ${imdbId || 'unknown'} (catalog)`);
-                    } catch (err) {
-                        console.error('[Search] IMDb id lookup failed:', err.message);
-                    }
-                }
-            }
+            const imdbId = tmdbId ? await imdbIdFor(tmdbId, itemMediaType) : null;
 
             // ── Comet is the ONLY torrent source ────────────────────────────
             // VaultWares policy: every torrent/debrid lookup MUST go through
@@ -171,4 +174,4 @@ function registerSearchHandlers(ipcMain) {
     });
 }
 
-module.exports = { registerSearchHandlers };
+module.exports = { registerSearchHandlers, imdbIdFor };

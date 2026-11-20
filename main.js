@@ -295,6 +295,13 @@ function createWindow() {
                 mainWindow.hide();
                 return;
             }
+            // A real close: send the Moments pause first, then close for real — the cleanup below ends with a
+            // taskkill of this app (packaged builds), which would otherwise beat the pause.
+            if (!momentsPauseSent && process.env.VAULT_STREAMING_E2E !== '1') {
+                e.preventDefault();
+                sendMomentsPause().finally(() => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close(); });
+                return;
+            }
         }
         performFullAppCleanup();
     });
@@ -324,6 +331,15 @@ app.whenReady().then(async () => {
         if (!isE2E) setTimeout(finishSplash, 8000);
         app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
+        // Moments reads paused when the app last closed continue where they stopped (after start-up has settled).
+        if (!isE2E && loadSettings().indexPlayback !== false) {
+            momentsResumeTimer = setTimeout(() => {
+                require('./src/raggae').resumeStreams()
+                    .then(r => { if (r && r.resumed && r.resumed.length) console.log('[moments] resumed:', r.resumed.join(', ')); })
+                    .catch(() => { });
+            }, 20000);
+        }
+
         // Remove leftover .tmp files from previous crashes/kills in the background.
         // This runs after the window is created so startup is never blocked by I/O.
         cleanupAllVaultTempFiles().catch(err => {
@@ -339,7 +355,25 @@ app.whenReady().then(async () => {
         console.error('[main:fatal] app.whenReady rejected:', err);
     });
 
-app.on('before-quit', () => {
+// Moments reads (vault-raggae) pause when the app closes and resume when it starts again, from where they stopped.
+// Sent once, from the window's close (a real close) or before-quit (the tray's Quit), whichever comes first; neither
+// can await, so each holds its close / quit until the pause has gone (2.5 s at most) and then repeats it.
+let momentsPauseSent = false;
+let momentsResumeTimer = null;   // the start-up resume; cancelled once quitting starts, so it can't follow the pause
+function sendMomentsPause() {
+    momentsPauseSent = true;
+    if (momentsResumeTimer) { clearTimeout(momentsResumeTimer); momentsResumeTimer = null; }
+    return require('./src/raggae').pauseStreams()
+        .then(r => console.log('[moments] pause on quit:', r ? (r.paused && r.paused.length ? r.paused.join(', ') : 'nothing running') : 'no answer'))
+        .catch(() => { });
+}
+app.on('before-quit', (event) => {
+    if (momentsResumeTimer) { clearTimeout(momentsResumeTimer); momentsResumeTimer = null; }
+    if (!momentsPauseSent && process.env.VAULT_STREAMING_E2E !== '1') {
+        event.preventDefault();
+        sendMomentsPause().finally(() => app.quit());
+        return;
+    }
     isQuitting = true;
     performFullAppCleanup();
 });

@@ -55,22 +55,25 @@ async function call(method, route, { body, timeoutMs = DEFAULT_TIMEOUT_MS, quiet
             console.warn(`[raggae] ${method} ${route.split('?')[0]} timed out after ${timeoutMs / 1000} s`);
             return null;
         }
+        clearTimeout(timer);
         markOffline(err);
         return null;
-    } finally {
-        clearTimeout(timer);
     }
     markOnline();
     if (!res.ok) {
+        clearTimeout(timer);
         if (!(quiet404 && res.status === 404)) {
             console.warn(`[raggae] ${method} ${route.split('?')[0]} -> HTTP ${res.status}`);
         }
         return null;
     }
+    // the deadline covers the body too: headers then a stalled body must not hold a caller (the quit-time pause)
     try {
         return await res.json();
     } catch (_) {
         return null;
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -131,6 +134,32 @@ async function setList(key, catalogIds) {
 async function queueStream(job) {
     if (!job || !job.key || !job.url) return null;
     return call('POST', '/v1/moments/stream', { body: job, timeoutMs: 10000, tripOnTimeout: false });
+}
+
+/** Pause every Moments stream read (the app is closing): each keeps a checkpoint. { running, paused } or null. */
+async function pauseStreams({ timeoutMs = 2500 } = {}) {
+    return call('POST', '/v1/moments/stream/pause', { body: {}, timeoutMs, tripOnTimeout: false });
+}
+
+/** Resume the paused Moments stream reads from their checkpoints (the app started). { resumed, waiting_for_play }. */
+async function resumeStreams() {
+    return call('POST', '/v1/moments/stream/resume', { body: {}, timeoutMs: 10000, tripOnTimeout: false });
+}
+
+/** The Moments job of a played stream (GET /v1/moments/stream/{key}): { state: 'queued' | 'starting' | 'reading' |
+ *  'done' | 'failed', read_s?, duration?, transcript? } or null (no job yet / gateway down). */
+async function streamStatus(key) {
+    if (!key) return null;
+    return call('GET', `/v1/moments/stream/${encodeURIComponent(key)}`, { quiet404: true, tripOnTimeout: false });
+}
+
+/** The transcripts store's subtitle files for a path — a library video, or a stream's key (stream:imdb:tt…) — each
+ *  with its cue_list ({ idx, start_ms, end_ms, text }) and language (GET /v1/transcripts/by-path); [] when none. */
+async function transcriptsByPath(p) {
+    if (!p) return [];
+    const data = await call('GET', `/v1/transcripts/by-path?path=${encodeURIComponent(p)}`,
+        { quiet404: true, timeoutMs: 15000, tripOnTimeout: false });
+    return (data && Array.isArray(data.files)) ? data.files : [];
 }
 
 /**
@@ -219,6 +248,10 @@ module.exports = {
     getList,
     setList,
     queueStream,
+    streamStatus,
+    transcriptsByPath,
+    pauseStreams,
+    resumeStreams,
     search,
     searchTitles,
     browse,
