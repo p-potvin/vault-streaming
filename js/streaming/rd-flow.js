@@ -139,7 +139,22 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     const prevMedia = window.activeStreamingMedia;
     const sameItem = prevMedia && String(prevMedia.tmdbId || prevMedia.title) === String(tmdbId || movieTitle)
         && (prevMedia.season || null) === (isTV ? (season || 1) : null) && (prevMedia.episode || null) === (isTV ? (episode || 1) : null);
-    if (!sameItem) window._resumePosAfterSwitch = null;
+    if (!sameItem) {
+        window._resumePosAfterSwitch = null;
+        // leaving a playing title for another: its position is saved now (as itself) and it stops, so its clock is
+        // never saved under the new one while the new one's source is searched
+        const vpEl = el('video-player');
+        if (prevMedia && prevMedia.streamUrl && vpEl && vpEl.duration > 0 && !prevMedia.creditsDone) {
+            const at = vpEl.currentTime, dur = vpEl.duration;
+            if (window.isWatchedAt && window.isWatchedAt(at, dur)) {
+                window.electronAPI.markWatched({ mediaType: prevMedia.mediaType, tmdbId: prevMedia.tmdbId, title: prevMedia.title,
+                    season: prevMedia.season, episode: prevMedia.episode, poster: prevMedia.poster, year: prevMedia.year }).catch(() => {});
+            } else {
+                window.electronAPI.setWatchProgress({ ...prevMedia, positionSec: at, durationSec: dur }).catch(() => {});
+            }
+        }
+        if (prevMedia && vpEl && !vpEl.paused) vpEl.pause();
+    }
     window.activeStreamingMedia = {
         mediaType: mediaType || 'movie',
         tmdbId: tmdbId || null,

@@ -520,8 +520,11 @@ function initPlayer() {
 
         // Final position save to persistent Watch History
         if (vp.duration > 0) {
-            if (window.activeStreamingMedia) {
-                const completed = window.isWatchedAt(vp.currentTime, vp.duration); // Settings → Mark as Watched at (95 %)
+            if (window.activeStreamingMedia && !window.activeStreamingMedia.streamUrl) {
+                // a new episode was still being searched: the loaded video is the previous one (saved when it was left)
+            } else if (window.activeStreamingMedia) {
+                const completed = window.isWatchedAt(vp.currentTime, vp.duration)   // Settings → Mark as Watched at (95 %)
+                    || !!window.activeStreamingMedia.creditsDone;                     // reached its credits (series skip)
                 if (completed) {
                     window.electronAPI.markWatched({
                         mediaType: window.activeStreamingMedia.mediaType,
@@ -721,12 +724,17 @@ function initPlayer() {
         if (now - lastHistoryUpdate > 5000) {
             lastHistoryUpdate = now;
             trackMomentsPlayback(vp);
-            if (window.activeStreamingMedia) {
-                window.electronAPI.setWatchProgress({
-                    ...window.activeStreamingMedia,
-                    positionSec: vp.currentTime,
-                    durationSec: vp.duration
-                });
+            const m = window.activeStreamingMedia;
+            if (m) {
+                // only the episode whose stream is loaded (a new one being searched has no streamUrl yet: the
+                // still-playing video's clock is not its progress); one that reached its credits stays watched
+                if (m.streamUrl && !m.creditsDone) {
+                    window.electronAPI.setWatchProgress({
+                        ...m,
+                        positionSec: vp.currentTime,
+                        durationSec: vp.duration
+                    });
+                }
             } else if (window.currentPlayingItem) {
                 const itm = window.currentPlayingItem;
                 if (itm && itm.path) {
@@ -817,6 +825,8 @@ function initPlayer() {
     vp.addEventListener('ended', () => {
         // A clip under a minute that "ended" is a provider error video, not the title: nothing was watched
         if (!(vp.duration >= 60)) return;
+        // the old episode ending while the next one is being searched is not the new one's end
+        if (window.activeStreamingMedia && !window.activeStreamingMedia.streamUrl) return;
         // Series: the Up next card plays the next episode (js/player/up-next.js); the playlist logic below is for
         // library files.
         if (window.activeStreamingMedia && window.activeStreamingMedia.mediaType === 'tv' && typeof window.upNextOnEnded === 'function') {
@@ -972,7 +982,8 @@ function initPlayer() {
         window._keepWarmTimer = setInterval(() => {
             const u = keepWarmUrl();
             if (!u || !vp.paused || el('video-modal').style.display === 'none') { stopKeepWarm(); return; }
-            fetch(u, { headers: { Range: 'bytes=0-1' }, mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+            // through the main process (a renderer no-cors fetch would drop the Range header: a whole-video download)
+            if (window.electronAPI && window.electronAPI.keepStreamWarm) window.electronAPI.keepStreamWarm({ url: u }).catch(() => {});
         }, KEEP_WARM_MS);
     });
     vp.addEventListener('play', stopKeepWarm);

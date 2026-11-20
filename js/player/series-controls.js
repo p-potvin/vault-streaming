@@ -295,6 +295,7 @@
         // the credits point counts as the end (the player's own "ended" covers episodes without one)
         const end = effectiveEnd();
         if (end < vp.duration && vp.currentTime >= end && !state.ended) {
+            state.media.creditsDone = true;   // later saves (tick, close) keep it watched (player.js)
             window.electronAPI.markWatched({
                 mediaType: 'tv', tmdbId: state.media.tmdbId, title: state.media.title, season: state.media.season,
                 episode: state.media.episode, poster: state.media.poster, year: state.media.year,
