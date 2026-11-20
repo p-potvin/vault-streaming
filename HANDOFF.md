@@ -1,116 +1,111 @@
 # Vault Streaming — Session Handoff
 
-**Last updated:** Thu, 19 Nov 2026 09:00
-**Branch:** `main`, everything merged (vault-streaming #15–#18, vault-raggae #85–#88). **Version 2.4.0** (vault-raggae 0.25.1).
-**Next task:** fix Real-Debrid / Deepbrid stream selection — popular titles (that play fine in Stremio) try 5 sources
-and give up. See §1; it already has a measured root-cause list.
+**Last updated:** Fri, 20 Nov 2026 10:00
+**Branch:** `main`, everything merged (vault-streaming #19–#22, vault-raggae #91). **Version 2.7.0** (vault-raggae 0.26.0).
+**Next tasks:** §1 TV series resume the last episode; §2 run the playback indexing (Moments) on `greencloud-panopticam`.
 
-Read this, then `README.md` ("Metadata, trailers and debrid", "Version"). Company protocol entry point:
-`..\vaultwares-docs\instructions\ROUTER.md`; ledger last (`..\agent-ledger\scripts\record-agent-change.ps1`).
+Read this, then `README.md`. Company protocol entry point: `..\vaultwares-docs\instructions\ROUTER.md`; ledger last
+(`..\agent-ledger\scripts\record-agent-change.ps1`).
 
 ---
 
-## 1. Next task: stream selection gives up after 5 tries
+## 1. Next task: TV series open on the last episode watched
 
-### What the user sees
-Popular movies/series: the app tries 5 sources, then "Real-Debrid Error" / "none of the found streams are cached".
-The same titles play in Stremio.
+### What the user wants
+Opening a series (details modal, Library card, Continue Watching, Watch History) lands on the season **and episode**
+watched last, ready to resume — or on the next episode when the last one was finished.
 
-### Measured Wed 18 Nov (Game of Thrones S01E01, `tt0944947:1:1`)
-Comet returned 71 entries: 24 `[RD…]`, 24 `[AD…]`, 23 `[TORRENT🧲]`, plus one `[RD🔄] Comet Sync` and one
-`[AD🔄] Comet Sync` ("Sync debrid account library now"). Run through the app's own ranking (`js/streaming/ranking.js`)
-and the retry order (`js/streaming/rd-flow.js` `startRDDebridFlow`, ~line 560), the 5 attempts were:
+### What exists today
+- `js/streaming/details-modal.js` (~line 266): the season picker already defaults to the last-watched season
+  (`getWatchProgress({ mediaType: 'tv', tmdbId, title })` without season/episode returns the most recent episode of the
+  show, `src/watch-history.js` `watch-history:get-progress`). The **episode** is not marked, scrolled to, or offered to
+  resume; `_loadSeasonEpisodes` (~line 303) renders the list with no progress at all.
+- `js/favorites.js` (~line 224, Library card): an in-progress episode is resumed directly; a finished one, or none,
+  opens the season screen. "Next episode after a finished one" is not handled anywhere.
+- `js/continue-watching.js` / `js/history.js`: resume the exact item stored (`triggerRDStream` with its season/episode).
+- Watch progress per episode is keyed `tv:<tmdbId|title>:s<S>e<E>`; `completed` = 90 % watched.
 
-| # | Entry | Playable? |
-|---|---|---|
-| 1 | `[RD⚡]` 720p 584 MB, single episode | yes — only cached because we played it the day before; before that nothing was ⚡ |
-| 2 | `[TORRENT🧲]` 1080p 30 GB season pack | **no link** — skipped as `notCached`, but it **uses up an attempt** |
-| 3 | `[RD⬇️]` same 30 GB pack | uncached pack, Comet has to download it |
-| 4 | `[AD⬇️]` **same pack, same hash** via AllDebrid | duplicate of #3 |
-| 5 | `[TORRENT🧲]` 1080p 3.7 GB | **no link** again |
+### To do
+- In the episode list: mark watched episodes / show the progress bar, highlight + scroll to the last one, a
+  "Resume S02E05 (12:40)" or "Next: S02E06" button. Next episode = same season +1, else first episode of the next
+  season (the TMDB season list is already loaded there).
+- Library card / Continue Watching for a finished episode: offer the next one instead of re-opening the finished one.
+- Watch out: `get-progress` matches `item.tmdbId === tmdbId` strictly. Series launched with an IMDb id (`tt…`) or a
+  numeric string store a different tmdbId than the details modal asks with — normalise both sides (String, catalog id)
+  or a show's progress looks empty.
+- The episode's last source (§3) is per episode, so "Next episode" still goes through the search; that is expected.
 
-So of 5 attempts, at most one is a real distinct try. Root causes, most likely first:
+## 2. Next task: playback indexing (Moments) on greencloud-panopticam
 
-1. **Link-less `[TORRENT🧲]` entries consume attempts.** `rd-stream-torrent` returns `notCached` for them (no url)
-   and the loop `continue`s, but the attempt counter still advances. Fix: drop entries without a `url` (and the
-   `🔄 Comet Sync` entries) before ranking/retrying, or don't count them.
-2. **The same torrent (same `hash`) appears once per debrid service** (RD + AD) and is retried as if different.
-   Dedupe by hash (prefer the cached / RD copy), or at least count one attempt per hash.
-3. **Uncached season packs rank high** (big size, 1080p). Single-episode files that match the requested SxxEyy
-   should outrank packs; a pack ⬇️ almost never plays instantly.
-4. **"Cached" is nearly meaningless now.** Real-Debrid removed `instantAvailability`; Comet checks availability through
-   StremThru's shared list, which knows almost nothing: Comet's own log (ssh, below) said
-   `realdebrid: Found 1 cached … Available cached torrents on realdebrid: 1/132, alldebrid: 0/132`, and the user's RTN
-   filter in the Comet config then kept 23/132. **`⬇️` entries still play** when RD actually has the file (that is
-   what Stremio does: it just tries the link) — the app already accepts them; `src/realdebrid/stream.js` size-probes
-   each resolved url and treats < 50 MB as Comet's "downloading / unavailable" placeholder → next source.
-5. **5 is a hard cap** (`const maxAttempts = Math.min(torrentsToTry.length, 5)`, rd-flow.js ~589) and each ⬇️ try can
-   take up to Comet's resolve time. With 1–4 fixed, a higher cap of *distinct, linked* candidates (e.g. 8–10, with an
-   overall time budget) is reasonable.
-6. **Index mismatch on a manual pick:** `startIndex` is found in `allTorrents` (ranked order) but used to index
-   `torrentsToTry` (re-sorted cached-first): `torrentsToTry[startIndex + attempt]`. Picking a source by hand can start
-   on a different one.
-7. **Deepbrid** is the fallback after the loop fails (`rd-flow.js`, "Fallback: nothing played through Real-Debrid /
-   Comet", `src/deepbrid/client.js`): one attempt with the best-ranked magnet; it adds the torrent to Deepbrid and waits
-   ~16 s (`POLL_ATTEMPTS` 8 × 2 s); a season pack picks the requested episode's file or fails. Never tested live.
-   Deepbrid has no cache-check API (docs: https://www.deepbrid.com/api-docs).
-8. Also check the old claim that Comet's config is **AD + TB + RD** (July handoff): the 18 Nov responses showed only
-   `realdebrid+alldebrid` — TorBox is not in the current Comet config (`.access/comet_config.txt` / `.env`
-   `COMET_STREAM_BASE`, base64 JSON with `debridServices`; never print it, it holds API keys).
+(Notes from the operator, Fri 20 Nov 2026. This is vault-raggae work — `app/moments/stream.py` and the gateway queue in
+`app/main.py` — vault-streaming only queues jobs via `POST /v1/moments/stream`, `src/ipc/moments.ipc.js`.)
 
-### How to reproduce / measure (no UI needed)
-- Script pattern (worked Wed 18 Nov): register the main-process handlers with a fake ipcMain and call them, e.g.
-  `require('./src/tmdb').registerTmdbHandlers(reg); require('./src/realdebrid').registerRealDebridHandlers(reg);`
-  then `h['search-torrents']({}, { movieTitle, tmdbId, mediaType: 'tv', season, episode })` → `s.torrents`
-  (`name`, `desc`, `size`, `url`, `hash`, `cached`), and `h['rd-stream-torrent']({}, { magnet, hash, url, name })`
-  to resolve one (adds it to the RD account, exactly like pressing play). Ranking: `eval` `js/streaming/ranking.js`
-  with a stub `window` / `localStorage`, then `window.rankTorrents(list)` where `list = torrents.map(t => ({...t,
-  isRDCached: !!t.cached}))`. Redact urls in output (`/eyJ…` is the Comet config with keys).
-- Comet logs (read-only): `ssh -i ~/.ssh/<vps key> ubuntu@100.67.25.118 "sudo -n docker logs --since 30m comet"`
-  (containers `comet`, `comet-postgres`, `comet-vpn`; stop/start: `cd /opt/vw-comet && sudo docker compose …`).
-- Each Comet search is an outside request: a handful while debugging is fine; ask before any loop over many titles
+**Idea:** run the catalog's Moments ingest for streams (and possibly the Prom-King site-rebuild catalog, ADR 0001 in
+vaultwares-docs) on `greencloud-panopticam`, which already pulls a second stream for its own work, instead of reading
+every played title a second time from this PC.
+
+### Measured Fri 20 Nov 2026
+- **Storage per hour of video: ~4 MB** in total — nothing of the video is kept. Local numbers
+  (`%LOCALAPPDATA%\VaultWares\raggae`): sound + look vectors 0.93 MB/h in `vw-moments.db` (370 windows/h, CLAP 512-d +
+  SigLIP 768-d as float16), the LanceDB search copy ~2.2 MB/h (1,773 MB for 807 h, index overhead included), tags +
+  "said" text + transcript ~0.1 MB/h (GoT S01E01: 501 cues, 15 KB). Disk is not the constraint.
+- **What a read costs instead:** the whole file is downloaded once (the audio is interleaved): a 4K remux is
+  25–80 GB, a 1080p web release 2–5 GB, a 720p copy ~1 GB (vault-streaming already passes a 720p/480p copy above
+  1080p, same release group first). ffmpeg now decodes key frames only (4 % of this PC for a 4K remux).
+  The models are the heavy part: SigLIP + CLAP run on GPU 1 here, and the transcript is Nemotron 3.5 through
+  nemo-speech (GPU, `NEMO_SPEECH_URL`).
+- **greencloud-panopticam now** (read-only check, Fri 20 Nov 09:50): 4 vCPU AMD EPYC-Milan, **no GPU**, 7.7 GB RAM
+  (3.9 GB available), disk 58 GB with **18 GB free** (71 % used; `/var/lib/panopticam` 22 GB), load average 2.0–2.7.
+  Panopticam's `worker.py` alone uses ~150 % CPU (running 7 days), the `panopticam` service ~30 % CPU / 28 % RAM.
+- `ovh-panopticam` is retired (provider terminating, Thu 29 Oct 2026) and no longer answers.
+
+### What that means (to decide next session)
+- Without a GPU, SigLIP/CLAP on CPU at 1 frame/s and Nemotron speech on CPU would be far slower than real time on
+  4 shared cores already half-used by Panopticam. The realistic split: greencloud does the **read** (ffmpeg, key frames
+  + 16 kHz audio, a lighter copy) and ships the small extracts (JPEG frames + WAV segments, or the 1 fps frames only)
+  to this PC's gateway, which runs the models — or the models stay here and greencloud is not needed for streams at
+  all. Measure before choosing: frames + audio per hour at 224 px JPEG is roughly 360 × 10 frames × ~10 KB ≈ 36 MB +
+  ~115 MB of 16 kHz WAV per hour.
+- The site-rebuild catalog is a separate source (its own media, not debrid streams): same per-hour storage, but its
+  size (number of hours) decides whether 18 GB free is enough — check the catalog's total runtime first.
+- Any outside requests in a loop (catalog ingest) need the operator's go-ahead with counts and rate
   (REQUEST_RATE_LIMITING).
 
----
+## 3. What shipped Thu 19 – Fri 20 Nov (for context)
 
-## 2. Environment and rules that still hold
+- **Stream picking** (#19): sync entries and lapsed AllDebrid/TorBox dropped, one entry per hash, episode fit, cached →
+  single episode → packs, 8 tries / 120 s. Only Real-Debrid (via Comet) and Deepbrid are paid for.
+- **Settings / subtitles** (#21): Upscaling (off by default), skip the KinoCheck trailer intro (on), subtitles by
+  IMDb id with a picker per language, the AI transcript from vault-raggae listed (never starts a speech job), no live ASR.
+- **Moments** (#21, vault-raggae #91): a lighter copy above 1080p; reads pause when the app quits and resume at start
+  (checkpoints per transcribed 10-min segment; stopped reads resume from what they stored); ffmpeg key frames only.
+- **Playback** (#22): HEVC Main 10 copied as `hvc1.2.4`, Dolby Vision 7/5 never copied, a failing copy recovers as a
+  1080p tone-mapped re-encode; the transcode knows the runtime (clock, seek restarts ffmpeg, progress saved);
+  **the last source of a title replays directly** (`lastSource` in the watch history, "Other sources…" in the quality
+  menu searches again); start tab and Continue Watching settings; PiP fixes; vault-explorer collection leftovers removed.
+- **Logs:** `%APPDATA%\vault-streaming\logs\vault-streaming.log` (previous run `.1.log`), every line redacted
+  (`src/app-log.js`). Stream links are stored as `comet:/playback/…` — never with the Comet config (debrid keys).
 
-- **Debrid through Comet** (`COMET_STREAM_BASE`, Comet at `100.67.25.118:5173` behind ProtonVPN on vps-ovhcloud) for
-  search and streaming; the app never calls `api.real-debrid.com` for playback. **Proxy tunnel is optional now**
-  (operator, 18 Nov) for the Debrid Downloader (RD direct calls) and Deepbrid; it is used when enabled.
-- **Metadata comes from the vault-raggae catalog** (`127.0.0.1:8750`, `src/raggae.js`), read through `src/tmdb.js`:
-  TMDB only on a miss (ingested, then served from the catalog). Torrent search gets its IMDb id from the catalog.
-- **Versions come from one place:** vault-streaming `package.json` (`node scripts/sync-version.js X.Y.Z`,
-  `tests/test_version.js`); vault-raggae `pyproject.toml` (`python tools/sync_version.py X.Y.Z`). Bump on every PR.
-- **Git:** branch `vw-codex-*`, PR with reviewer p-potvin, the user merges. Devin / CodeRabbit review within ~5 min;
-  Auto-fix relays comments — fix, reply on the thread, resolve.
-- **Windows shell traps:** backslashes in Bash heredocs get mangled (`\n`, `\d`, `\b`, `\t`): write scripts with the
-  Write tool and run them. Scratchpad `.js` files run as ES modules (a parent `package.json` has `"type": "module"`):
-  use `.cjs`.
-- **Ledger quirk:** `record-agent-change.ps1 -Summary` rejects a literal `*` or a drive-letter token like `Q:`.
-- **Public hygiene:** no adult-site names in commits, PRs, branches or public docs.
+## 4. Environment and rules that still hold
 
----
+- **Debrid through Comet** (`COMET_STREAM_BASE`, Comet on vps-ovhcloud behind its VPN); the app never calls
+  `api.real-debrid.com` for playback. Comet's own config still lists AllDebrid (the app drops those entries; removing
+  it from Comet's config saves Comet a lookup per search — operator's call, the config holds keys).
+- **Testing in the app:** Electron ignores an `APPDATA` override, so a Playwright-launched copy uses the operator's
+  real settings and watch history. Back up `%APPDATA%\vault-streaming\vault-settings.json` and
+  `vault-watch-history.json` first and restore what a test changed. `VAULT_STREAMING_E2E=1` skips the Moments
+  pause/resume and the splash.
+- **Versions:** vault-streaming `package.json` (`node scripts/sync-version.js X.Y.Z`); vault-raggae `pyproject.toml`
+  (`python tools/sync_version.py X.Y.Z`). Bump on every PR.
+- **Git:** branch `vw-codex-*` / `vw-claude-*`, PR with reviewer p-potvin, the operator merges (or asks you to).
+  Act on Devin / Gemini review comments; CodeRabbit is ignored.
+- **Windows shell traps:** write scripts with the Write tool; Python `write_text` on Windows writes CRLF (index.html
+  is LF); scratchpad `.js` files run as ES modules — use `.cjs`.
+- **Public hygiene:** vault-streaming is a public repo — no adult-site names in commits, PRs, branches or docs.
 
-## 3. What shipped 18 Nov (for context)
-
-- Catalog read-through; Discover/trending from catalog lists (`scripts/ingest-front-page.js`, scheduled 06:30/18:30 as
-  `\VaultWares\Vault Streaming Front Page`).
-- **TMDB backfill done** (`scripts/backfill-catalog.js`): 80,205 titles stored, 1,798 TMDB misses, 161,948 requests,
-  316 min (films ≥ 600 votes, series ≥ 1,000; episodes for the top 3,000 series ≤ 500 episodes; en-US + fr-FR blobs).
-  Resumable: `%LOCALAPPDATA%\VaultWares\vault-streaming\backfill-done.txt` / `backfill-misses.txt`.
-- **Posters cached** by vault-raggae `python -m app.pictures catalog`: 84,014 kept (16.7 GB), 43 failed, finished
-  Thu 19 Nov 00:52 (log `pictures-after-backfill.log` in the same folder). Not yet embedded for image search.
-- Trailers: downloaded once, 720p AV1, `G:\VaultStreaming\trailers` (`src/trailers.js`).
-- Audio language: stream tag → track title → Nemotron detection only when the stream reports nothing
-  (`src/ipc/audio-tracks.ipc.js`); `qc` dropped as a language code.
-- **Playback Moments:** after 2 min of playback the stream is handed to vault-raggae (`src/ipc/moments.ipc.js` →
-  `POST /v1/moments/stream`), which reads it once (unthrottled since #88) for a Nemotron transcript + SigLIP/CLAP
-  windows. Verified live on GoT S01E01: 370 windows, 501 cues, searchable ("winter is coming", "a direwolf pup").
-  Unthrottled speed ≈ 20× real time, set by the image/sound work.
-
-## 4. Open after this task
+## 5. Still open
 - Embed the 84k cached posters for image search (SigLIP, vault-raggae).
-- Moments re-index of the 2,331 library videos at 10 frames (`python -m app.moments.index …`, ~11 h+ GPU; not scheduled).
+- Moments re-index of the 2,331 library videos at 10 frames (`python -m app.moments.index …`, ~11 h+ GPU).
 - A Settings switch for `indexPlayback` (today only `appSettings.indexPlayback = false`).
-- `tests/ai_separation_settings_test.js` fails on its live-subtitles assertion (pre-existing, also on main).
+- The intermittent mid-play failure of a copied 4K Dolby Vision video is recovered (1080p re-encode) but its cause is
+  not pinned down; the log file will show `copied video not playable` when it happens.
