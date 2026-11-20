@@ -182,6 +182,38 @@ test('magnet for Deepbrid: the release name, several live trackers, never the de
     assert.ok(new URLSearchParams(m.slice('magnet:?'.length)).getAll('tr').includes('udp://tracker.opentrackr.org:1337/announce'));
 });
 
+test('Deepbrid retry: with the torrent id of a download in progress, the magnet is never added again', async () => {
+    // Stub the network (src/realdebrid/proxy.js) before the Deepbrid client loads; no request leaves this process.
+    const calls = [];
+    const proxyPath = require.resolve('../src/realdebrid/proxy');
+    const realProxy = require.cache[proxyPath];
+    require.cache[proxyPath] = { id: proxyPath, filename: proxyPath, loaded: true, exports: {
+        makeProxiedRequest: async (url, opts) => {
+            calls.push(`${opts.method} ${url.replace(/^.*\/api\/v1/, '')}`);
+            const body = url.includes('/torrents/add') ? { id: 'T42' }
+                : url.includes('/torrents/info') ? { status: 'downloaded', links: ['https://h/1'] }
+                : { error: 0, link: 'https://dl/ep.mkv', filename: 'Show.S04E02.mkv', size: '350 MB' };
+            return { ok: true, status: 200, json: async () => body };
+        } } };
+    const clientPath = require.resolve('../src/deepbrid/client');
+    delete require.cache[clientPath];
+    process.env.DEEPBRID_API_TOKEN = 'test-token';
+    try {
+        const deepbrid = require('../src/deepbrid/client');
+        const retry = await deepbrid.unrestrictMagnet('magnet:?xt=urn:btih:abc', null, 'abc', null, 'T42');
+        assert.ok(retry.success && retry.torrentId === 'T42');
+        assert.ok(!calls.some(c => c.includes('/torrents/add')), calls.join(', '));
+        assert.ok(calls.some(c => c.includes('/torrents/info?id=T42')));
+        calls.length = 0;
+        await deepbrid.unrestrictMagnet('magnet:?xt=urn:btih:def', null, 'def');
+        assert.strictEqual(calls[0], 'POST /torrents/add', 'a first try adds the magnet');
+    } finally {
+        delete process.env.DEEPBRID_API_TOKEN;
+        delete require.cache[clientPath];
+        if (realProxy) require.cache[proxyPath] = realProxy; else delete require.cache[proxyPath];
+    }
+});
+
 test('Deepbrid: a single episode before a pack; a link-less manual pick wins', () => {
     const { ranked } = pipeline(raw);
     assert.notStrictEqual(pickDeepbridSource(ranked).fit, 'pack');

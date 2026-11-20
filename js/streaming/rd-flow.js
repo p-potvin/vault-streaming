@@ -634,14 +634,16 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
     const proxy = (window.appSettings && window.appSettings.debridProxyEnable)
         ? (window.appSettings.debridProxyAddress || '') : '';
     let deepbridTried = false;
-    let deepbridDownloading = null;   // { src, progress } while Deepbrid downloads the torrent it was given
-    const askDeepbrid = async (src) => {
+    let deepbridDownloading = null;   // { src, progress, torrentId } while Deepbrid downloads the torrent it was given
+    const askDeepbrid = async (src, torrentId = null) => {
         const db = await window.electronAPI.streamDeepbrid({ magnet: src.magnet, hash: src.hash, name: src.name, proxy,
+            torrentId,   // a retry polls the torrent Deepbrid is downloading instead of adding the magnet again
             // a season pack must yield the requested episode, never another one
             season: media.mediaType === 'tv' ? media.season : null,
             episode: media.mediaType === 'tv' ? media.episode : null });
         if (db && db.success) { deepbridDownloading = null; return { ...db, magnet: src.magnet, hash: src.hash, source: src }; }
-        deepbridDownloading = db && db.downloading ? { src, progress: Number(db.progress) || 0 } : null;
+        deepbridDownloading = db && db.downloading
+            ? { src, progress: Number(db.progress) || 0, torrentId: db.torrentId || torrentId || null } : null;
         if (db && !db.notConfigured) {
             console.warn('[Deepbrid] failed:', db.error);
             if (!deepbridDownloading) lastError = `${lastError ? lastError + ' — ' : ''}Deepbrid: ${db.error}`;
@@ -735,7 +737,7 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
                 lastError = (r && r.error) || lastError;
             }
             if (!response && deepbridDownloading) {
-                response = await askDeepbrid(deepbridDownloading.src);
+                response = await askDeepbrid(deepbridDownloading.src, deepbridDownloading.torrentId);
                 if (cancelled()) return;
                 if (response) console.log(`[Deepbrid] Ready after ${round} wait round(s)`);
             }

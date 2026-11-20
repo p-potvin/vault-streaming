@@ -103,16 +103,21 @@ function isVideo(filename) {
  * downloading: true } once the bounded wait ends (Deepbrid keeps downloading it server-side).
  * `want` ({ season, episode }) picks that episode's file out of a season pack; no match is a failure, never another
  * episode. Without it the largest video file is used.
+ * `torrentId` (from an earlier { downloading: true } answer) polls that torrent instead of adding the magnet again,
+ * so a retry while Deepbrid downloads never submits it twice.
  */
-function unrestrictMagnet(magnet, proxy, dedupKey, want = null) {
+function unrestrictMagnet(magnet, proxy, dedupKey, want = null, torrentId = null) {
     const ep = want && want.season != null && want.episode != null ? want : null;
     const key = `${(dedupKey || magnet || '').toLowerCase()}${ep ? `:${ep.season}:${ep.episode}` : ''}`;
     if (_inFlight.has(key)) return _inFlight.get(key);
     const job = (async () => {
         if (!configured()) return { success: false, notConfigured: true, error: 'Deepbrid API key is not configured' };
-        const added = await api('POST', '/torrents/add', { form: { magnet }, proxy });
-        const id = torrentIdOf(added);
-        if (!id) return { success: false, error: (added && added.message) || 'Deepbrid did not return a torrent id' };
+        let id = torrentId ? String(torrentId) : null;
+        if (!id) {
+            const added = await api('POST', '/torrents/add', { form: { magnet }, proxy });
+            id = torrentIdOf(added);
+            if (!id) return { success: false, error: (added && added.message) || 'Deepbrid did not return a torrent id' };
+        }
         let info = null;
         for (let i = 0; i < POLL_ATTEMPTS; i++) {
             info = await api('GET', `/torrents/info?id=${encodeURIComponent(id)}`, { proxy });
