@@ -11,6 +11,9 @@ window.initKeybindingsAndFolderListeners = function () {
     document.addEventListener('keydown', async (e) => {
         if (e.key === 'F5') {
             e.preventDefault();
+            // the player is open on a stream: reload the stream (js/player/player.js), not the folder behind it
+            const playerOpen = el('video-modal') && el('video-modal').style.display === 'flex';
+            if (playerOpen && typeof window.reloadStream === 'function' && window.reloadStream()) return;
             if (window.currentRealPath) {
                 console.log('[F5] Refreshing directory:', window.currentRealPath);
                 window.loadDirectory(window.currentNavPath, window.currentRealPath, false);
