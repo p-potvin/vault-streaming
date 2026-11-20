@@ -5,6 +5,60 @@
 
 let _torrentRequestCounter = 0;
 
+/** Search for the active title's sources even though a last source exists (another release than the one saved). */
+window.findOtherSources = function () {
+    const m = window.activeStreamingMedia;
+    if (!m) return;
+    window.triggerRDStream(m.title, m.tmdbId, m.mediaType || 'movie', m.season, m.episode,
+        { poster: m.poster, year: m.year, skipLastSource: true });
+};
+
+/**
+ * Play the source that worked last time for the active title (saved as `lastSource` with its watch progress).
+ * Resolves true when it is playing; false (after a short notice) when there is none or it no longer resolves.
+ */
+async function playLastSource(requestNum, movieTitle, epLabel, statusText) {
+    const m = window.activeStreamingMedia;
+    if (!m || !window.electronAPI.getWatchProgress) return false;
+    let prog = null;
+    try {
+        prog = await window.electronAPI.getWatchProgress({ mediaType: m.mediaType, tmdbId: m.tmdbId, title: m.title,
+                                                           season: m.season, episode: m.episode });
+    } catch (_) { return false; }
+    // (a TV lookup without an episode returns the latest episode: only reuse the episode asked for)
+    const src = prog && prog.lastSource;
+    if (!src || !src.url || (m.mediaType === 'tv' && (prog.season !== m.season || prog.episode !== m.episode))) return false;
+    if (requestNum !== _torrentRequestCounter) return true;   // superseded: nothing to do here
+    // while it opens, "Choose Manually" runs the normal search instead (another release)
+    const chooseBtn = el('btn-rd-choose-manually');
+    if (chooseBtn) {
+        chooseBtn.style.display = 'block';
+        chooseBtn.onclick = () => window.findOtherSources();
+    }
+    statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} ${window.currentLang === 'fr' ? 'Ouverture de la dernière source' : 'Opening the last source'}:<br><strong>${window.escapeHtml(`${movieTitle}${epLabel}`)}</strong><br><span style="font-size:10px; color:var(--vault-slate);">${window.escapeHtml(`${src.quality || ''} ${src.desc || ''}`)}</span>`;
+    let r = null;
+    try {
+        r = await window.electronAPI.streamRDTorrent({ url: src.url, hash: src.hash, name: src.name, cached: false });
+    } catch (_) { r = null; }
+    if (requestNum !== _torrentRequestCounter) return true;
+    if (!r || !r.success || !r.streamUrl) {
+        console.warn('[streaming] last source no longer plays:', r && r.error);
+        window.showToast(tr('toastCachedExpired', 'Cached stream expired — finding a fresh source…'), 'info');
+        return false;
+    }
+    const t = { ...src, isRDCached: true, cached: true, fit: 'exact', type: `⚡ ${src.name || ''}`, seeds: '—', peers: '—' };
+    window.currentTorrentList = [t];      // the quality menu lists this one (a manual search finds the others)
+    window.currentMovieTitle = movieTitle;
+    if (typeof window.qualityLabelOf === 'function') window._activeStreamLabel = window.qualityLabelOf(t);
+    m.quality = src.quality || '';
+    m.release = String(src.desc || '').replace(/^📄\s*/, '');
+    m.lastSource = { ...src, savedAt: new Date().toISOString() };
+    console.log('[streaming] playing the last source:', (src.desc || src.name || '').slice(0, 80));
+    window.playStream(r.streamUrl, movieTitle);
+    window.showToast(window.currentLang === 'fr' ? 'Dernière source rouverte.' : 'Opened the last source.', 'success');
+    return true;
+}
+
 /**
  * Overrides the base triggerRDStream to inject season/episode for TV and
  * apply quality+language ranking before displaying the torrent list.
@@ -86,7 +140,8 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
         title: movieTitle,
         season: isTV ? (season || 1) : null,
         episode: isTV ? (episode || 1) : null,
-        poster: (meta && meta.poster) || (posterEl ? posterEl.src : null),
+        // (the details page's poster element may hold an inline placeholder image: never keep that)
+        poster: (meta && meta.poster) || (posterEl && /^https?:/i.test(posterEl.src) ? posterEl.src : null),
         year: (meta && meta.year) || (yearEl ? yearEl.textContent : null)
     };
 
@@ -99,6 +154,11 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
             console.log(`[streaming] Cancelled outdated torrent search stagger for: ${movieTitle}`);
             return;
         }
+
+        // The source this title (episode) played from last time: open it directly — no search, no picking. Only if
+        // it no longer resolves (dropped from the debrid account, …) does the normal search run.
+        if (!(meta && meta.skipLastSource) && await playLastSource(currentRequestNum, movieTitle, epLabel, statusText)) return;
+        if (currentRequestNum !== _torrentRequestCounter) return;
 
         let torrents = [];
         let title = movieTitle;
@@ -687,6 +747,13 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
             window.activeStreamingMedia.quality = (successfulTorrent || {}).quality || '';
             // the release name: subtitles made for the same release (group, source) have the right timing
             window.activeStreamingMedia.release = String((successfulTorrent || {}).desc || '').replace(/^📄\s*/, '');
+            // the source that played, so the next play of this title can open it directly (no search, no picking);
+            // saved with the watch progress, its link without the Comet config (src/watch-history.js)
+            window.activeStreamingMedia.lastSource = (response.provider !== 'deepbrid' && successfulTorrent && successfulTorrent.url)
+                ? { url: successfulTorrent.url, hash: successfulTorrent.hash || null, name: successfulTorrent.name || '',
+                    desc: successfulTorrent.desc || '', quality: successfulTorrent.quality || '', size: successfulTorrent.size || '',
+                    savedAt: new Date().toISOString() }
+                : null;
         }
         window.playStream(response.streamUrl, movieTitle);
         if (response.provider === 'deepbrid') {

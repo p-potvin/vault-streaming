@@ -83,6 +83,7 @@ function initSettingsListeners() {
             el('settings-minimize-to-tray').checked = window.appSettings.minimizeToTray === true;
             if (el('settings-dev-mode')) el('settings-dev-mode').checked = window.appSettings.devMode === true;
             if (el('settings-trailer-skip-intro')) el('settings-trailer-skip-intro').checked = window.appSettings.trailerSkipIntro !== false;
+            if (el('settings-continue-watching')) el('settings-continue-watching').checked = window.appSettings.continueWatchingRow !== false;
             if (el('settings-upscaling')) el('settings-upscaling').checked = window.appSettings.upscaling === true;
             window.applyUpscalingSetting(window.appSettings.upscaling === true);
             if (el('settings-subs-include-es')) el('settings-subs-include-es').checked = window.appSettings.subsIncludeSpanish === true;
@@ -90,7 +91,7 @@ function initSettingsListeners() {
                 el('settings-opensubtitles-key').value = window.appSettings.openSubtitlesKey || '';
             }
             if (el('settings-default-home-tab')) {
-                el('settings-default-home-tab').value = window.appSettings.defaultHomeTab || 'files';
+                el('settings-default-home-tab').value = window.startTabOf(window.appSettings);
             }
             if (el('settings-default-folder-photoalbums')) {
                 el('settings-default-folder-photoalbums').value = window.appSettings.defaultFolderAlbums || '';
@@ -199,6 +200,10 @@ function initSettingsListeners() {
         window.appSettings.minimizeToTray = el('settings-minimize-to-tray').checked;
         if (el('settings-dev-mode')) window.appSettings.devMode = el('settings-dev-mode').checked;
         if (el('settings-trailer-skip-intro')) window.appSettings.trailerSkipIntro = el('settings-trailer-skip-intro').checked;
+        if (el('settings-continue-watching')) {
+            window.appSettings.continueWatchingRow = el('settings-continue-watching').checked;
+            if (window.currentStreamingSubtab === 'discover' && typeof window.renderContinueWatching === 'function') window.renderContinueWatching();
+        }
         if (el('settings-upscaling')) window.appSettings.upscaling = el('settings-upscaling').checked;
         window.applyUpscalingSetting(window.appSettings.upscaling === true);
         if (el('settings-subs-include-es')) window.appSettings.subsIncludeSpanish = el('settings-subs-include-es').checked;

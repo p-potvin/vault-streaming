@@ -58,6 +58,9 @@ if (process.platform === 'win32') {
 // vault-settings.json and the watch history.
 app.setPath('userData', path.join(app.getPath('appData'), 'vault-streaming'));
 
+// Every log line also goes to %APPDATA%\vault-streaming\logs\vault-streaming.log, with debrid keys cut out.
+require('./src/app-log').install(app.getPath('userData'));
+
 // Import modular files
 const utils = require('./src/utils');
 

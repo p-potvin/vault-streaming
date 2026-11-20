@@ -10,7 +10,7 @@
 // sets `cached:true` for those). We follow that Comet url to the final media
 // location. Resolved urls are cached by hash so repeated plays don't re-hit
 // Comet's resolver for the same content.
-const { fetchWithTimeout } = require("./client");
+const { fetchWithTimeout, cometUrl } = require("./client");
 const { recordSelection, recordOutcome } = require("../telemetry/debrid-stats");
 
 const _inFlightMagnets = new Set();
@@ -59,7 +59,9 @@ async function probeStreamBytes(url, timeoutMs = 12000) {
 }
 
 function registerStreamHandlers(ipcMain) {
-    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url, name, cached: markedCached = true } = {}) => {
+    ipcMain.handle('rd-stream-torrent', async (event, { magnet, hash, url: givenUrl, name, cached: markedCached = true } = {}) => {
+        // a saved source (watch history) is stored without the Comet config: put the current one back
+        const url = cometUrl(givenUrl);
         const dedupKey = (hash || url || magnet || '').toLowerCase().trim();
 
         // Only a Comet-resolved url is playable. No url = not cached/available;

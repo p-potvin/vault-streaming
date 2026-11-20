@@ -132,6 +132,9 @@ window.renderTMDB = async function (query = '', append = false) {
 
     const grid = el('tmdb-results-grid');
     if (!grid) return;
+    if (!append && typeof window.renderContinueWatching === 'function') {
+        window.renderContinueWatching(!!(query && String(query).trim()));
+    }
 
     window.tmdbIsFetching = true;
     window.tmdbRequestId = (window.tmdbRequestId || 0) + 1;

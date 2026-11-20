@@ -79,7 +79,6 @@ window.translationsEn = {
   libraryEmptyDesc: "Add films or series to your library from the Movies/Series tab.",
   browseSeasons: "Browse Seasons",
   streamMovie: "Stream Movie",
-  addToCollection: "Add to Collection",
   confirmRemoveFromLibrary: "Are you sure you want to remove \"{0}\" from your library?",
   loadingFavorites: "Loading favorites...",
   errorLoadingFavorites: "Error loading favorites.",
@@ -267,5 +266,10 @@ window.translationsEn = {
   aiTranscriptFailed: "Failed",
   aiTranscriptUnavailable: "Unavailable",
   aiTranscriptSoon: "Starts after 2 min of playback",
-  aiTranscriptNone: "None for this file"
+  aiTranscriptNone: "None for this file",
+  tabHistory: "Watch History",
+  settingStartTab: "Open the App On:",
+  settingContinueWatching: "Continue Watching on Discover:",
+  settingContinueWatchingHint: "Show your 4 most recent titles at the top of Discover.",
+  continueWatching: "Continue Watching"
 };

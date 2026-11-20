@@ -4,6 +4,13 @@
 
 window.currentStreamingSubtab = 'discover';
 
+/** The tab the app opens on (Settings → "Open the App On"): discover (default), library or history. Older installs
+ *  saved 'files' (a removed tab), which means Discover. */
+window.startTabOf = function (settings) {
+    const v = settings && settings.defaultHomeTab;
+    return ['discover', 'library', 'history'].includes(v) ? v : 'discover';
+};
+
 window.switchStreamingSubtab = function (subtab) {
     window.currentStreamingSubtab = subtab;
 

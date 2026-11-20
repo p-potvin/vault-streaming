@@ -321,6 +321,9 @@ body.titlebar-hovered #video-modal #player-topbar {
 }
 
 .pip-ctrl-btn {
+  /* a global button rule pads 8px 18px: in a 36px button that left 0px for the icon (the "empty" play button) */
+  padding: 0;
+  flex: 0 0 auto;
   pointer-events: auto;
   background: rgba(15, 17, 23, 0.85);
   border: 1px solid var(--vault-border);
@@ -346,6 +349,11 @@ body.titlebar-hovered #video-modal #player-topbar {
 
 #video-modal.minimized .player-corner-btns {
   display: none;
+}
+
+/* the transcode quality pill belongs to the full player, not the mini one */
+#video-modal.minimized #transcode-badge {
+  display: none !important;
 }
 
 #video-modal.minimized #pip-close-btn {

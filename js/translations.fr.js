@@ -81,7 +81,6 @@ window.translationsFr = {
   libraryEmptyDesc: "Ajoutez des films et séries à votre bibliothèque depuis l'onglet Cinéma/Séries.",
   browseSeasons: "Parcourir les saisons",
   streamMovie: "Diffuser le film",
-  addToCollection: "Ajouter à la collection",
   confirmRemoveFromLibrary: "Voulez-vous vraiment retirer \"{0}\" de votre bibliothèque ?",
   loadingFavorites: "Chargement des favoris...",
   errorLoadingFavorites: "Erreur lors du chargement des favoris.",
@@ -269,5 +268,10 @@ window.translationsFr = {
   aiTranscriptFailed: "Échec",
   aiTranscriptUnavailable: "Indisponible",
   aiTranscriptSoon: "Commence après 2 min de lecture",
-  aiTranscriptNone: "Aucune pour ce fichier"
+  aiTranscriptNone: "Aucune pour ce fichier",
+  tabHistory: "Historique",
+  settingStartTab: "Ouvrir l'app sur :",
+  settingContinueWatching: "Reprendre le visionnement dans Découvrir :",
+  settingContinueWatchingHint: "Afficher vos 4 titres les plus récents en haut de Découvrir.",
+  continueWatching: "Reprendre le visionnement"
 };

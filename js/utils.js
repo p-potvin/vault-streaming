@@ -118,6 +118,8 @@ function _isToastNoise(message) {
 }
 
 function showToast(message, type = 'success') {
+  // errors and warnings reach the log file (src/app-log.js) through the forwarded console
+  if (type === 'error' || type === 'warning') console.warn(`[toast:${type}] ${message}`);
   const msgLower = (message || '').toLowerCase();
   const isClipboard = msgLower.includes('copied') || msgLower.includes('presse-papiers') || msgLower.includes('press-papiers') || msgLower.includes('cut ') || msgLower.includes('pasted');
   if (isClipboard && type === 'success') {

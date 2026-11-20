@@ -19,6 +19,15 @@ function getHistoryPath() {
     return _historyPath;
 }
 
+// Stream links are kept without their Comet config (the debrid keys): "comet:/playback/…" (realdebrid/client.js).
+function withoutSecrets(item) {
+    const { cometPath } = require('./realdebrid/client');
+    const out = { ...item };
+    if (out.streamUrl) out.streamUrl = cometPath(out.streamUrl);
+    if (out.lastSource && out.lastSource.url) out.lastSource = { ...out.lastSource, url: cometPath(out.lastSource.url) };
+    return out;
+}
+
 function loadHistory() {
     if (_cache) return _cache;
     try {
@@ -28,6 +37,13 @@ function loadHistory() {
         console.error('[watch-history] Failed to load:', e.message);
     }
     _cache = _cache || { items: {} };
+    // entries written before links were stored without their config: clean them once
+    let cleaned = 0;
+    for (const [k, item] of Object.entries(_cache.items || {})) {
+        const safe = withoutSecrets(item);
+        if (JSON.stringify(safe) !== JSON.stringify(item)) { _cache.items[k] = safe; cleaned++; }
+    }
+    if (cleaned) { console.log(`[watch-history] removed the debrid config from ${cleaned} saved link(s)`); scheduleFlush(); }
     return _cache;
 }
 
@@ -59,6 +75,11 @@ function saveHistory(history) {
  * Movies: "movie:tmdbId" or "movie:title"
  * TV:     "tv:tmdbId:season:episode"
  */
+/** A poster worth keeping: a real image URL, not the details modal's inline placeholder (data:…) or nothing. */
+function realPoster(p) {
+    return typeof p === 'string' && /^(https?:|file:)/i.test(p) ? p : null;
+}
+
 function makeKey(mediaType, tmdbId, title, season, episode) {
     if (mediaType === 'tv' && season != null && episode != null) {
         return `tv:${tmdbId || title}:s${season}e${episode}`;
@@ -78,7 +99,7 @@ function registerWatchHistoryHandlers(ipcMain, app) {
         const existing = history.items[key] || {};
         history.items[key] = {
             ...existing,
-            ...data,
+            ...withoutSecrets(data),
             key,
             mediaType: mediaType || 'movie',
             tmdbId: tmdbId || null,
@@ -89,8 +110,8 @@ function registerWatchHistoryHandlers(ipcMain, app) {
             durationSec: durationSec || 0,
             // Completed if watched >90% of runtime
             completed: durationSec > 0 && (positionSec / durationSec) >= 0.9,
-            poster: poster || null,
-            year: year || null,
+            poster: realPoster(poster) || realPoster(existing.poster) || null,
+            year: year || existing.year || null,
             lastWatched: new Date().toISOString(),
             // Preserve original firstWatched
             firstWatched: existing.firstWatched || new Date().toISOString(),
@@ -151,8 +172,8 @@ function registerWatchHistoryHandlers(ipcMain, app) {
             season: season || null,
             episode: episode || null,
             completed: true,
-            poster: poster || null,
-            year: year || null,
+            poster: realPoster(poster) || realPoster(existing.poster) || null,
+            year: year || existing.year || null,
             lastWatched: new Date().toISOString(),
             firstWatched: existing.firstWatched || new Date().toISOString(),
         };
