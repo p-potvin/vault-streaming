@@ -3,6 +3,26 @@ const { fetchWithTimeout, checkRealDebridCache, COMET_STREAM_BASE } = require(".
 const { recordResolve, detectDebridProvider } = require("../telemetry/debrid-stats");
 const { filterAndDedupe, episodeFit } = require("./candidates");
 
+// The magnet handed to Deepbrid (Comet keeps each torrent's own trackers server-side and does not return them).
+// Fri 20 Nov 2026: with one dead tracker (coppersurfer, offline for years) and one live one, Deepbrid sat on
+// "Family Guy" / "American Dad!" at QUEUED, 0 seeds, 0 % — no peer found, not even the torrent's metadata.
+// Long-running public trackers instead, and the release's file name as the name (Deepbrid lists it).
+const PUBLIC_TRACKERS = [
+    'udp://tracker.opentrackr.org:1337/announce',
+    'udp://open.demonii.com:1337/announce',
+    'udp://open.stealth.si:80/announce',
+    'udp://tracker.torrent.eu.org:451/announce',
+    'udp://exodus.desync.com:6969/announce',
+    'udp://explodie.org:6969/announce',
+    'udp://tracker.tiny-vps.com:6969/announce',
+    'http://tracker.opentrackr.org:1337/announce',
+];
+
+function magnetOf(hash, name) {
+    const tr = PUBLIC_TRACKERS.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+    return `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(String(name || '').trim())}${tr}`;
+}
+
 async function fetchCometStreams(streamType, idParam, cleanTitle) {
     if (!COMET_STREAM_BASE) return null;
     const url = `${COMET_STREAM_BASE}/stream/${streamType}/${idParam}.json`;
@@ -69,9 +89,7 @@ async function fetchCometStreams(streamType, idParam, cleanTitle) {
             const seedsMatch = descStr.match(/👥\s*([0-9]+)/i) || descStr.match(/S:\s*([0-9]+)/i);
             const seeds = seedsMatch ? seedsMatch[1] : '—';
             const hash = (s.infoHash || s.behaviorHints?.bingeGroup?.match(/[a-fA-F0-9]{40}/)?.[0] || '').toLowerCase();
-            const magnet = hash
-                ? `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(cleanTitle)}&tr=udp://tracker.coppersurfer.tk:6969/announce&tr=udp://tracker.opentrackr.org:1337/announce`
-                : '';
+            const magnet = hash ? magnetOf(hash, s.behaviorHints?.filename || cleanTitle) : '';
             const isCached = !!s.url && ((s.name && s.name.includes('⚡')) || (s.description && s.description.includes('⚡')));
             return {
                 quality,
@@ -174,4 +192,4 @@ function registerSearchHandlers(ipcMain) {
     });
 }
 
-module.exports = { registerSearchHandlers, imdbIdFor };
+module.exports = { registerSearchHandlers, imdbIdFor, magnetOf, PUBLIC_TRACKERS };

@@ -139,6 +139,49 @@ test('IMDb id: an id given as one is used as is (no catalog or TMDB needed)', as
     delete require.cache[require.resolve('../src/tmdb')];
 });
 
+test('Comet config: the language requirement is cleared (untagged English releases were dropped), the rest kept', () => {
+    const { keepUntaggedReleases } = require('../src/realdebrid/client');
+    const cfg = { maxResultsPerResolution: 0, debridServices: [{ service: 'realdebrid', apiKey: 'K'.repeat(52) }],
+                  languages: { required: ['multi', 'en', 'fr'], allowed: ['en', 'fr'], exclude: [], preferred: ['multi', 'en', 'fr'] } };
+    const base = `http://comet.test:5173/${Buffer.from(JSON.stringify(cfg)).toString('base64')}`;
+    const out = keepUntaggedReleases(base);
+    const seg = new URL(out).pathname.split('/').filter(Boolean)[0];
+    assert.ok(!seg.includes('/') && seg.startsWith('eyJ'), 'one path segment, still a config');
+    const got = JSON.parse(Buffer.from(seg, 'base64').toString('utf8'));
+    assert.deepStrictEqual(got.languages.required, []);
+    assert.deepStrictEqual(got.languages.allowed, ['en', 'fr']);
+    assert.deepStrictEqual(got.languages.preferred, ['multi', 'en', 'fr']);
+    assert.strictEqual(got.debridServices[0].apiKey, 'K'.repeat(52));
+    assert.strictEqual(keepUntaggedReleases(out), out, 'nothing required: unchanged');
+    assert.strictEqual(keepUntaggedReleases('http://comet.test:5173/plain'), 'http://comet.test:5173/plain');
+});
+
+test('Comet status videos: "downloading" is told apart from a Real-Debrid refusal by its size', () => {
+    const { placeholderKind } = require('../src/realdebrid/stream');
+    assert.strictEqual(placeholderKind(433923), 'notCachedYet');   // MEDIA_NOT_CACHED_YET.mp4
+    assert.strictEqual(placeholderKind(410511), 'refused');        // UNAVAILABLE_FOR_LEGAL_REASONS.mp4 (infringing_file)
+    assert.strictEqual(placeholderKind(421667), 'unknown');        // UNKNOWN.mp4: no wait
+});
+
+test('waiting for Real-Debrid: single episodes before packs, at most 2, never another episode or a link-less one', () => {
+    const { pickWaitSources } = require('../js/streaming/ranking');
+    const src = (desc, fit, url = 'comet:/playback/x') => ({ desc, fit, url });
+    const picked = pickWaitSources([src('pack', 'pack'), src('other', 'other'), src('e1', 'exact'), src('nolink', 'exact', null),
+                                    src('e2', 'exact'), src('e3', 'exact')]);
+    assert.deepStrictEqual(picked.map(t => t.desc), ['e1', 'e2']);
+    assert.deepStrictEqual(pickWaitSources([src('pack', 'pack')]).map(t => t.desc), ['pack'], 'a pack when that is all');
+    assert.deepStrictEqual(pickWaitSources([]), []);
+});
+
+test('magnet for Deepbrid: the release name, several live trackers, never the dead coppersurfer one', () => {
+    const { magnetOf, PUBLIC_TRACKERS } = require('../src/realdebrid/search');
+    const m = magnetOf('68d3b43a6a628ba7b8f686d88462f37c674b0585', 'Family Guy S04E02 - Fast Times.avi');
+    assert.ok(m.startsWith('magnet:?xt=urn:btih:68d3b43a6a628ba7b8f686d88462f37c674b0585&dn=Family%20Guy%20S04E02'));
+    assert.strictEqual((m.match(/&tr=/g) || []).length, PUBLIC_TRACKERS.length);
+    assert.ok(PUBLIC_TRACKERS.length >= 5 && !/coppersurfer/.test(m));
+    assert.ok(new URLSearchParams(m.slice('magnet:?'.length)).getAll('tr').includes('udp://tracker.opentrackr.org:1337/announce'));
+});
+
 test('Deepbrid: a single episode before a pack; a link-less manual pick wins', () => {
     const { ranked } = pipeline(raw);
     assert.notStrictEqual(pickDeepbridSource(ranked).fit, 'pack');

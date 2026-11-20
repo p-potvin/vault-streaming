@@ -634,26 +634,33 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
     const proxy = (window.appSettings && window.appSettings.debridProxyEnable)
         ? (window.appSettings.debridProxyAddress || '') : '';
     let deepbridTried = false;
-    const tryDeepbrid = async (src) => {
-        if (!src || deepbridTried || !window.electronAPI.streamDeepbrid) return null;
-        deepbridTried = true;
-        statusText.innerHTML = `${boltIcon} ${fr ? 'Essai avec Deepbrid…' : 'Trying Deepbrid…'}<br><span style="font-size:10px; color:var(--vault-slate);">${window.escapeHtml(`${src.quality || ''} ${src.desc || ''}`)}</span>`;
+    let deepbridDownloading = null;   // { src, progress } while Deepbrid downloads the torrent it was given
+    const askDeepbrid = async (src) => {
         const db = await window.electronAPI.streamDeepbrid({ magnet: src.magnet, hash: src.hash, name: src.name, proxy,
             // a season pack must yield the requested episode, never another one
             season: media.mediaType === 'tv' ? media.season : null,
             episode: media.mediaType === 'tv' ? media.episode : null });
-        if (db && db.success) return { ...db, magnet: src.magnet, hash: src.hash, source: src };
+        if (db && db.success) { deepbridDownloading = null; return { ...db, magnet: src.magnet, hash: src.hash, source: src }; }
+        deepbridDownloading = db && db.downloading ? { src, progress: Number(db.progress) || 0 } : null;
         if (db && !db.notConfigured) {
             console.warn('[Deepbrid] failed:', db.error);
-            lastError = `${lastError ? lastError + ' — ' : ''}Deepbrid: ${db.error}`;
+            if (!deepbridDownloading) lastError = `${lastError ? lastError + ' — ' : ''}Deepbrid: ${db.error}`;
         }
         return null;
+    };
+    const tryDeepbrid = async (src) => {
+        if (!src || deepbridTried || !window.electronAPI.streamDeepbrid) return null;
+        deepbridTried = true;
+        statusText.innerHTML = `${boltIcon} ${fr ? 'Essai avec Deepbrid…' : 'Trying Deepbrid…'}<br><span style="font-size:10px; color:var(--vault-slate);">${window.escapeHtml(`${src.quality || ''} ${src.desc || ''}`)}</span>`;
+        return askDeepbrid(src);
     };
 
     let lastError = null;
     let response = null;
     let tried = 0;
     let placeholders = 0;
+    let refused = 0;       // sources Real-Debrid refused (most often a copyright block on that release)
+    const notReady = [];   // sources Real-Debrid accepted and is downloading (Comet's MEDIA_NOT_CACHED_YET)
 
     try {
         // A manual pick Comet has no link for can only play through Deepbrid: try it there first.
@@ -687,15 +694,52 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
                 break;
             }
             if (r && r.placeholder) placeholders++;
+            if (r && r.refused) refused++;
+            if (r && r.notCachedYet) notReady.push(current);
             lastError = (r && r.error) || 'Unknown error';
             console.warn(`[RD] Source ${i + 1}/${queue.length} failed (${lastError}), trying next`);
         }
 
-        // Nothing played through Real-Debrid / Comet: one Deepbrid try with the likeliest magnet. Skipped quietly
-        // when no Deepbrid key is configured.
+        // Nothing played through Real-Debrid / Comet: one Deepbrid try with the likeliest magnet (it starts Deepbrid's
+        // download when it does not have it). Skipped quietly when no Deepbrid key is configured.
         if (!response) {
             response = await tryDeepbrid(window.pickDeepbridSource(allTorrents, { pick: torrent }));
             if (cancelled()) return;
+        }
+
+        // Still nothing, but something is downloading: Real-Debrid sources it accepted (MEDIA_NOT_CACHED_YET) and/or
+        // the torrent Deepbrid took. Ask them again every few seconds for a bounded time (ranking.js: pickWaitSources,
+        // RD_WAIT). Sources Real-Debrid refused (copyright block) are never asked again.
+        const waitFor = !response && typeof window.pickWaitSources === 'function' ? window.pickWaitSources(notReady) : [];
+        const wait = window.RD_WAIT || { rounds: 6, intervalMs: 15000 };
+        for (let round = 1; !response && (waitFor.length || deepbridDownloading) && round <= wait.rounds; round++) {
+            const who = [waitFor.length ? 'Real-Debrid' : '', deepbridDownloading ? 'Deepbrid' : ''].filter(Boolean).join(' + ');
+            const pct = deepbridDownloading && deepbridDownloading.progress ? ` · Deepbrid ${Math.round(deepbridDownloading.progress)} %` : '';
+            for (let left = Math.round(wait.intervalMs / 1000); left > 0; left--) {
+                statusText.innerHTML = `${boltIcon} ${window.escapeHtml(fr ? `${who} télécharge cet épisode…` : `${who} is downloading this…`)}<br><span style="font-size:10px; color:var(--vault-slate);">${window.escapeHtml(fr
+                    ? `Nouvel essai dans ${left} s (${round}/${wait.rounds})${pct} — ou choisissez un flux manuellement`
+                    : `Checking again in ${left} s (${round}/${wait.rounds})${pct} — or pick a stream manually`)}</span>`;
+                await new Promise(r => setTimeout(r, 1000));
+                if (cancelled()) return;
+            }
+            for (const current of waitFor) {
+                const r = await window.electronAPI.streamRDTorrent({
+                    magnet: current.magnet, hash: current.hash, url: current.url, name: current.name, cached: false,
+                });
+                if (cancelled()) return;
+                if (r && r.success) {
+                    console.log(`[RD] Ready on Real-Debrid after ${round} wait round(s)`);
+                    response = { ...r, magnet: current.magnet, hash: current.hash, source: current };
+                    break;
+                }
+                lastError = (r && r.error) || lastError;
+            }
+            if (!response && deepbridDownloading) {
+                response = await askDeepbrid(deepbridDownloading.src);
+                if (cancelled()) return;
+                if (response) console.log(`[Deepbrid] Ready after ${round} wait round(s)`);
+            }
+            if (!response) console.warn(`[RD] Still downloading after wait round ${round}/${wait.rounds}`);
         }
 
         if (!response || !response.success) {
@@ -718,6 +762,14 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
                 errMsg = fr
                     ? "Aucun des liens testés n'est autorisé par Real-Debrid."
                     : 'None of the tested links are allowed by Real-Debrid.';
+            } else if (deepbridDownloading) {
+                errMsg = fr
+                    ? `Deepbrid télécharge encore cet épisode (${Math.round(deepbridDownloading.progress)} %). Réessayez dans quelques minutes.`
+                    : `Deepbrid is still downloading this episode (${Math.round(deepbridDownloading.progress)} %). Try again in a few minutes.`;
+            } else if (refused > 0 && refused === placeholders) {
+                errMsg = fr
+                    ? `Real-Debrid a refusé ${refused} version(s) de cet épisode (le plus souvent un blocage pour droits d'auteur). Choisissez une autre version manuellement.`
+                    : `Real-Debrid refused ${refused} release(s) of this episode (most often a copyright block). Pick another release manually.`;
             } else if (placeholders > 0) {
                 errMsg = fr
                     ? `${tried} source(s) essayée(s), ${placeholders} pas encore disponible(s) sur Real-Debrid. Choisissez un flux manuellement ou réessayez plus tard.`

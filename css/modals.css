@@ -419,6 +419,87 @@
   text-align: right;
 }
 
+/* Where the show stands: resume the last episode, or the next one after a finished episode */
+.tv-resume-row {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tv-resume-btn {
+  background: var(--vault-accent);
+  color: var(--vt-primary);
+  border: none;
+  padding: 7px 16px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.tv-resume-btn:hover,
+.tv-resume-btn:focus-visible {
+  opacity: 0.85;
+}
+
+.tv-resume-note {
+  font-size: 11px;
+  color: var(--vault-slate);
+}
+
+.tv-ep-row {
+  border-bottom: 1px solid var(--vault-border);
+  transition: background 0.15s;
+}
+
+.tv-ep-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tv-ep-row.tv-ep-target {
+  background: rgba(245, 185, 41, 0.08);
+  box-shadow: inset 3px 0 0 var(--vault-gold);
+}
+
+.tv-ep-title {
+  color: var(--vault-text);
+}
+
+.tv-ep-row.tv-ep-watched .tv-ep-title {
+  color: var(--vault-slate);
+}
+
+.tv-ep-watched-mark {
+  color: var(--vault-signal-online);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.tv-ep-progress {
+  display: block;
+  height: 3px;
+  margin-top: 5px;
+  max-width: 220px;
+  border-radius: 2px;
+  background: var(--vault-border);
+  overflow: hidden;
+}
+
+.tv-ep-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--vault-accent);
+}
+
+.tv-ep-row.tv-ep-watched .tv-ep-progress > span {
+  background: var(--vault-signal-online);
+}
+
 /* ===== Debrid Download Dialog ===== */
 #debrid-download-dialog {
   z-index: 3360;

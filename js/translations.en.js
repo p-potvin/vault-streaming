@@ -105,6 +105,8 @@ window.translationsEn = {
   settingDefaultSubtitle: "Default Subtitle:",
   settingSubtitleFontSize: "Subtitle Font Size:",
   settingRememberPlayback: "Remember Playback Pos:",
+  settingWatchedAt: "Mark as Watched at:",
+  settingWatchedAtHint: "A movie or episode counts as watched (Continue Watching, the episode list, Next episode) once playback reaches this share of its runtime.",
   settingMuteTrailers: "Mute Trailers by Default:",
   settingMinimizeToTray: "Minimize to System Tray:",
   settingDevMode: "Dev Mode (verbose toasts/logs):",

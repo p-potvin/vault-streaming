@@ -99,6 +99,20 @@
   border-radius: 4px;
 }
 
+/* "Mark as Watched at: [95] %" — a short number field on a toggle row */
+.settings-percent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--vault-slate);
+}
+
+.settings-number {
+  width: 64px;
+  text-align: right;
+}
+
 .settings-toggle-row {
   display: flex;
   align-items: center;

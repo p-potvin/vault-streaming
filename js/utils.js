@@ -82,6 +82,22 @@ function showClipboardNotification(message) {
   }, 2200);
 }
 
+// ── Mark as watched at N % (Settings, default 95) ──────────────────────────
+// The same rule as the watch history in the main process (src/watch-history.js, watchedAtPercent).
+const WATCHED_AT_DEFAULT = 95;
+
+/** The setting as a whole percent in 50–100; `value` (a field's text) is clamped, else the saved setting. */
+window.watchedAtPercent = function (value) {
+  const raw = value !== undefined ? value : (window.appSettings && window.appSettings.watchedAtPercent);
+  const n = Math.round(Number(raw));
+  return Number.isFinite(n) && raw !== '' && raw !== null ? Math.min(100, Math.max(50, n)) : WATCHED_AT_DEFAULT;
+};
+
+/** True when playback at `positionSec` of `durationSec` counts as watched. */
+window.isWatchedAt = function (positionSec, durationSec) {
+  return durationSec > 0 && positionSec / durationSec >= window.watchedAtPercent() / 100;
+};
+
 // ── Dev mode + toast noise filter ──────────────────────────────────────────
 // When Dev Mode is OFF (default), suppress chatty non-essential toasts and
 // route console.log/info/debug to no-ops. Errors always show and ALSO clear
@@ -399,7 +415,8 @@ function applyWatchStatusCues(card, movie) {
   // Remove any existing cue
   const existing = card.querySelector('.watch-status-cue');
   if (existing) existing.remove();
-  const thumb = card.querySelector('.thumbnail-container');
+  // Poster cards carry a badge row just above their details (rating left, this cue right); other cards the poster.
+  const thumb = card.querySelector('.card-badge-row') || card.querySelector('.thumbnail-container');
   if (!thumb) return;
 
   if (status.completed) {

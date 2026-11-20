@@ -527,7 +527,7 @@ function initPlayer() {
         // Final position save to persistent Watch History
         if (vp.duration > 0) {
             if (window.activeStreamingMedia) {
-                const completed = vp.currentTime >= vp.duration - 15; // 15 seconds from end counts as finished
+                const completed = window.isWatchedAt(vp.currentTime, vp.duration); // Settings → Mark as Watched at (95 %)
                 if (completed) {
                     window.electronAPI.markWatched({
                         mediaType: window.activeStreamingMedia.mediaType,
@@ -549,7 +549,7 @@ function initPlayer() {
                 const closingItm = window.currentPlayingItem;
                 if (closingItm && closingItm.path) {
                     window.appSettings.playbackPositions = window.appSettings.playbackPositions || {};
-                    const completed = vp.currentTime >= vp.duration - 15;
+                    const completed = window.isWatchedAt(vp.currentTime, vp.duration);
                     if (completed) {
                         delete window.appSettings.playbackPositions[closingItm.path];
                         window.electronAPI.markWatched({
@@ -571,7 +571,7 @@ function initPlayer() {
                 const closingItm = window.displayedItems[window.currentPlayingIndex];
                 if (closingItm && closingItm.path) {
                     window.appSettings.playbackPositions = window.appSettings.playbackPositions || {};
-                    const completed = vp.currentTime >= vp.duration - 15;
+                    const completed = window.isWatchedAt(vp.currentTime, vp.duration);
                     if (completed) {
                         delete window.appSettings.playbackPositions[closingItm.path];
                         window.electronAPI.markWatched({

@@ -112,6 +112,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Watch History API
   setWatchProgress: (data) => ipcRenderer.invoke('watch-history:set-progress', data),
   getWatchProgress: (data) => ipcRenderer.invoke('watch-history:get-progress', data),
+  getShowProgress: (data) => ipcRenderer.invoke('watch-history:show-progress', data),
   getContinueWatching: (opts) => ipcRenderer.invoke('watch-history:continue-watching', opts),
   getWatchHistory: (opts) => ipcRenderer.invoke('watch-history:get-all', opts),
   markWatched: (data) => ipcRenderer.invoke('watch-history:mark-watched', data),

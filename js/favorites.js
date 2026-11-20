@@ -273,23 +273,21 @@ window.renderLibrary = async function (useCache = false) {
         const isTV = movie.media_type === 'tv';
         const tvSvg = window.icons ? window.icons.tv('', 'width:11px; height:11px; display:inline-block;') : '';
         const movieSvg = window.icons ? window.icons.movie('', 'width:11px; height:11px; display:inline-block;') : '';
-        const closeSvg = window.icons ? window.icons.close('', 'width: 10px; height: 10px; display: inline-block;') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
 
         card.innerHTML = `
-            <div class="thumbnail-container" style="position:relative; background:#111; height: 180px; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
+            <div class="thumbnail-container" style="position:relative; background:#111; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
                <button onclick="event.stopPropagation(); window.showMediaDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})" style="position: absolute; top: 8px; left: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-gold); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-gold); transition: all 0.2s;" title="${isTV ? t.browseSeasons : t.streamMovie}">
                   ${isTV ? tvSvg : movieSvg}
                </button>
-               <button onclick="event.stopPropagation(); window.removeFromLibrary(${movie.id}, '${window.escapeHtml(movie.title || movie.name).replace(/'/g, "\\'")}')" style="position: absolute; top: 8px; right: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-signal-alert, #ff7979); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-signal-alert, #ff7979); transition: all 0.2s; width: 24px; height: 24px;" title="${t.removeFromLibrary}">
-                  ${closeSvg}
-               </button>
                <img class="thumbnail" src="${movie.poster}" alt="${window.escapeHtml(movie.title || movie.name)}" style="object-fit: cover; width:100%; height:100%; transition: opacity 0.25s ease;" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9IiMxMTEiIHJ4PSIyIiByeT0iMiIvPjxyZWN0IHg9IjgiIHk9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiM5OTkiIHJ4PSIyIiByeT0iMiIvPjwvc3ZnPg==';" />
-               <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; width: 28px; height: 28px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8.5px; line-height: 1.1; padding: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
-                  <span>${window.icons ? window.icons.star('', 'width:10px;height:10px;', 'currentColor', 'currentColor') : '*'}</span>
-                  <span style="margin-top:-1px;">${movie.rating || '0.0'}</span>
-               </div>
             </div>
             <div class="filename-container" style="padding:12px; text-align:left;">
+               <div class="card-badge-row">
+                  <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; width: 28px; height: 28px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8.5px; line-height: 1.1; padding: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
+                  <span>${window.icons ? window.icons.star('', 'width:10px;height:10px;', 'currentColor', 'currentColor') : '*'}</span>
+                  <span style="margin-top:-1px;">${movie.rating || '0.0'}</span>
+                  </div>
+               </div>
                <div style="font-weight:700; font-size:13px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono);">${window.escapeHtml(movie.title || movie.name)}</div>
                <div style="font-size:10px; color:var(--vault-slate); margin-top:2px; font-weight:500;">${movie.year || ''} • ${window.escapeHtml(movie.genres || '')}</div>
                <div style="font-size:11px; color:#bbb; margin-top:6px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; font-family:var(--font-body);">${window.escapeHtml(movie.overview || '')}</div>

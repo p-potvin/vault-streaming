@@ -20,6 +20,13 @@
     }
 
     function resume(item) {
+        // A finished episode: open the series on its next episode (the details modal offers "Next: S02E06")
+        // instead of replaying the one already watched.
+        if (item.mediaType === 'tv' && item.completed && item.tmdbId && typeof window.showMediaDetails === 'function') {
+            window.showMediaDetails({ id: item.tmdbId, media_type: 'tv', title: item.title, poster: item.poster,
+                                      year: item.year });
+            return;
+        }
         if (typeof window.triggerRDStream !== 'function') return;
         window.triggerRDStream(item.title, item.tmdbId, item.mediaType || 'movie', item.season || null,
             item.episode || null, { poster: item.poster, year: item.year });

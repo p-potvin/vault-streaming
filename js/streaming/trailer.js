@@ -1,6 +1,15 @@
 // js/streaming/trailer.js — the details modal's trailer, played from the local cache (src/trailers.js)
 // Part of the streaming feature, split out of the former monolithic js/streaming.js.
 
+/** Whether the details modal's trailer starts muted: as the hover preview was when it was clicked (once), else the
+ *  "Mute trailers" setting. */
+window.trailerStartsMuted = function () {
+    const carried = window._persistedTrailerMuted;
+    window._persistedTrailerMuted = null;
+    if (typeof carried === 'boolean') return carried;
+    return !!(window.appSettings && window.appSettings.muteTrailers);
+};
+
 async function _fetchAndInjectTrailer(tmdbId, mediaType) {
     // Generation token: any modal close (destroyTrailer) bumps this, so an
     // in-flight resolution that finishes AFTER the modal closed will abort
@@ -75,7 +84,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
             vid.preload = 'auto';
             vid.autoplay = true;
             // Trailers at 80% (−20%) by default; muted if the user opted in.
-            vid.muted = !!(window.appSettings && window.appSettings.muteTrailers);
+            vid.muted = window.trailerStartsMuted();
             vid.volume = 0.8;
 
             // Hide loading indicator when video metadata is loaded
@@ -157,6 +166,7 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
             });
             const introSkip = window.trailerStartAt(res);
             if (introSkip > 0) params.set('start', introSkip);
+            if (window.trailerStartsMuted()) params.set('mute', '1');
 
             if (window._persistedTrailerTime) {
                 const secs = Math.floor(window._persistedTrailerTime);
