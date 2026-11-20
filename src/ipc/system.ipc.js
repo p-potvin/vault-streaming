@@ -263,6 +263,7 @@ function registerSystemIpc(ipcMain, settingsPath, loadSettings, saveSettings) {
                     );
                 } else {
                     templ.push(
+                        { label: 'Reload Stream', accelerator: 'F5', registerAccelerator: false, click: () => once('reload-stream') },
                         { type: 'separator' },
                         { label: 'Copy Stream URL', click: () => { clipboard.writeText(item.path || ''); once('copied'); } }
                     );

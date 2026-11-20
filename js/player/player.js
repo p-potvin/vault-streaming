@@ -29,6 +29,8 @@ async function handlePlayerContextMenu(action, menuItem) {
     } else if (action.startsWith('speed:')) {
         const speed = parseFloat(action.split(':')[1]);
         if (vp && !isNaN(speed)) vp.playbackRate = speed;
+    } else if (action === 'reload-stream') {
+        window.reloadStream();
     } else if (action === 'pip') {
         el('video-modal').classList.toggle('minimized');
     } else if (action === 'fullscreen') {
@@ -160,6 +162,38 @@ async function handlePlayerContextMenu(action, menuItem) {
         window.showPropertiesDialog({ path: itemPath, name: menuItem.name, type: 'video' });
     }
 }
+
+// ── Stream reload ───────────────────────────────────────────────────────────
+// A stream that played for a while can stop mid-episode: the player follows Comet's link to a debrid download link
+// and keeps reading that one, which can expire or drop (a MediaError, often "decoding failed"). Reloading asks Comet
+// again (a fresh download link) and continues at the same spot. Context menu → Reload Stream, F5, and automatically
+// on such an error (AUTO_RELOADS times, the count reset once playback has run a minute past the reload).
+const AUTO_RELOADS = 3;
+window._streamLastGood = 0;        // the last position that actually played (the error resets currentTime)
+window._streamAutoReloads = { count: 0, at: 0 };
+
+/** Reload the playing stream at its current position. `auto` = after a playback error. False when nothing to reload. */
+window.reloadStream = function ({ auto = false } = {}) {
+    const media = window.activeStreamingMedia;
+    const url = media && media.streamUrl;
+    if (!vp || !url || !/^https?:\/\//i.test(String(url)) || window.currentPlayingItem) return false;
+    const now = Number.isFinite(vp.currentTime) ? vp.currentTime : 0;
+    const at = now > 1 ? now : (window._streamLastGood || 0);
+    const resume = auto || !vp.paused;
+    console.log(`[streaming] reloading the stream at ${Math.round(at)} s${auto ? ' (after a playback error)' : ''}`);
+    window.showToast(window.currentLang === 'fr' ? 'Rechargement du flux…' : 'Reloading the stream…', 'info');
+
+    if (window.isTranscodeActive && window.isTranscodeActive() && window.transcodeRestart && window.transcodeRestart(at)) return true;
+
+    // a new address so the browser does not reuse the old (expired) redirect target; media.streamUrl stays the same
+    const fresh = `${url}${url.includes('?') ? '&' : '?'}reload=${Date.now()}`;
+    vp.addEventListener('loadedmetadata', () => {
+        try { if (at > 1 && (!isFinite(vp.duration) || at < vp.duration - 1)) vp.currentTime = at; } catch (_) { /* not seekable */ }
+        if (resume) vp.play().catch(() => {});
+    }, { once: true });
+    vp.src = fresh;
+    return true;
+};
 
 let vp = null;
 let seekArea = null;
@@ -728,7 +762,8 @@ function initPlayer() {
             if (m) {
                 // only the episode whose stream is loaded (a new one being searched has no streamUrl yet: the
                 // still-playing video's clock is not its progress); one that reached its credits stays watched
-                if (m.streamUrl && !m.creditsDone) {
+                // (and not the 0 s of a stream being reloaded, before it has seeked back)
+                if (m.streamUrl && !m.creditsDone && vp.currentTime > 1 && vp.duration > 0) {
                     window.electronAPI.setWatchProgress({
                         ...m,
                         positionSec: vp.currentTime,
@@ -774,6 +809,18 @@ function initPlayer() {
         // A copied video the browser can't decode: the transcoder restarts it as H.264 at the same spot.
         if (window.isTranscodeActive && window.isTranscodeActive() && window.transcodeRecover
             && window.transcodeRecover('MediaError ' + (err && err.code))) return;
+        // A stream that had been playing and then failed: its download link most likely expired or dropped.
+        // Reload it at the same spot (a few times) before giving up.
+        if (err && err.code !== 1 && window._streamLastGood > 5 && window.activeStreamingMedia
+            && window.activeStreamingMedia.streamUrl && !window.currentPlayingItem) {
+            const r = window._streamAutoReloads;
+            if (r.count < AUTO_RELOADS) {
+                r.count++;
+                r.at = window._streamLastGood;
+                console.warn(`[streaming] playback error ${err.code} at ${Math.round(r.at)} s — auto reload ${r.count}/${AUTO_RELOADS}`);
+                if (window.reloadStream({ auto: true })) return;
+            }
+        }
         let errMsg = 'Unknown playback error.';
         if (err) {
             switch (err.code) {
@@ -802,6 +849,15 @@ function initPlayer() {
         const curEl = el('time-current');
         if (totalEl) totalEl.innerText = '0:00';
         if (curEl) curEl.innerText = '0:00';
+    });
+
+    // the last position that played (the reload's fallback once an error has reset currentTime); a minute of playback
+    // past the last auto reload gives the stream its auto reloads back
+    vp.addEventListener('timeupdate', () => {
+        if (vp.seeking || !(vp.currentTime > 1) || vp.paused) return;
+        window._streamLastGood = vp.currentTime;
+        const r = window._streamAutoReloads;
+        if (r.count && vp.currentTime > r.at + 60) { r.count = 0; r.at = 0; }
     });
 
     vp.addEventListener('loadedmetadata', () => {
@@ -1786,6 +1842,8 @@ async function playStream(url, title) {
             if (typeof window.findOtherSources === 'function') window.findOtherSources();
         }, { once: true });
     }
+    window._streamLastGood = 0;
+    window._streamAutoReloads = { count: 0, at: 0 };
     vp.src = url;
 
     // Arm the overlay teardown HERE, immediately after the source is assigned.

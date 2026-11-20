@@ -114,6 +114,17 @@
         return true;
     };
 
+    /** Restart the current transcode (same source, height and options) at `at` seconds: the stream reload
+     *  (js/player/player.js, reloadStream). False when no transcode is running. */
+    window.transcodeRestart = function (at) {
+        if (!active || !session) return false;
+        const { url, height, opts } = session;
+        retired.add(session);
+        pendingRecovery = true;
+        window.startTranscodePlayback(url, height, Math.max(0, Number(at) || 0), opts);
+        return true;
+    };
+
     // Start transcoded playback. Returns true if the transcode pipeline took over,
     // false if it declined/failed (caller should have set vp.src directly).
     // `opts`: { audioIndex, videoInfo } to switch the audio track (the main process then copies the video when it
