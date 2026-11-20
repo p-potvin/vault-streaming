@@ -273,16 +273,12 @@ window.renderLibrary = async function (useCache = false) {
         const isTV = movie.media_type === 'tv';
         const tvSvg = window.icons ? window.icons.tv('', 'width:11px; height:11px; display:inline-block;') : '';
         const movieSvg = window.icons ? window.icons.movie('', 'width:11px; height:11px; display:inline-block;') : '';
-        const plusSvg = window.icons ? window.icons.plus('', 'width: 10px; height: 10px; display: inline-block;') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
         const closeSvg = window.icons ? window.icons.close('', 'width: 10px; height: 10px; display: inline-block;') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
 
         card.innerHTML = `
             <div class="thumbnail-container" style="position:relative; background:#111; height: 180px; width: 100%; border-top-left-radius: 5px; border-top-right-radius: 5px; overflow: hidden;">
                <button onclick="event.stopPropagation(); window.showMediaDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})" style="position: absolute; top: 8px; left: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-gold); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-gold); transition: all 0.2s;" title="${isTV ? t.browseSeasons : t.streamMovie}">
                   ${isTV ? tvSvg : movieSvg}
-               </button>
-               <button ${typeof window.showAddToFolderDialog === 'function' ? '' : 'hidden'} onclick="event.stopPropagation(); window.showAddToFolderDialogForStreaming(${JSON.stringify(movie).replace(/"/g, '&quot;')})" style="position: absolute; top: 8px; right: 38px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-accent); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-accent); transition: all 0.2s; width: 24px; height: 24px;" title="${t.addToCollection}">
-                  ${plusSvg}
                </button>
                <button onclick="event.stopPropagation(); window.removeFromLibrary(${movie.id}, '${window.escapeHtml(movie.title || movie.name).replace(/'/g, "\\'")}')" style="position: absolute; top: 8px; right: 8px; border: none; background: rgba(0,0,0,0.8); color: var(--vault-signal-alert, #ff7979); font-family: var(--font-mono); font-size: 10px; font-weight: 800; padding: 4px 6.5px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid var(--vault-signal-alert, #ff7979); transition: all 0.2s; width: 24px; height: 24px;" title="${t.removeFromLibrary}">
                   ${closeSvg}
@@ -352,22 +348,6 @@ window.removeFromLibrary = async function (movieId, movieTitle) {
 
         // Reload Library
         window.renderLibrary();
-    }
-};
-
-/**
- * Open Collection Selection Dialog for TMDB streaming media.
- */
-window.showAddToFolderDialogForStreaming = function (movie) {
-    const virtualItem = {
-        name: movie.title || movie.name,
-        path: 'tmdb://metadata:' + JSON.stringify(movie),
-        type: 'video', // Matches 'collection'
-        isStreaming: true,
-        meta: movie
-    };
-    if (typeof window.showAddToFolderDialog === 'function') {
-        window.showAddToFolderDialog(virtualItem);
     }
 };
 

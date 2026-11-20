@@ -79,7 +79,6 @@ window.translationsEn = {
   libraryEmptyDesc: "Add films or series to your library from the Movies/Series tab.",
   browseSeasons: "Browse Seasons",
   streamMovie: "Stream Movie",
-  addToCollection: "Add to Collection",
   confirmRemoveFromLibrary: "Are you sure you want to remove \"{0}\" from your library?",
   loadingFavorites: "Loading favorites...",
   errorLoadingFavorites: "Error loading favorites.",

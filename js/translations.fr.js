@@ -81,7 +81,6 @@ window.translationsFr = {
   libraryEmptyDesc: "Ajoutez des films et séries à votre bibliothèque depuis l'onglet Cinéma/Séries.",
   browseSeasons: "Parcourir les saisons",
   streamMovie: "Diffuser le film",
-  addToCollection: "Ajouter à la collection",
   confirmRemoveFromLibrary: "Voulez-vous vraiment retirer \"{0}\" de votre bibliothèque ?",
   loadingFavorites: "Chargement des favoris...",
   errorLoadingFavorites: "Erreur lors du chargement des favoris.",
