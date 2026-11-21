@@ -68,6 +68,55 @@ foreach ($owner in $portOwners) {
 }
 if ($portOwners) { Start-Sleep -Seconds 2 }
 
+# Stop-ScheduledTask ends only the process the task launched (conhost); this script, cmd and node then carried on
+# without it, node still holding 8722 (Sat, 21 Nov 2026: the task said "Ready" while the server ran on). Two guards:
+#  1. a kill-on-close job object holding this script: everything it starts (cmd, node, node's ffmpeg / yt-dlp) is in
+#     it, and Windows ends them all when this script ends, however it ends;
+#  2. this script ends when the process that launched it does (checked every 2 s while the server runs).
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class VwKillOnCloseJob {
+    [StructLayout(LayoutKind.Sequential)] struct Basic {
+        public long PerProcessUserTimeLimit; public long PerJobUserTimeLimit; public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize; public UIntPtr MaximumWorkingSetSize; public uint ActiveProcessLimit;
+        public UIntPtr Affinity; public uint PriorityClass; public uint SchedulingClass;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct Io {
+        public ulong ReadOps, WriteOps, OtherOps, ReadBytes, WriteBytes, OtherBytes;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct Extended {
+        public Basic BasicLimits; public Io IoInfo; public UIntPtr ProcessMemoryLimit; public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed; public UIntPtr PeakJobMemoryUsed;
+    }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateJobObject(IntPtr attrs, string name);
+    [DllImport("kernel32.dll")] static extern bool SetInformationJobObject(IntPtr job, int cls, IntPtr info, uint len);
+    [DllImport("kernel32.dll")] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    static IntPtr handle;   // kept open for this process's life: closing it is what ends the job's processes
+    public static string Join() {
+        handle = CreateJobObject(IntPtr.Zero, null);
+        if (handle == IntPtr.Zero) return "CreateJobObject failed " + Marshal.GetLastWin32Error();
+        var ext = new Extended();
+        ext.BasicLimits.LimitFlags = 0x2000;   // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        int len = Marshal.SizeOf(typeof(Extended));
+        IntPtr p = Marshal.AllocHGlobal(len);
+        try {
+            Marshal.StructureToPtr(ext, p, false);
+            if (!SetInformationJobObject(handle, 9, p, (uint)len)) return "SetInformationJobObject failed " + Marshal.GetLastWin32Error();
+        } finally { Marshal.FreeHGlobal(p); }
+        if (!AssignProcessToJobObject(handle, GetCurrentProcess())) return "AssignProcessToJobObject failed " + Marshal.GetLastWin32Error();
+        return null;
+    }
+}
+'@
+$jobError = [VwKillOnCloseJob]::Join()
+if ($jobError) { Write-Log "Job object not set ($jobError): a stopped task may leave node running" }
+
+$launcherPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+$launcher = Get-Process -Id $launcherPid -ErrorAction SilentlyContinue
+function Test-LauncherGone { return ($launcher -and $launcher.HasExited) }
+
 # Supervise rather than exit. The server has died mid-session at least once (an
 # unhandled rejection out of a trailer/yt-dlp path took the process with it), and
 # a scheduled task that simply ends leaves the site down until someone notices.
@@ -81,8 +130,19 @@ while ($true) {
     # Keep the child attached through cmd redirection. A PowerShell pipeline to
     # Out-File can throw a broken-pipe console error under a detached conhost
     # task and terminate this supervisor after the child exits.
-    & cmd.exe /d /c "node web/server.js >> `"$LogFile`" 2>&1"
-    $code = $LASTEXITCODE
+    $psi = [System.Diagnostics.ProcessStartInfo]::new('cmd.exe', "/d /c `"node web/server.js >> `"$LogFile`" 2>&1`"")
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.WorkingDirectory = $RepoRoot
+    $server = [System.Diagnostics.Process]::Start($psi)
+    while (-not $server.WaitForExit(2000)) {
+        if (Test-LauncherGone) {
+            # the task was stopped: end here, and the job object ends cmd, node and their children with us
+            Write-Log 'Task stopped (launcher gone); stopping the server.'
+            exit 0
+        }
+    }
+    $code = $server.ExitCode
     $ranFor = (Get-Date) - $lastStart
 
     Write-Log "Server exited with code $code after $([int]$ranFor.TotalSeconds)s"

@@ -87,6 +87,14 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
             vid.muted = window.trailerStartsMuted();
             vid.volume = 0.8;
 
+            // A browser that said it plays AV1 but cannot: the server's H.264 copy, once (web client only)
+            vid.addEventListener('error', () => {
+                if (!window.__VW_WEB__ || /\.h264\.mp4/.test(vid.src) || !stillCurrent()) return;
+                console.warn('[streaming] Trailer did not play, trying the H.264 copy');
+                window._vwAv1 = false;
+                vid.src = window.trailerSrc(res);
+            });
+
             // Hide loading indicator when video metadata is loaded
             vid.addEventListener('loadedmetadata', () => {
                 if (loadingEl) loadingEl.style.display = 'none';
@@ -249,10 +257,23 @@ async function _fetchAndInjectTrailer(tmdbId, mediaType) {
  *  web client (which cannot read the host's disk). */
 window.trailerSrc = function (res) {
     if (!res) return null;
-    const src = window.__VW_WEB__ ? res.httpPath : res.fileUrl;
+    let src = window.__VW_WEB__ ? res.httpPath : res.fileUrl;
+    // The cached trailers are AV1; a browser that cannot decode it (Safari on an iPhone / iPad without an AV1 chip)
+    // gets the server's H.264 copy (web/trailer-h264-route.js).
+    if (window.__VW_WEB__ && src && !window.canPlayAv1()) src = src.replace(/\.mp4$/, '.h264.mp4');
     const at = window.trailerStartAt(res);
     // A media fragment starts the first play there (a later restore or seek still wins).
     return src && at > 0 ? `${src}#t=${at}` : src;
+};
+
+/** Whether this browser decodes AV1 in an MP4 (asked once). */
+window.canPlayAv1 = function () {
+    if (window._vwAv1 === undefined) {
+        try {
+            window._vwAv1 = !!document.createElement('video').canPlayType('video/mp4; codecs="av01.0.05M.08, mp4a.40.2"');
+        } catch (_) { window._vwAv1 = false; }
+    }
+    return window._vwAv1;
 };
 
 /** Seconds to start a trailer at: KinoCheck trailers open on a ~3 s channel bumper, skipped unless the user turned

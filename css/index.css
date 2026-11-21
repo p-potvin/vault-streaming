@@ -619,12 +619,16 @@ body.tab-streaming-active #tmdb-container {
   overflow: visible !important;
 }
 
+/* Only where a pointer can hover: on a touch screen iOS applies :hover on the first tap, and since the overview's
+   display changes with it, that first tap only enlarged the card and a second one opened the details. */
+@media (hover: hover) and (pointer: fine) {
 .tmdb-movie-card:hover {
   transform: scale(1.15) translateY(-8px) !important;
   z-index: 50;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6) !important;
   background-color: var(--vault-hover) !important;
   border-color: var(--vault-accent) !important;
+}
 }
 
 .tmdb-movie-card .overview-text {
@@ -638,6 +642,7 @@ body.tab-streaming-active #tmdb-container {
   color: var(--vault-slate);
 }
 
+@media (hover: hover) and (pointer: fine) {
 .tmdb-movie-card:hover .overview-text {
   display: -webkit-box;
   opacity: 0.9;
@@ -645,6 +650,7 @@ body.tab-streaming-active #tmdb-container {
   line-clamp: 4;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
+}
 }
 
 /* Animated Switch Toggle */
