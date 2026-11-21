@@ -424,7 +424,7 @@ function applyWatchStatusCues(card, movie) {
     // Watched — green checkmark badge
     const badge = document.createElement('div');
     badge.className = 'watch-status-cue watched-cue';
-    badge.title = 'Watched';
+    badge.title = tr('watchedBadge', 'Watched');
     badge.innerHTML = window.icons
       ? window.icons.check('watch-check', 'width:12px; height:12px; stroke:#fff; stroke-width:2.5;')
       : '✓';

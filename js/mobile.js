@@ -50,7 +50,7 @@
       clearBtn.type = 'button';
       clearBtn.className = 'mobile-search-clear';
       clearBtn.innerHTML = '✕';
-      clearBtn.title = 'Clear search';
+      clearBtn.title = tr('tipClearSearch', 'Clear search');
       clearBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         searchInput.value = '';
@@ -97,19 +97,19 @@
     nav.innerHTML = `
       <div class="mobile-nav-item active" data-tab="discover">
         <span class="mobile-nav-icon">${discSvg}</span>
-        <span>Discover</span>
+        <span data-i18n="tabDiscover">${tr('tabDiscover', 'Discover')}</span>
       </div>
       <div class="mobile-nav-item" data-tab="library">
         <span class="mobile-nav-icon">${libSvg}</span>
-        <span>Library</span>
+        <span data-i18n="tabLibrary">${tr('tabLibrary', 'Library')}</span>
       </div>
       <div class="mobile-nav-item" data-tab="history">
         <span class="mobile-nav-icon">${histSvg}</span>
-        <span>History</span>
+        <span data-i18n="navHistory">${tr('navHistory', 'History')}</span>
       </div>
       <div class="mobile-nav-item" data-tab="settings">
         <span class="mobile-nav-icon">${setSvg}</span>
-        <span>Settings</span>
+        <span data-i18n="settings">${tr('settings', 'Settings')}</span>
       </div>
     `;
 
@@ -168,22 +168,22 @@
           </div>
           <button class="ios-quick-action-btn primary" id="action-play-now">
             <span>▶️</span>
-            <span>Play Now (Instant Stream)</span>
+            <span>${tr('qsPlayNow', 'Play Now (Instant Stream)')}</span>
           </button>
           <button class="ios-quick-action-btn" id="action-toggle-library">
             <span>${inLib ? '➖' : '➕'}</span>
-            <span>${inLib ? 'Remove from Library' : 'Add to Library'}</span>
+            <span>${inLib ? tr('removeFromLibrary', 'Remove from Library') : tr('addToLibrary', 'Add to Library')}</span>
           </button>
           <button class="ios-quick-action-btn" id="action-view-details">
             <span>ℹ️</span>
-            <span>View Details</span>
+            <span>${tr('moreDetails', 'View Details')}</span>
           </button>
           <button class="ios-quick-action-btn" id="action-mark-watched">
             <span>👁️</span>
-            <span>Mark as Watched</span>
+            <span>${tr('qsMarkWatched', 'Mark as Watched')}</span>
           </button>
         </div>
-        <button class="ios-quick-action-cancel" id="action-cancel">Cancel</button>
+        <button class="ios-quick-action-cancel" id="action-cancel">${tr('cancel', 'Cancel')}</button>
       </div>
     `;
 

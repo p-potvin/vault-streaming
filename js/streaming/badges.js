@@ -27,7 +27,7 @@ function _populateExternalBadges(title, tmdbId, mediaType, trailerKey = null) {
     if (window._currentModalImdbId) {
         const btnIMDb = document.createElement('button');
         btnIMDb.style.cssText = badgeStyle;
-        btnIMDb.innerHTML = '<img src="public/imdb_favicon.png" style="width:12px; height:12px; vertical-align:middle;" onerror="this.style.display=\'none\'" /> IMDb Rating';
+        btnIMDb.innerHTML = '<img src="public/imdb_favicon.png" style="width:12px; height:12px; vertical-align:middle;" onerror="this.style.display=\'none\'" /> ' + (window.currentLang === 'fr' ? 'Note IMDb' : 'IMDb Rating');
         btnIMDb.onclick = () => {
             if (window.electronAPI && window.electronAPI.openExternalURL) {
                 window.electronAPI.openExternalURL(`https://www.imdb.com/title/${window._currentModalImdbId}/`);

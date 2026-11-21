@@ -116,6 +116,13 @@ liveSubtitlesHandlers.registerLiveSubtitlesHandlers(ipcMain);
 
 console.log(`[web:bridge] ${bridge.channels().length} IPC channels registered`);
 
+// Per-device settings and watch history (web/devices.js): each tailnet device its own, this machine the shared ones
+const devices = require('./devices').createDevices({
+    userData: USER_DATA,
+    loadSharedSettings: loadSettings,
+    envExtras: () => ({ tmdbBearerToken: process.env.TMDB_BEARER_TOKEN }),
+});
+
 // ── App ─────────────────────────────────────────────────────────────────────
 const app = express();
 app.disable('x-powered-by');
@@ -196,7 +203,7 @@ app.post('/api/invoke', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Missing channel' });
     }
     const clientId = req.get('x-vw-client') || 'anonymous';
-    const payload = await bridge.invoke(channel, Array.isArray(args) ? args : [], clientId);
+    const payload = await (devices.route(req, channel) || bridge).invoke(channel, Array.isArray(args) ? args : [], clientId);
 
     // Web-only playback limits. Applied to the result rather than inside the
     // handler so src/ stays shared with the desktop app, which has no such cap.
@@ -421,6 +428,7 @@ function shutdown() {
     console.log('\n[web] Shutting down…');
     try { liveSubtitlesHandlers.shutdownLiveSubtitles(); } catch (_) { }
     try { watchHistoryHandlers.flushNow(); } catch (_) { }
+    try { devices.flushAll(); } catch (_) { }
     try { cleanupVwTempFiles(); } catch (_) { }
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();

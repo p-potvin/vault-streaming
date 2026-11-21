@@ -31,7 +31,8 @@ const RESTART_GAP = 4;           // a request this many segments past what ffmpe
 const WAIT_MS = 45000;           // how long a segment request waits for ffmpeg to make it
 const IDLE_MS = 2 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 60 * 1000;
-const ROOT = path.join(os.tmpdir(), 'vault-streaming-hls');
+// one folder per server (port): a second instance (a dev copy) must not empty the live one's segments on start
+const ROOT = path.join(os.tmpdir(), `vault-streaming-hls-${process.env.VW_WEB_PORT || '8722'}`);
 
 const sessions = new Map();      // key -> session
 
