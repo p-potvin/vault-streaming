@@ -134,7 +134,7 @@ test('another UI language is its own TMDB copy; the English overview is not over
 });
 
 test('tv details and seasons are read through and kept on the series item', async () => {
-    tmdbAnswers['/tv/1396'] = { id: 1396, name: 'Breaking Bad', first_air_date: '2008-01-20', vote_average: 8.9,
+    tmdbAnswers['/tv/1396'] = { id: 1396, name: 'Breaking Bad', first_air_date: '2008-01-20', vote_average: 8.9, poster_path: '/bb.jpg',
         external_ids: { imdb_id: 'tt0903747' }, seasons: [{ season_number: 1, name: 'Season 1', episode_count: 7 }],
         videos: { results: [] } };
     tmdbAnswers['/tv/1396/season/1'] = { name: 'Season 1', episodes: [{ episode_number: 1, name: 'Pilot', vote_average: 8.3 }] };
@@ -160,11 +160,12 @@ test('unknown everywhere: a plain failure, no made-up "Offline Fallback" title',
 });
 
 // ---- Discover / trending ---------------------------------------------------------------------------------------
+// (Discover and trending leave out titles with no poster yet: src/tmdb.js hasPoster; the fixtures carry one)
 test('discover reads the stored list, filters it locally, and never calls TMDB', async () => {
     items.set('imdb:tt1', { catalog_id: 'imdb:tt1', category: 'movie', title: 'Old Western', year: 1965, rating: 7.9,
-                            genres: ['Western'], external_ids: { tmdb: 11 }, raw_enrichment: { tmdb: { meta: { origin_country: ['US'] } } } });
+                            genres: ['Western'], external_ids: { tmdb: 11 }, poster_url: 'https://image.tmdb.org/t/p/w500/x.jpg', raw_enrichment: { tmdb: { meta: { origin_country: ['US'] } } } });
     items.set('imdb:tt2', { catalog_id: 'imdb:tt2', category: 'movie', title: 'New Drama', year: 2023, rating: 6.1,
-                            genres: ['Drama'], external_ids: { tmdb: 12 }, raw_enrichment: { tmdb: { meta: { origin_country: ['FR'] } } } });
+                            genres: ['Drama'], external_ids: { tmdb: 12 }, poster_url: 'https://image.tmdb.org/t/p/w500/x.jpg', raw_enrichment: { tmdb: { meta: { origin_country: ['FR'] } } } });
     lists.set('vs:discover:movie:8:CA', ['imdb:tt2', 'imdb:tt1', 'imdb:tt0133093']);
     calls.length = 0;
     const all = await handlers['discover-tmdb']({}, { providerId: '8', mediaType: 'movie', watchRegion: 'CA' });
@@ -201,7 +202,7 @@ test('trending reads its list; with no list it falls back to the catalog browse'
 test('newest first leaves out titles not released yet', async () => {
     const nextYear = new Date().getUTCFullYear() + 1;
     items.set('imdb:tt3', { catalog_id: 'imdb:tt3', category: 'movie', title: 'Upcoming', year: nextYear,
-                            release_date: `${nextYear}-06-01`, genres: ['Drama'], external_ids: { tmdb: 13 } });
+                            release_date: `${nextYear}-06-01`, genres: ['Drama'], external_ids: { tmdb: 13 }, poster_url: 'https://image.tmdb.org/t/p/w500/x.jpg' });
     lists.set('vs:discover:movie:350:CA', ['imdb:tt3', 'imdb:tt1', 'imdb:tt2']);
     const r = await handlers['discover-tmdb']({}, { providerId: '350', mediaType: 'movie', watchRegion: 'CA', sort: 'primary_release_date.desc' });
     assert.deepStrictEqual(r.results.map(x => x.title), ['New Drama', 'Old Western']);
