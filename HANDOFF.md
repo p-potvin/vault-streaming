@@ -1,111 +1,81 @@
 # Vault Streaming — Session Handoff
 
-**Last updated:** Fri, 20 Nov 2026 10:00
-**Branch:** `main`, everything merged (vault-streaming #19–#22, vault-raggae #91). **Version 2.7.0** (vault-raggae 0.26.0).
-**Next tasks:** §1 TV series resume the last episode; §2 run the playback indexing (Moments) on `greencloud-panopticam`.
+**Last updated:** Sat, 21 Nov 2026 14:10
+**Branch:** `vw-claude-web-mobile` = open PR **#29** (web client on phones / iPhone & iPad playback / per-device data /
+French strings). Everything else is merged: vault-streaming #24–#28 (**2.10.1** on `main`, #29 makes it 2.10.2),
+vault-raggae #92–#94 (**0.29.0**; its checkout is back on `main`).
 
-Read this, then `README.md`. Company protocol entry point: `..\vaultwares-docs\instructions\ROUTER.md`; ledger last
-(`..\agent-ledger\scripts\record-agent-change.ps1`).
+Read this, then `README.md` and `web/README.md`. Company protocol entry point: `..\vaultwares-docs\instructions\ROUTER.md`;
+ledger last (`..\agent-ledger\scripts\record-agent-change.ps1`). Act on Devin / Gemini review comments, ignore CodeRabbit.
 
 ---
 
-## 1. Next task: TV series open on the last episode watched
+## 0. Running right now / waiting
 
-### What the user wants
-Opening a series (details modal, Library card, Continue Watching, Watch History) lands on the season **and episode**
-watched last, ready to resume — or on the next episode when the last one was finished.
+- **TMDB catalog backfill** (`scripts/backfill-catalog.js --execute`, started from this checkout ~10:20, log
+  `%LOCALAPPDATA%\VaultWares\vault-streaming\backfill-20261121.log`): films >= 600 votes (72.5 k) and every series
+  >= 600 votes (18.1 k) with **all** episodes (1.6 M, specials included), full episode fields (crew, guest stars) and
+  cast / crew per title in `raw_enrichment.tmdb.credits`. At 14:10: ~44 k / 86.7 k titles, 302 misses. Resumable
+  (done files in that folder: `backfill-done.txt`, `backfill-episodes-done-v2.txt`, `backfill-credits-done.txt`).
+  The catalog (`G:\Catalogs\vw-catalog.db`, 23.6 GB before) grows ~12 GB.
+- **After the backfill** (vault-raggae, all built and tested on samples, not run for real):
+  1. `python -m app.cast.build` — the cast catalog `G:\Catalogs\vw-cast.db` (people kept: top-billed 20 + key crew
+     jobs + people named by a Celebrities identity; 300-title sample: 14,471 people).
+  2. `python -m app.pictures seasons profiles stills` (`--dry-run` first: counts / time; stills ~1.6 M at 4 req/s =
+     days, run seasons and profiles first).
+  3. `python -m app.picture_vectors posters seasons stills profiles` (SigLIP into `G:\Catalogs\vw-pictures.lance`,
+     RTX 2060).
+  4. Later, ask the operator first (new batch of requests): TMDB person details (biography, birthday, imdb id) for
+     the people in the most titles; face vectors of profiles vs the Celebrities exemplars (`method = face`).
+- **The operator is testing the web client on iPhone and iPad** (live server restarted 13:30 with the HLS route).
+  **The live server needs one more restart** for per-device data (§2): `Stop-ScheduledTask` leaves the node child
+  behind, so: kill the process listening on 8722, then `Start-ScheduledTask -TaskPath '\VaultWares\' -TaskName
+  VaultStreamingWeb`, and check `logs\web-server.log` shows `[web:hls] route registered`.
 
-### What exists today
-- `js/streaming/details-modal.js` (~line 266): the season picker already defaults to the last-watched season
-  (`getWatchProgress({ mediaType: 'tv', tmdbId, title })` without season/episode returns the most recent episode of the
-  show, `src/watch-history.js` `watch-history:get-progress`). The **episode** is not marked, scrolled to, or offered to
-  resume; `_loadSeasonEpisodes` (~line 303) renders the list with no progress at all.
-- `js/favorites.js` (~line 224, Library card): an in-progress episode is resumed directly; a finished one, or none,
-  opens the season screen. "Next episode after a finished one" is not handled anywhere.
-- `js/continue-watching.js` / `js/history.js`: resume the exact item stored (`triggerRDStream` with its season/episode).
-- Watch progress per episode is keyed `tv:<tmdbId|title>:s<S>e<E>`; `completed` = 90 % watched.
+## 1. PR #29 — what is in it
 
-### To do
-- In the episode list: mark watched episodes / show the progress bar, highlight + scroll to the last one, a
-  "Resume S02E05 (12:40)" or "Next: S02E06" button. Next episode = same season +1, else first episode of the next
-  season (the TMDB season list is already loaded there).
-- Library card / Continue Watching for a finished episode: offer the next one instead of re-opening the finished one.
-- Watch out: `get-progress` matches `item.tmdbId === tmdbId` strictly. Series launched with an IMDb id (`tt…`) or a
-  numeric string store a different tmdbId than the details modal asks with — normalise both sides (String, catalog id)
-  or a show's progress looks empty.
-- The episode's last source (§3) is per episode, so "Next episode" still goes through the search; that is expected.
+- **Phones**: Library / History no longer stacked under Discover (`css/mobile.css` forced `display:grid
+  !important`); bottom-bar Settings opens; details window and settings full screen, one column; player controls,
+  Up next / loading card, episodes panel and loading card fit; search box on its own row. Review fixes: sticky details
+  header under a notch, control groups wrap.
+- **iPhone / iPad playback** (`web/hls-route.js`, `web/public/web-overrides.js`): Safari gets HLS
+  (`/api/hls/index.m3u8?src=…`): VOD playlist with the probed duration, 6 s MPEG-TS segments made on demand,
+  far seeks restart ffmpeg there (`-output_ts_offset`, `-forced-idr` for NVENC), ffmpeg stopped 20 segments ahead /
+  idle. Cause: the piped fMP4 of `/api/transcode` has no length / ranges (iPhone: "format not supported"; iPad: a
+  few-second duration the <60 s provider-error-clip guard paused). `playsinline` + iPhone fullscreen fallback;
+  `body.vw-player-open` (js/mobile.js) hides the app's top and bottom bars over the player on any touch device.
+  Verified in the browser pane (native HLS there): full duration, plays, seek works. **Not yet confirmed on the
+  operator's devices.**
+- **Per-device settings and watch history** (`web/devices.js`): device = tailnet address (greencloud's X-Real-IP,
+  trusted only from greencloud 100.73.93.84 / loopback); files in `%APPDATA%\vault-streaming\devices\<ip>\`; a new
+  device starts with the shared settings and an empty history; the desktop app and local requests keep the shared
+  files. Test: `tests/test_web_devices.js`.
+- **French**: English-only strings translated (details window, bottom bar, player tooltips, filters, countdown,
+  quick actions, stream status lines, History badge, IMDb button, quality menu); "Québécois (QC)" labels are now
+  "Français (fr-CA)" / "French (fr-CA)". French subtitles checked: fr track auto-selected, accents fine.
 
-## 2. Next task: playback indexing (Moments) on greencloud-panopticam
+## 2. Open findings / next ideas
 
-(Notes from the operator, Fri 20 Nov 2026. This is vault-raggae work — `app/moments/stream.py` and the gateway queue in
-`app/main.py` — vault-streaming only queues jobs via `POST /v1/moments/stream`, `src/ipc/moments.ipc.js`.)
+- **Episode numbering mismatch** (subtitles): American Dad! S07E14 is "School Lies" on TMDB but the French subtitle
+  picked was Addic7ed's 07x14 "Stan's Best Friend" (TVDB order). Subtitle matching by season/episode numbers can give
+  another episode's subtitles; match by episode IMDb id or title instead. Not started.
+- Web client on desktop browsers still uses the piped `/api/transcode` (no seeking past the buffer). The HLS route
+  could serve them too (via hls.js where there is no native HLS).
+- Device names: `web/devices.js` resolves the tailnet machine name (`tailscale whois`) for the log only; a "this
+  device" line in Settings would help.
 
-**Idea:** run the catalog's Moments ingest for streams (and possibly the Prom-King site-rebuild catalog, ADR 0001 in
-vaultwares-docs) on `greencloud-panopticam`, which already pulls a second stream for its own work, instead of reading
-every played title a second time from this PC.
+## 3. Done this session (for context)
 
-### Measured Fri 20 Nov 2026
-- **Storage per hour of video: ~4 MB** in total — nothing of the video is kept. Local numbers
-  (`%LOCALAPPDATA%\VaultWares\raggae`): sound + look vectors 0.93 MB/h in `vw-moments.db` (370 windows/h, CLAP 512-d +
-  SigLIP 768-d as float16), the LanceDB search copy ~2.2 MB/h (1,773 MB for 807 h, index overhead included), tags +
-  "said" text + transcript ~0.1 MB/h (GoT S01E01: 501 cues, 15 KB). Disk is not the constraint.
-- **What a read costs instead:** the whole file is downloaded once (the audio is interleaved): a 4K remux is
-  25–80 GB, a 1080p web release 2–5 GB, a 720p copy ~1 GB (vault-streaming already passes a 720p/480p copy above
-  1080p, same release group first). ffmpeg now decodes key frames only (4 % of this PC for a 4K remux).
-  The models are the heavy part: SigLIP + CLAP run on GPU 1 here, and the transcript is Nemotron 3.5 through
-  nemo-speech (GPU, `NEMO_SPEECH_URL`).
-- **greencloud-panopticam now** (read-only check, Fri 20 Nov 09:50): 4 vCPU AMD EPYC-Milan, **no GPU**, 7.7 GB RAM
-  (3.9 GB available), disk 58 GB with **18 GB free** (71 % used; `/var/lib/panopticam` 22 GB), load average 2.0–2.7.
-  Panopticam's `worker.py` alone uses ~150 % CPU (running 7 days), the `panopticam` service ~30 % CPU / 28 % RAM.
-- `ovh-panopticam` is retired (provider terminating, Thu 29 Oct 2026) and no longer answers.
+- Stream reload (F5 / context menu / automatic on a dead link) — #26.
+- Diarized AI subtitles (Nemotron-3-Diarization on nemo-speech, `D:\HuggingFace\models\NeMoSpeech`) — vault-raggae #93.
+- Splash-style stream loading card, in-player loading on the Up next card, next-episode pre-load 30 s before the end,
+  Continue Watching per series, Play next fix (the stream dialog sat under the player and any click cancelled it) — #27.
+- Series backfill limits (600 votes, no top-3000, no episode cap), cast / crew and full episode fields — #28.
+- Cast catalog, picture phases, picture vectors — vault-raggae #94.
 
-### What that means (to decide next session)
-- Without a GPU, SigLIP/CLAP on CPU at 1 frame/s and Nemotron speech on CPU would be far slower than real time on
-  4 shared cores already half-used by Panopticam. The realistic split: greencloud does the **read** (ffmpeg, key frames
-  + 16 kHz audio, a lighter copy) and ships the small extracts (JPEG frames + WAV segments, or the 1 fps frames only)
-  to this PC's gateway, which runs the models — or the models stay here and greencloud is not needed for streams at
-  all. Measure before choosing: frames + audio per hour at 224 px JPEG is roughly 360 × 10 frames × ~10 KB ≈ 36 MB +
-  ~115 MB of 16 kHz WAV per hour.
-- The site-rebuild catalog is a separate source (its own media, not debrid streams): same per-hour storage, but its
-  size (number of hours) decides whether 18 GB free is enough — check the catalog's total runtime first.
-- Any outside requests in a loop (catalog ingest) need the operator's go-ahead with counts and rate
-  (REQUEST_RATE_LIMITING).
+## 4. Testing notes
 
-## 3. What shipped Thu 19 – Fri 20 Nov (for context)
-
-- **Stream picking** (#19): sync entries and lapsed AllDebrid/TorBox dropped, one entry per hash, episode fit, cached →
-  single episode → packs, 8 tries / 120 s. Only Real-Debrid (via Comet) and Deepbrid are paid for.
-- **Settings / subtitles** (#21): Upscaling (off by default), skip the KinoCheck trailer intro (on), subtitles by
-  IMDb id with a picker per language, the AI transcript from vault-raggae listed (never starts a speech job), no live ASR.
-- **Moments** (#21, vault-raggae #91): a lighter copy above 1080p; reads pause when the app quits and resume at start
-  (checkpoints per transcribed 10-min segment; stopped reads resume from what they stored); ffmpeg key frames only.
-- **Playback** (#22): HEVC Main 10 copied as `hvc1.2.4`, Dolby Vision 7/5 never copied, a failing copy recovers as a
-  1080p tone-mapped re-encode; the transcode knows the runtime (clock, seek restarts ffmpeg, progress saved);
-  **the last source of a title replays directly** (`lastSource` in the watch history, "Other sources…" in the quality
-  menu searches again); start tab and Continue Watching settings; PiP fixes; vault-explorer collection leftovers removed.
-- **Logs:** `%APPDATA%\vault-streaming\logs\vault-streaming.log` (previous run `.1.log`), every line redacted
-  (`src/app-log.js`). Stream links are stored as `comet:/playback/…` — never with the Comet config (debrid keys).
-
-## 4. Environment and rules that still hold
-
-- **Debrid through Comet** (`COMET_STREAM_BASE`, Comet on vps-ovhcloud behind its VPN); the app never calls
-  `api.real-debrid.com` for playback. Comet's own config still lists AllDebrid (the app drops those entries; removing
-  it from Comet's config saves Comet a lookup per search — operator's call, the config holds keys).
-- **Testing in the app:** Electron ignores an `APPDATA` override, so a Playwright-launched copy uses the operator's
-  real settings and watch history. Back up `%APPDATA%\vault-streaming\vault-settings.json` and
-  `vault-watch-history.json` first and restore what a test changed. `VAULT_STREAMING_E2E=1` skips the Moments
-  pause/resume and the splash.
-- **Versions:** vault-streaming `package.json` (`node scripts/sync-version.js X.Y.Z`); vault-raggae `pyproject.toml`
-  (`python tools/sync_version.py X.Y.Z`). Bump on every PR.
-- **Git:** branch `vw-codex-*` / `vw-claude-*`, PR with reviewer p-potvin, the operator merges (or asks you to).
-  Act on Devin / Gemini review comments; CodeRabbit is ignored.
-- **Windows shell traps:** write scripts with the Write tool; Python `write_text` on Windows writes CRLF (index.html
-  is LF); scratchpad `.js` files run as ES modules — use `.cjs`.
-- **Public hygiene:** vault-streaming is a public repo — no adult-site names in commits, PRs, branches or docs.
-
-## 5. Still open
-- Embed the 84k cached posters for image search (SigLIP, vault-raggae).
-- Moments re-index of the 2,331 library videos at 10 frames (`python -m app.moments.index …`, ~11 h+ GPU).
-- A Settings switch for `indexPlayback` (today only `appSettings.indexPlayback = false`).
-- The intermittent mid-play failure of a copied 4K Dolby Vision video is recovered (1080p re-encode) but its cause is
-  not pinned down; the log file will show `copied video not playable` when it happens.
+- GUI tests (Playwright `_electron`) must run with `VAULT_STREAMING_E2E=1 VAULT_STREAMING_USER_DATA=<scratch>` (a copy
+  of settings / history), never the operator's real data; delete the copy after (it holds keys).
+- Web dev instance: `.claude/launch.json` "web-dev" (port 8723, token `devlocal`, `VW_WEB_USERDATA` = a scratch copy).
+- Unit tests: `node tests/test_series_resume.js`, `test_stream_picker.js`, `test_version.js`, `test_web_devices.js`.
