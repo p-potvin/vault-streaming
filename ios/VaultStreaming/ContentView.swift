@@ -54,6 +54,10 @@ public struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .vaultStreamingShouldLock)) { _ in
             if AppConfig.isBiometricLockEnabled {
+                // the lock overlay covers this view only: a details sheet or the full-screen player sit above it,
+                // so close them (the player saves its position as it closes) before locking
+                selectedMedia = nil
+                activeStream = nil
                 isLocked = true
                 triggerUnlock()
             }
@@ -275,7 +279,36 @@ public struct ContentView: View {
     }
 
     private func resumeHistoryPlayback(_ record: WatchProgressRecord) {
-        let fallback = MediaItem(
+        // a finished episode: go on with the series' next one rather than replay it (js/continue-watching.js)
+        if record.mediaType == "tv" && record.completed {
+            let rawId = record.rawTmdbId.isEmpty ? record.title : record.rawTmdbId
+            Task { @MainActor in
+                let shown = await Api.shared.fetchShowProgress(rawId: record.rawTmdbId, title: record.title)
+                let seasons = await SeriesResumeHelper.seasonsOf(rawId: rawId)
+                if let target = SeriesResumeHelper.pickResumeTarget(items: shown.isEmpty ? [record] : shown, seasons: seasons) {
+                    startPlayback(
+                        mediaType: "tv",
+                        tmdbId: record.tmdbId,
+                        rawId: rawId,
+                        title: record.title,
+                        posterUrl: record.posterUrl,
+                        year: record.year,
+                        season: target.season,
+                        episode: target.episode,
+                        overrideStartPosition: target.kind == .resume && target.positionSec > 5 ? target.positionSec : nil,
+                        fallbackItem: historyFallbackItem(record)
+                    )
+                } else {
+                    startHistoryRecord(record)
+                }
+            }
+            return
+        }
+        startHistoryRecord(record)
+    }
+
+    private func historyFallbackItem(_ record: WatchProgressRecord) -> MediaItem {
+        MediaItem(
             id: record.tmdbId ?? abs(record.title.hashValue),
             rawId: record.rawTmdbId.isEmpty ? record.title : record.rawTmdbId,
             tmdbId: record.tmdbId,
@@ -285,6 +318,10 @@ public struct ContentView: View {
             year: record.year,
             media_type: record.mediaType
         )
+    }
+
+    private func startHistoryRecord(_ record: WatchProgressRecord) {
+        let fallback = historyFallbackItem(record)
         let startPos: Double? = (!record.completed && record.position > 5) ? record.position : nil
 
         startPlayback(
@@ -541,22 +578,9 @@ public struct ContentView: View {
     }
 
     private func handlePlaybackDismiss(stream: StreamPlaybackItem, position: Double, duration: Double, completed: Bool) {
-        Task {
-            await Api.shared.recordProgress(
-                mediaType: stream.mediaType ?? "movie",
-                tmdbId: stream.tmdbId,
-                rawId: stream.rawId,
-                title: stream.title,
-                position: position,
-                duration: duration,
-                completed: completed,
-                posterUrl: stream.posterUrl,
-                year: stream.year,
-                season: stream.season,
-                episode: stream.episode,
-                lastSource: stream.sourceStream
-            )
-        }
+        // Nothing to save here: PlayerViewModel.cleanup() writes the final position against the episode actually
+        // playing. `stream` is the item the cover opened with, so after Next episode a second write here put
+        // episode 2's position on episode 1.
     }
 
     // MARK: - Watchlist Persistence

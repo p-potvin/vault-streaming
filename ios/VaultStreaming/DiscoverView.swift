@@ -11,6 +11,7 @@ public struct DiscoverView: View {
 
     @ObservedObject private var lang = LanguageManager.shared
 
+    @State private var feedGeneration: Int = 0   // bumped by every reset: an older load's page is dropped
     @State private var selectedCategory: String = "movie"
     @State private var selectedProvider: String = "all"
     @State private var selectedSort: String = "popularity.desc"
@@ -503,14 +504,20 @@ public struct DiscoverView: View {
             continueWatching = []
             return
         }
-        if let raw = try? await Api.shared.fetchContinueWatching(limit: 16) {
-            continueWatching = Array(SeriesResumeHelper.latestPerTitle(raw).prefix(4))
+        // as js/continue-watching.js: each series' most recent episode, finished or not (the unfinished-only list
+        // dropped a just-finished episode and offered an older one), grouped before anything is left out; a
+        // finished series card opens on its next episode (ContentView.resumeHistoryPlayback)
+        if let raw = try? await Api.shared.fetchWatchHistory(limit: 500) {
+            let latest = SeriesResumeHelper.latestPerTitle(raw).filter { $0.mediaType == "tv" || !$0.completed }
+            continueWatching = Array(latest.prefix(4))
         }
     }
 
     private func loadFeed(reset: Bool) async {
         if reset {
+            feedGeneration += 1
             isLoading = true
+            isLoadingMore = false
             errorMessage = nil
             currentPage = 1
             hasMorePages = true
@@ -519,16 +526,20 @@ public struct DiscoverView: View {
             isLoadingMore = true
             currentPage += 1
         }
+        // a category / provider / sort change while this page loads makes it another list's page
+        let generation = feedGeneration
+        let requestedPage = currentPage
 
         async let cwTask: Void = reloadContinueWatchingIfNeeded(reset)
 
         do {
             let fetched = try await Api.shared.fetchDiscover(
                 mediaType: selectedCategory,
-                page: currentPage,
+                page: requestedPage,
                 providerId: selectedProvider,
                 sort: selectedSort
             )
+            guard generation == feedGeneration else { return }
 
             if reset {
                 items = fetched
@@ -540,6 +551,7 @@ public struct DiscoverView: View {
                 hasMorePages = !fetched.isEmpty
             }
         } catch {
+            guard generation == feedGeneration else { return }
             if reset {
                 errorMessage = error.localizedDescription
             } else {

@@ -265,32 +265,79 @@ function catalogToCard(item, language = null) {
     const ext = item.external_ids || {};
     const imdb = ext.imdb || (String(item.catalog_id || '').startsWith('imdb:') ? item.catalog_id.slice(5) : null);
     const credits = Array.isArray(item.cast_or_credits) ? item.cast_or_credits : [];
-    const b = (language && language !== 'en-US') ? tmdbBlob(item, language) : null;
-    const localTitle = b && (item.category === 'tv' ? (b.name || b.title) : (b.title || b.name));
-    const localPoster = b && b.poster_path ? tmdbImage(b.poster_path) : null;
-    const localGenres = (b && Array.isArray(b.genres) && b.genres.length)
-        ? b.genres.slice(0, 3).map(g => g.name).filter(Boolean).join(', ')
-        : null;
-    return {
+    const card = {
         id: ext.tmdb || imdb || item.catalog_id,
         imdb_id: imdb,
         catalog_id: item.catalog_id,
         media_type: item.category === 'tv' ? 'tv' : 'movie',
-        title: localTitle || item.title || item.original_title || 'Untitled',
+        title: item.title || item.original_title || 'Untitled',
         year: item.year ? String(item.year) : '—',
         rating: item.rating ? String(item.rating) : '—',
-        genres: localGenres || (Array.isArray(item.genres) ? item.genres.slice(0, 3).join(', ') : (item.genres || 'General')),
-        poster: localPoster || raggae.posterFor(item) || PLACEHOLDER_POSTER,
-        overview: (b && b.overview) || item.overview || (credits.length ? credits.slice(0, 3).join(', ') : 'No description available.'),
+        genres: Array.isArray(item.genres) ? item.genres.slice(0, 3).join(', ') : (item.genres || 'General'),
+        poster: raggae.posterFor(item) || PLACEHOLDER_POSTER,
+        overview: item.overview || (credits.length ? credits.slice(0, 3).join(', ') : 'No description available.'),
         votes: item.votes || 0,
         source: 'raggae'
     };
+    const b = isLocalized(language) ? tmdbBlob(item, language) : null;
+    return b ? applyLanguageBlob(card, b, language) : card;
+}
+
+function isLocalized(language) {
+    return !!language && language !== 'en-US';
+}
+
+/** A card with the title, overview, genres and poster of the catalog's TMDB copy in another language. */
+function applyLanguageBlob(card, b, language) {
+    const title = card.media_type === 'tv' ? (b.name || b.title) : (b.title || b.name);
+    const genres = (Array.isArray(b.genres) && b.genres.length)
+        ? b.genres.slice(0, 3).map(g => (g && g.name) || g).filter(Boolean).join(', ') : null;
+    return {
+        ...card,
+        title: title || card.title,
+        overview: b.overview || card.overview,
+        genres: genres || card.genres,
+        poster: b.poster_path ? tmdbImage(b.poster_path) : card.poster,
+        localized: language,
+    };
+}
+
+// catalog id + language -> the few fields a card needs from that language's TMDB copy (null: there is none)
+const languageBlobCache = new Map();
+
+async function languageBlobFor(catalogId, language) {
+    const key = `${catalogId}|${language}`;
+    if (languageBlobCache.has(key)) return languageBlobCache.get(key);
+    let slim = null;
+    try {
+        const item = await raggae.getItem(catalogId, { raw: true });
+        const b = item && tmdbBlob(item, language);
+        if (b) slim = { title: b.title, name: b.name, overview: b.overview, poster_path: b.poster_path, genres: b.genres };
+    } catch (_) {
+        return null;   // not remembered: the gateway may answer next time
+    }
+    languageBlobCache.set(key, slim);
+    if (languageBlobCache.size > 5000) languageBlobCache.delete(languageBlobCache.keys().next().value);
+    return slim;
+}
+
+/**
+ * Cards in `language`. Browse and search rows come without the catalog's raw TMDB copies (only the stored lists
+ * carry them), so each card not localized yet is looked up once by its catalog id (cached).
+ */
+async function localizeCards(cards, language) {
+    if (!isLocalized(language) || !Array.isArray(cards)) return cards;
+    return Promise.all(cards.map(async card => {
+        if (!card || card.localized || card.source !== 'raggae' || !card.catalog_id) return card;
+        const b = await languageBlobFor(card.catalog_id, language);
+        return b ? applyLanguageBlob(card, b, language) : card;
+    }));
 }
 
 async function searchLocalCatalog(query, options = {}) {
     if (!query) return [];
     const hits = await raggae.searchTitles(query, { limit: options.limit || 20 });
-    return hits.map(it => catalogToCard(it, options.language || null));
+    return localizeCards(hits.map(it => catalogToCard(it, options.language || null)), options.language);
 }
 
 /** Local hits are enough on their own when there are several and at least one well-known title among them. */
@@ -498,7 +545,7 @@ async function localPopular(page = 1, language = 'en-US') {
     const pageOf = category => filteredPage(`popular:${category}:${language}`, page, per,
         (offset, limit) => raggae.browse({ category, sort: 'votes', limit, offset, minVotes: minVotesFor(category) }),
         row => { const card = catalogToCard(row, language); return hasPoster(card) ? card : null; });
-    const [movies, shows] = await Promise.all([pageOf('movie'), pageOf('tv')]);
+    const [movies, shows] = await Promise.all([pageOf('movie'), pageOf('tv')].map(p => p.then(c => localizeCards(c, language))));
     const out = [];
     for (let i = 0; i < per; i++) {
         if (movies[i]) out.push(movies[i]);
@@ -648,7 +695,8 @@ async function findCatalogItem(id, category, raw = true) {
 function tmdbBlob(item, language) {
     const tmdb = item && item.raw_enrichment && item.raw_enrichment.tmdb;
     if (!tmdb || typeof tmdb !== 'object') return null;
-    return tmdb[language] || null;
+    // the backfill stores French under fr-FR (scripts/backfill-catalog.js); a fr-CA client reads that copy
+    return tmdb[language] || (/^fr/i.test(String(language)) ? (tmdb['fr-FR'] || tmdb['fr-CA']) : null) || null;
 }
 
 /** A catalog item (+ its TMDB copy in `language`, when there is one) in the TMDB details shape the modal reads. */
@@ -969,7 +1017,7 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, language =
     const browseKey = JSON.stringify([category, browseSort, page, language, genreNames, range]);
     const hit = browseCache.get(browseKey);
     if (hit && Date.now() - hit.ts < LIST_CACHE_MS) return { success: true, source: 'raggae', list: false, results: hit.results };
-    const results = await filteredPage(JSON.stringify([category, browseSort, language, genreNames, range]), page, PAGE_SIZE,
+    let results = await filteredPage(JSON.stringify([category, browseSort, language, genreNames, range]), page, PAGE_SIZE,
         (offset, limit) => raggae.browse({
             category, sort: browseSort, limit, offset,
             // every sort keeps to the backfill's floor (src/catalog-coverage.js: films 600, series 1,000 votes):
@@ -985,6 +1033,7 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, language =
             const card = catalogToCard(it, language);
             return hasPoster(card) ? card : null;
         });
+    results = await localizeCards(results, language);
     if (results.length) browseCache.set(browseKey, { ts: Date.now(), results });
     if (browseCache.size > 200) browseCache.delete(browseCache.keys().next().value);
     return { success: true, source: 'raggae', list: false, results };

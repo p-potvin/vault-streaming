@@ -40,3 +40,9 @@ Each phase is one PR on its own branch, built by the workflow before it is merge
 
 - **Phases 1–7 implemented locally** across server prerequisites (`web/trailer-h264-route.js`, `web/server.js`, `src/tmdb.js`) and all native iOS/iPadOS SwiftUI views/models (`ios/VaultStreaming/` + `ios/VaultStreaming.xcodeproj/project.pbxproj`, `ios/README.md`).
 - **Pending macOS CI compile**: Dispatch `.github/workflows/ios-unsigned-build.yml` on `macos-14` once pushed to verify Xcode compilation and generate the `v2.10.3` unsigned IPA artifact.
+- **Review fixes (Sat, 21 Nov 2026 16:10)**: the app sends `fr-FR` to the server (the catalog's key; its own text
+  stays fr-CA) and the server localizes browse / search / popular cards; audio auto-choice and failover; Discover
+  stale pages; film / series identity; single progress writer on close; autoplay countdown; growing AI transcripts;
+  preload expiry; Continue Watching on finished episodes; lock closes open screens; `+` in HLS sources; no token in
+  URLs; trailers AV1-first on AV1 devices. Trailers on older devices need `/trailers/<id>.h264.mp4` from PR #29:
+  merge #29 first.

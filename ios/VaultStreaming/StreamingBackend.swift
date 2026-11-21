@@ -12,6 +12,7 @@ public enum IpcChannel: String, Sendable {
 
     // Trailers
     case trailerGet = "trailer:get"
+    case trailerCacheStats = "trailer-cache:stats"
     case getKinocheckTrailer = "get-kinocheck-trailer"
 
     // Streams & Debrid
@@ -123,7 +124,8 @@ public class StreamingBackend: ObservableObject {
         return headers
     }
 
-    /// Builds an authenticated URL for routes such as `/api/hls/index.m3u8`, `/api/media`, or `/trailers/...`.
+    /// Builds a URL for routes such as `/api/hls/index.m3u8`, `/api/media`, or `/trailers/...`. The token travels in
+    /// `authHeaders` (AVURLAsset / fetchData), not in the query, so it never lands in the front end's access logs.
     public func authenticatedURL(path: String, queryItems: [URLQueryItem] = [], includeTokenQuery: Bool = false) -> URL? {
         guard var components = URLComponents(url: activeServerURL, resolvingAgainstBaseURL: false) else {
             return nil
@@ -135,6 +137,9 @@ public class StreamingBackend: ObservableObject {
             items.append(URLQueryItem(name: "token", value: token))
         }
         components.queryItems = items.isEmpty ? nil : items
+        // URLComponents leaves a literal "+" in query values; Express reads it as a space, which broke source links
+        // carrying one (a Comet config path) on their way through /api/hls?src=
+        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         return components.url
     }
 
@@ -146,25 +151,25 @@ public class StreamingBackend: ObservableObject {
         if maxHeight > 0 {
             items.append(URLQueryItem(name: "h", value: String(maxHeight)))
         }
-        return authenticatedURL(path: "/api/hls/index.m3u8", queryItems: items, includeTokenQuery: !token.isEmpty)
+        return authenticatedURL(path: "/api/hls/index.m3u8", queryItems: items)
     }
 
     public func mediaFileURL(serverPath: String) -> URL? {
         authenticatedURL(
             path: "/api/media",
-            queryItems: [URLQueryItem(name: "path", value: serverPath)],
-            includeTokenQuery: !token.isEmpty
+            queryItems: [URLQueryItem(name: "path", value: serverPath)]
         )
     }
 
     public func trailerURL(youtubeId: String, h264: Bool = false) -> URL? {
         let suffix = h264 ? ".h264.mp4" : ".mp4"
-        return authenticatedURL(path: "/trailers/\(youtubeId)\(suffix)", includeTokenQuery: !token.isEmpty)
+        return authenticatedURL(path: "/trailers/\(youtubeId)\(suffix)")
     }
 
     // MARK: - Connection Verification
 
-    /// Tests a candidate server URL and token against `get-settings` before saving credentials.
+    /// Tests a candidate server URL and token before saving credentials. Any `/api/invoke` call needs the token; this
+    /// one answers a few numbers (`get-settings` sent the whole settings file, API keys included, to the phone).
     public func verifyConnection(serverURL rawServerURL: String, token rawToken: String) async throws {
         let (cleanURLString, embeddedToken) = AppConfig.splitEmbeddedToken(from: rawServerURL)
         guard let baseURL = URL(string: cleanURLString.isEmpty ? AppConfig.defaultServerURL : cleanURLString),
@@ -177,7 +182,7 @@ public class StreamingBackend: ObservableObject {
         let candidateToken = trimmedToken.isEmpty ? (embeddedToken ?? "") : trimmedToken
 
         _ = try await performInvoke(
-            channel: IpcChannel.getSettings.rawValue,
+            channel: IpcChannel.trailerCacheStats.rawValue,
             args: [],
             baseURL: baseURL,
             tokenOverride: candidateToken,
@@ -284,7 +289,7 @@ public class StreamingBackend: ObservableObject {
             "providerId": providerId,
             "mediaType": mediaType,
             "page": page,
-            "language": AppConfig.effectiveLanguage,
+            "language": AppConfig.serverLanguage,
             "withGenres": withGenres,
             "decade": decade,
             "region": region,
@@ -305,7 +310,7 @@ public class StreamingBackend: ObservableObject {
         let params: [String: Any] = [
             "query": "",
             "page": page,
-            "language": AppConfig.effectiveLanguage
+            "language": AppConfig.serverLanguage
         ]
         let json = try await invoke(.searchTmdb, args: [params])
         guard let result = json["result"] as? [String: Any],
@@ -342,7 +347,7 @@ public class StreamingBackend: ObservableObject {
         let params: [String: Any] = [
             "query": trimmed,
             "page": page,
-            "language": AppConfig.effectiveLanguage
+            "language": AppConfig.serverLanguage
         ]
         let json = try await invoke(.searchTmdb, args: [params])
         guard let result = json["result"] as? [String: Any],
@@ -361,7 +366,7 @@ public class StreamingBackend: ObservableObject {
         let params: [String: Any] = [
             "id": idValue,
             "mediaType": mediaType,
-            "language": AppConfig.effectiveLanguage,
+            "language": AppConfig.serverLanguage,
             "title": title
         ]
         do {
@@ -388,7 +393,7 @@ public class StreamingBackend: ObservableObject {
 
         let json = try await invoke(channel, args: [[
             "id": idValue,
-            "language": AppConfig.effectiveLanguage
+            "language": AppConfig.serverLanguage
         ]])
 
         guard let result = json["result"] as? [String: Any] else {
@@ -404,7 +409,7 @@ public class StreamingBackend: ObservableObject {
         let json = try await invoke(.getTmdbTvSeason, args: [[
             "id": idValue,
             "seasonNumber": seasonNumber,
-            "language": AppConfig.effectiveLanguage
+            "language": AppConfig.serverLanguage
         ]])
 
         guard let result = json["result"] as? [String: Any] else {

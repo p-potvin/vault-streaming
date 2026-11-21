@@ -195,6 +195,13 @@ public struct AppConfig {
     }
 
     /// Resolved TMDB/catalog BCP-47 tag sent to backend API calls (`"fr-CA"` or `"en-US"`).
+    /// The language sent to the server (catalog, details, seasons, trailers). The catalog keeps its French copy under
+    /// `fr-FR` (scripts/backfill-catalog.js; Québec titles first) and the web client asks for `fr-FR` too, so asking
+    /// for `fr-CA` missed the stored copy, went to TMDB live and resolved every trailer again under a new key.
+    public static var serverLanguage: String {
+        effectiveLanguage.lowercased().hasPrefix("fr") ? "fr-FR" : "en-US"
+    }
+
     public static var effectiveLanguage: String {
         let choice = appLanguage
         if choice == "fr-CA" || choice == "en-US" {

@@ -1,8 +1,11 @@
 import SwiftUI
 import AVKit
+import VideoToolbox
 
 /// Inline trailer player shown at the top of `MovieDetailsSheet`, using the server's
-/// `/trailers/<id>.h264.mp4` route with automatic fallback to `.mp4` or YouTube thumbnail.
+/// cached trailer: the AV1 `/trailers/<id>.mp4` on devices with an AV1 decoder (A17 Pro / M3 and later), else the
+/// server's H.264 copy `/trailers/<id>.h264.mp4` (web/trailer-h264-route.js); the other one once on a failure, then
+/// the YouTube thumbnail.
 public struct TrailerPlayerView: View {
     let rawId: String
     let mediaType: String
@@ -15,7 +18,7 @@ public struct TrailerPlayerView: View {
     @State private var trailerKey: String? = nil
     @State private var isLoading: Bool = true
     @State private var playbackFailed: Bool = false
-    @State private var triedNonH264Fallback: Bool = false
+    @State private var triedOtherFormat: Bool = false
     @State private var loadTask: Task<Void, Never>? = nil
     @State private var statusObservation: NSKeyValueObservation? = nil
 
@@ -192,7 +195,7 @@ public struct TrailerPlayerView: View {
 
             let skipIntro = AppConfig.trailerSkipIntro && result.provider == "kinocheck"
             await MainActor.run {
-                self.attachStream(youtubeId: key, h264: true, skipIntro: skipIntro)
+                self.attachStream(youtubeId: key, h264: !Self.decodesAV1, skipIntro: skipIntro)
             }
         }
     }
@@ -230,9 +233,9 @@ public struct TrailerPlayerView: View {
                         avPlayer.play()
                     }
                 case .failed:
-                    if h264 && !self.triedNonH264Fallback {
-                        self.triedNonH264Fallback = true
-                        self.attachStream(youtubeId: youtubeId, h264: false, skipIntro: skipIntro)
+                    if !self.triedOtherFormat {
+                        self.triedOtherFormat = true
+                        self.attachStream(youtubeId: youtubeId, h264: !h264, skipIntro: skipIntro)
                     } else {
                         self.isLoading = false
                         self.playbackFailed = true
@@ -243,6 +246,9 @@ public struct TrailerPlayerView: View {
             }
         }
     }
+
+    /// Whether this device decodes AV1 in hardware ('av01'; the constant's SDK availability varies, the code does not).
+    static let decodesAV1: Bool = VTIsHardwareDecodeSupported(CMVideoCodecType(0x6176_3031))
 
     private func teardown() {
         loadTask?.cancel()

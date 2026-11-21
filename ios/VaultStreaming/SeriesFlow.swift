@@ -257,6 +257,7 @@ public final class NextEpisodePreloader {
     public func preload(mediaTitle: String, rawId: String, tmdbId: Int?, season: Int, episode: Int) {
         let idKey = rawId.isEmpty ? mediaTitle : rawId
         let key = keyFor(idOrTitle: idKey, season: season, episode: episode)
+        if let entry = cached, Date().timeIntervalSince(entry.createdAt) > Self.keepTTLSeconds { drop() }
         if pendingKey == key || cached?.key == key { return }
 
         pendingTask?.cancel()
@@ -276,11 +277,18 @@ public final class NextEpisodePreloader {
             guard let resolved else { return nil }
             self.drop()
             let streamURLString = resolved.streamURL.absoluteString
-            let warmTask = Task {
-                while !Task.isCancelled {
+            // kept warm for its lifetime only, then evicted whether or not it was played (leaving the player near the
+            // end of an episode used to keep the server warming the next one every minute, indefinitely)
+            let warmTask = Task { [weak self] in
+                let deadline = Date().addingTimeInterval(Self.keepTTLSeconds)
+                while !Task.isCancelled && Date() < deadline {
                     try? await Task.sleep(nanoseconds: 60_000_000_000)
-                    if Task.isCancelled { break }
+                    if Task.isCancelled { return }
                     await Api.shared.keepStreamWarm(url: streamURLString)
+                }
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    if let self, self.cached?.key == key { self.cached = nil }
                 }
             }
             self.cached = CachedPreload(key: key, outcome: resolved, createdAt: Date(), warmTask: warmTask)

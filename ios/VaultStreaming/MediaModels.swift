@@ -56,8 +56,9 @@ public struct MediaItem: Identifiable, Hashable, Codable {
         votes: Int? = nil,
         source: String? = nil
     ) {
-        self.id = id
-        self.rawId = rawId ?? String(id)
+        let resolvedRaw = rawId ?? String(id)
+        self.id = Self.identity(mediaType: media_type, rawId: resolvedRaw)
+        self.rawId = resolvedRaw
         self.tmdbId = tmdbId ?? (id > 0 ? id : nil)
         self.imdb_id = imdb_id
         self.catalog_id = catalog_id
@@ -113,7 +114,9 @@ public struct MediaItem: Identifiable, Hashable, Codable {
             decodedStableId = Self.stableHashId(fallback)
         }
 
-        self.id = decodedStableId
+        _ = decodedStableId
+        // recomputed rather than read back, so watchlist entries saved with the bare TMDB id are re-keyed too
+        self.id = Self.identity(mediaType: try? c.decodeIfPresent(String.self, forKey: .media_type), rawId: decodedRawId)
         self.rawId = decodedRawId
         self.tmdbId = decodedTmdbId
         self.imdb_id = try? c.decodeIfPresent(String.self, forKey: .imdb_id)
@@ -189,6 +192,13 @@ public struct MediaItem: Identifiable, Hashable, Codable {
         try c.encodeIfPresent(media_type, forKey: .media_type)
         try c.encodeIfPresent(votes, forKey: .votes)
         try c.encodeIfPresent(source, forKey: .source)
+    }
+
+    /// List / watchlist identity: the media type and the id together. A film and a series can share a TMDB number
+    /// (both 1399, say), and keyed by the number alone they were one item in ForEach and in the watchlist.
+    static func identity(mediaType: String?, rawId: String) -> Int {
+        let kind = (mediaType == "tv" || mediaType == "series") ? "tv" : "movie"
+        return stableHashId("\(kind):\(rawId)")
     }
 
     /// Deterministic non-colliding positive integer ID for string catalog/IMDb identifiers.

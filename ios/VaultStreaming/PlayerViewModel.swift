@@ -492,8 +492,8 @@ public final class PlayerViewModel: NSObject, ObservableObject {
 
         if selectedAudioIndex == nil {
             selectedAudioIndex = chosenIndex
-            let defaultIdx = tracks.first(where: { $0.isDefault == true })?.audioIndex ?? tracks[0].audioIndex
-            if chosenIndex != defaultIdx && chosenIndex != 0 {
+            // the first load asked HLS for no audio index, which plays a:0 whatever track the file marks default
+            if chosenIndex != 0 {
                 loadCurrentItem(resumeAt: lastGoodPosition, audioIndex: chosenIndex)
             }
         }
@@ -553,11 +553,19 @@ public final class PlayerViewModel: NSObject, ObservableObject {
     private func startTranscriptPollingIfNeeded() {
         transcriptPollTask?.cancel()
         transcriptPollTask = Task { [weak self] in
-            for _ in 0..<20 {
+            // up to 2 h (a transcript grows with the film); cleanup() cancels it when the player closes
+            for _ in 0..<480 {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
                 guard !Task.isCancelled, let self else { return }
+                let cuesBefore = self.transcriptStatus?.cues ?? 0
                 await self.refreshTranscriptStatus()
-                if let state = self.transcriptStatus?.state, state == "ready" || state == "failed" {
+                guard let st = self.transcriptStatus else { continue }
+                // the transcript grows while the server reads the source ("ready" + partial): reload the shown
+                // captions as cues are added, and keep polling until it is complete
+                if st.state == "ready", self.selectedSubtitleId == "ai_transcript", (st.cues ?? 0) > cuesBefore {
+                    await self.selectAiTranscript()
+                }
+                if st.state == "failed" || (st.state == "ready" && st.partial != true) {
                     return
                 }
             }
@@ -707,6 +715,9 @@ public final class PlayerViewModel: NSObject, ObservableObject {
                let uStr = resolved.streamUrl,
                let url = URL(string: uStr) {
                 autoReloadCount = 0
+                // the new source has its own tracks: probe and choose again (a stale index kept the old label while
+                // a:0 played, and stopped the probe from choosing)
+                selectedAudioIndex = nil
                 let pos = lastGoodPosition
                 currentItem = StreamPlaybackItem(
                     url: url,
@@ -811,6 +822,9 @@ public final class PlayerViewModel: NSObject, ObservableObject {
                 self.upNextCountdown = remaining
             }
             guard !Task.isCancelled, let self, !self.upNextDismissed else { return }
+            // playEpisode cancels countdownTask, which is this task: let go of it first, or the next episode's
+            // lookup (cancellation-aware URLSession) is cancelled with it
+            self.countdownTask = nil
             await self.playEpisode(season: next.season, episode: next.episode)
         }
     }
