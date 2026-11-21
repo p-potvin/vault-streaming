@@ -1,4 +1,4 @@
-# Vault Streaming — Native iOS & iPadOS App (`v2.10.2`)
+# Vault Streaming — Native iOS & iPadOS App (`v2.10.3`)
 
 100% native SwiftUI & AVPlayer app for iOS 16+ / iPadOS 16+, connecting over Tailscale/Tailnet to the Vault Streaming HTTP/SSE backend (`streaming.vaultwares.ca` or a local workstation worker).
 

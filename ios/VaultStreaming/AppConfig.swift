@@ -3,7 +3,7 @@ import Foundation
 /// Central configuration for the VaultStreaming iOS application.
 public struct AppConfig {
     public static let appName = "VaultStreaming"
-    public static let appVersion = "2.10.2"
+    public static let appVersion = "2.10.3"
     public static let customUserAgent = "VaultStreaming-iOS/\(appVersion) (VaultWares; Tailnet-First)"
 
     /// Default canonical endpoint pointing to Vault Streaming web client on Tailnet.

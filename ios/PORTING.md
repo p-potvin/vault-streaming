@@ -39,4 +39,4 @@ Each phase is one PR on its own branch, built by the workflow before it is merge
 ## Implementation Status (`vw-codex-ios-phase1`)
 
 - **Phases 1–7 implemented locally** across server prerequisites (`web/trailer-h264-route.js`, `web/server.js`, `src/tmdb.js`) and all native iOS/iPadOS SwiftUI views/models (`ios/VaultStreaming/` + `ios/VaultStreaming.xcodeproj/project.pbxproj`, `ios/README.md`).
-- **Pending macOS CI compile**: Dispatch `.github/workflows/ios-unsigned-build.yml` on `macos-14` once pushed to verify Xcode compilation and generate the `v2.10.2` unsigned IPA artifact.
+- **Pending macOS CI compile**: Dispatch `.github/workflows/ios-unsigned-build.yml` on `macos-14` once pushed to verify Xcode compilation and generate the `v2.10.3` unsigned IPA artifact.
