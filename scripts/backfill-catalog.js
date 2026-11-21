@@ -2,12 +2,13 @@
 // scripts/backfill-catalog.js — one-time TMDB backfill of the catalog's films and series (operator, Wed 18 Nov 2026),
 // so the app reads them from vault-raggae instead of asking TMDB on each first view.
 //
-// Who: IMDb films with >= --movie-votes votes (default 600) and series with >= --tv-votes (default 1000), most voted
-// first. Series with at most --max-episodes episodes (default 500, counted locally from IMDb's title.episode dump) also
-// get every season's episodes: they come in the same request as the details (up to 15 seasons appended), so they cost
-// next to nothing, while the long-running soaps / talk / game shows (10,000+ episodes) are skipped (operator, Wed 18
-// Nov 2026). --episodes-top (default 3000, operator) keeps the N most voted of those; 0 takes all 12,963 (411k
-// episodes).
+// Who: IMDb films with >= --movie-votes votes (default 600) and series with >= --tv-votes (default 600, lowered from
+// 1,000 on Sat 21 Nov 2026), most voted first. Every series also gets all its seasons' episodes, specials (season 0)
+// included: up to 14 seasons come in the details request itself, the rest 20 a request. By default there is no cap
+// (operator, Sat 21 Nov 2026: the long-running soaps / talk / game shows too); --max-episodes N leaves out the episodes
+// of series longer than N (counted locally from IMDb's title.episode dump), and --episodes-top N keeps only the N most
+// voted series (both 0 by default; until Sat 21 Nov 2026 they were 500 and 3000). A series stored before without all
+// its episodes is asked again for them: backfill-episodes-done-v2.txt lists the series whose episodes are stored.
 //
 // As much as possible per request (TMDB's append_to_response):
 //   1. GET /find/{imdb id}                      -> the TMDB id (skipped when the catalog already has it)
@@ -38,7 +39,7 @@
 // no longer gives for that IMDb id).
 // IMDb `video` titles (bonus features, deleted scenes) are left out (title.basics dump); --keep-video takes them.
 //
-//   node scripts/backfill-catalog.js --dry-run [--movie-votes 600] [--tv-votes 1000] [--episodes-top 1000]
+//   node scripts/backfill-catalog.js --dry-run [--movie-votes 600] [--tv-votes 600] [--episodes-top 0]
 //   node scripts/backfill-catalog.js --execute [--limit N] [--category movie|tv] [--max-requests 200000] [--retry-misses]
 
 const fs = require('fs');
@@ -69,8 +70,9 @@ const RETRY_MISSES = process.argv.includes('--retry-misses');
 const { MIN_VOTES } = require('../src/catalog-coverage');
 const MOVIE_VOTES = int('movie-votes', MIN_VOTES.movie);
 const TV_VOTES = int('tv-votes', MIN_VOTES.tv);
-const EPISODES_TOP = parseInt(arg('episodes-top', '3000'), 10) || 0;  // 0: every series under the cap
-const MAX_EPISODES = int('max-episodes', 500);
+const EPISODES_TOP = parseInt(arg('episodes-top', '0'), 10) || 0;  // 0: every series under the cap
+// 0: no cap (operator, Sat 21 Nov 2026: the 433 long-running series too); N skips the episodes of longer series
+const MAX_EPISODES = parseInt(arg('max-episodes', '0'), 10) || 0;
 const EPISODE_DUMP = process.env.IMDB_EPISODE_DUMP || 'G:/Catalogs/Sources/films/title.episode.tsv.gz';
 const BASICS_DUMP = process.env.IMDB_BASICS_DUMP || 'G:/Catalogs/Sources/films/title.basics.tsv.gz';
 const KEEP_VIDEO = process.argv.includes('--keep-video');   // IMDb `video` titles are left out by default (operator, Fri 20 Nov 2026)
@@ -78,6 +80,9 @@ const LIMIT = parseInt(arg('limit', '0'), 10) || 0;
 const ONLY = arg('category', '');
 const MAX_REQUESTS = int('max-requests', 200000);
 const INTERVAL_MS = Math.max(25, int('interval-ms', 100));
+// seasons asked in the details request itself: 20 appends, less videos, translations, external_ids, keywords, the
+// ratings and the credits (a 15th there cost every series a second request: Sat 21 Nov 2026)
+const FIRST_SEASONS = 14;
 const MAX_429_STREAK = 3;               // consecutive 429s before a cooldown
 const COOLDOWN_MS = 5 * 60 * 1000;
 const MAX_COOLDOWNS = 4;                // the 4th cooldown ends the run
@@ -85,6 +90,10 @@ const TOKEN = process.env.TMDB_BEARER_TOKEN;
 const STATE_DIR = path.join(process.env.LOCALAPPDATA || os.homedir(), 'VaultWares', 'vault-streaming');
 const DONE_FILE = path.join(STATE_DIR, 'backfill-done.txt');
 const MISS_FILE = path.join(STATE_DIR, 'backfill-misses.txt');
+// series whose episodes are stored, specials (season 0) included: the -v2 file restarts the list (Sat 21 Nov 2026: the
+// first file's series were checkpointed without their specials, so they are asked again)
+const EPISODES_DONE_FILE = path.join(STATE_DIR, 'backfill-episodes-done-v2.txt');
+const CREDITS_DONE_FILE = path.join(STATE_DIR, 'backfill-credits-done.txt');     // titles whose cast / crew are stored
 
 // ── bounded TMDB requests ────────────────────────────────────────────────────
 let requests = 0;
@@ -233,13 +242,17 @@ function buildIngest(item, data, category, seasons, catalogCategory = category) 
                 origin_country: data.origin_country || (data.production_countries || []).map(c => c.iso_3166_1),
                 popularity: data.popularity || null, tmdb_type: category, backfilled_at: new Date().toISOString(),
             },
+            // the people (language-neutral), with their TMDB person ids: the cast catalog joins on them
+            credits: T.slimCredits(category === 'tv' ? data.aggregate_credits : data.credits, category === 'tv'),
         },
     };
     return ingest;
 }
 
 async function details(category, tmdbId, seasonNumbers) {
-    const base = ['videos', 'translations', 'external_ids', 'keywords', category === 'tv' ? 'content_ratings' : 'release_dates'];
+    // the people too: a series' cast / crew across all its episodes (aggregate_credits), a film's credits
+    const base = ['videos', 'translations', 'external_ids', 'keywords', category === 'tv' ? 'content_ratings' : 'release_dates',
+                  category === 'tv' ? 'aggregate_credits' : 'credits'];
     const first = seasonNumbers.slice(0, 20 - base.length);
     const data = await tmdb(`/${category}/${tmdbId}?language=en-US&include_video_language=en,fr,null` +
         `&append_to_response=${[...base, ...first.map(n => `season/${n}`)].join(',')}`);
@@ -268,16 +281,25 @@ async function main() {
     fs.mkdirSync(STATE_DIR, { recursive: true });
     const done = readSet(DONE_FILE);
     const misses = readSet(MISS_FILE);
+    const episodesDone = readSet(EPISODES_DONE_FILE);
+    const creditsDone = readSet(CREDITS_DONE_FILE);
 
     const movies = ONLY === 'tv' ? [] : await candidates('movie', MOVIE_VOTES);
     const shows = ONLY === 'movie' ? [] : await candidates('tv', TV_VOTES);
     const eps = shows.length ? await episodeCounts(new Set(shows.map(s => s.catalog_id.slice(5)))) : new Map();
-    const underCap = shows.filter(s => (eps.get(s.catalog_id.slice(5)) || 0) <= MAX_EPISODES);
+    const underCap = MAX_EPISODES ? shows.filter(s => (eps.get(s.catalog_id.slice(5)) || 0) <= MAX_EPISODES) : shows;
     const episodeSet = new Set((EPISODES_TOP ? underCap.slice(0, EPISODES_TOP) : underCap).map(s => s.catalog_id));
     const skippedLong = shows.length - underCap.length;
     const episodeTotal = [...episodeSet].reduce((a, cid) => a + (eps.get(cid.slice(5)) || 0), 0);
+    // a series stored earlier without its episodes (outside the old top 3000): asked again for them
+    const needsEpisodes = cid => episodeSet.has(cid) && !episodesDone.has(cid);
+    const againForEpisodes = shows.filter(s => done.has(s.catalog_id) && needsEpisodes(s.catalog_id)).length;
+    // titles stored before their cast / crew (and the full episode fields) were kept: asked again (Sat 21 Nov 2026)
+    const needsCredits = cid => !creditsDone.has(cid);
+    const againForCredits = [...movies, ...shows].filter(s => done.has(s.catalog_id) && needsCredits(s.catalog_id)).length;
     let queue = [...shows.map(i => ({ item: i, category: 'tv' })), ...movies.map(i => ({ item: i, category: 'movie' }))]
-        .filter(q => !done.has(q.item.catalog_id) && (RETRY_MISSES || !misses.has(q.item.catalog_id)));
+        .filter(q => (!done.has(q.item.catalog_id) || needsEpisodes(q.item.catalog_id) || needsCredits(q.item.catalog_id))
+                     && (RETRY_MISSES || !misses.has(q.item.catalog_id)));
     const videos = KEEP_VIDEO || !queue.length ? new Set() : await videoTitles(new Set(queue.map(q => q.item.catalog_id.slice(5))));
     if (videos.size) queue = queue.filter(q => !videos.has(q.item.catalog_id.slice(5)));
     if (LIMIT) queue = queue.slice(0, LIMIT);
@@ -285,11 +307,11 @@ async function main() {
     const needFind = queue.filter(q => !(q.item.external_ids && q.item.external_ids.tmdb)).length;
     console.log(`[backfill] films >= ${MOVIE_VOTES} votes: ${movies.length}; series >= ${TV_VOTES}: ${shows.length};` +
         ` episodes for ${episodeSet.size} series (${episodeTotal} episodes; ${skippedLong} over ${MAX_EPISODES} episodes` +
-        ` skipped); already done ${done.size}, misses ${misses.size}${RETRY_MISSES ? ' (asked again: --retry-misses)' : ''}; ${videos.size} IMDb video titles left out` +
+        ` skipped); already done ${done.size} (asked again: ${againForEpisodes} series for their episodes, ${againForCredits} titles for their cast / crew), misses ${misses.size}${RETRY_MISSES ? ' (asked again: --retry-misses)' : ''}; ${videos.size} IMDb video titles left out` +
         `${KEEP_VIDEO ? ' (--keep-video: none)' : ''}`);
-    // episodes ride in the details request (15 seasons); a series past 15 seasons takes one more request per 20
+    // episodes ride in the details request (14 seasons); a series past 14 seasons takes one more request per 20
     console.log(`[backfill] to do: ${queue.length} titles; ~${needFind + queue.length} requests (+1 per 20 seasons past` +
-        ` the 15th), one per ${INTERVAL_MS} ms: ~${((needFind + queue.length) * INTERVAL_MS / 3600000).toFixed(1)} h;` +
+        ` the 14th), one per ${INTERVAL_MS} ms: ~${((needFind + queue.length) * INTERVAL_MS / 3600000).toFixed(1)} h;` +
         ` cap ${MAX_REQUESTS}`);
     if (!EXECUTE) {
         console.log('[backfill] dry run: nothing asked of TMDB (add --execute)');
@@ -301,6 +323,7 @@ async function main() {
     let missed = 0;
     let stop = null;
     const pending = [];
+    let pendingBytes = 0;
     const flush = async () => {
         if (!pending.length) return;
         const batch = pending.splice(0, pending.length);
@@ -321,6 +344,10 @@ async function main() {
         const saved = new Set(res.items.map(s => s && s.catalog_id).filter(Boolean));
         const finished = batch.filter(b => saved.has(b.cid) && !b.incomplete).map(b => b.cid);
         if (finished.length) fs.appendFileSync(DONE_FILE, finished.join('\n') + '\n');
+        const withEpisodes = batch.filter(b => b.episodes && saved.has(b.cid) && !b.incomplete).map(b => b.cid);
+        if (withEpisodes.length) fs.appendFileSync(EPISODES_DONE_FILE, withEpisodes.join('\n') + '\n');
+        const withCredits = batch.filter(b => b.credits && saved.has(b.cid) && !b.incomplete).map(b => b.cid);
+        if (withCredits.length) fs.appendFileSync(CREDITS_DONE_FILE, withCredits.join('\n') + '\n');
         stored += batch.filter(b => saved.has(b.cid)).length;
         if (saved.size < batch.length) console.warn(`  the gateway skipped ${batch.length - saved.size} of ${batch.length} titles`);
     };
@@ -363,7 +390,8 @@ async function main() {
                 tmdbType = ref.type;
             }
             // the season list comes with the details; ask for seasons 1..15 up front and the rest after
-            const seasonsFor = type => (type === 'tv' && episodeSet.has(cid) ? Array.from({ length: 15 }, (_, k) => k + 1) : []);
+            // as many seasons as fit in the details request (20 appends less the 6 others: 14); the rest after
+            const seasonsFor = type => (type === 'tv' && episodeSet.has(cid) ? Array.from({ length: FIRST_SEASONS }, (_, k) => k + 1) : []);
             let seasonNumbers = seasonsFor(tmdbType);
             let got = await details(tmdbType, tmdbId, seasonNumbers);
             if (got && got.notFound && storedId && !storedType) {
@@ -384,19 +412,28 @@ async function main() {
             if (!got) continue;
             if (got.notFound) { miss(cid, `details-404:${tmdbType}/${tmdbId}`); continue; }
             if (tmdbType !== q.category) crossed++;
-            // a series with more seasons than asked for up front
-            if (seasonNumbers.length && got.data.number_of_seasons > seasonNumbers.length) {
-                const rest = Array.from({ length: got.data.number_of_seasons - seasonNumbers.length }, (_, k) => k + 16);
-                for (let j = 0; j < rest.length; j += 20) {
-                    const chunk = rest.slice(j, j + 20);
+            // every season TMDB lists with episodes that the details request did not carry: those past the 14th,
+            // the specials (season 0), and any that came back empty; 20 a request. A series still missing one is
+            // stored as far as it goes and not checkpointed (asked again by the next run)
+            if (seasonNumbers.length) {
+                const listed = (Array.isArray(got.data.seasons) ? got.data.seasons : [])
+                    .filter(s => s.season_number >= 0 && s.episode_count > 0).map(s => s.season_number);
+                const missing = listed.filter(n => !got.seasons[String(n)]);
+                for (let j = 0; j < missing.length; j += 20) {
+                    const chunk = missing.slice(j, j + 20);
                     const more = await tmdb(`/tv/${tmdbId}?language=en-US&append_to_response=${chunk.map(n => `season/${n}`).join(',')}`);
                     if (more && !more.notFound) chunk.forEach(n => { const s = more[`season/${n}`]; if (s && s.episodes) got.seasons[String(n)] = T.slimSeason(s); });
-                    else got.incomplete = true;
                 }
+                got.incomplete = listed.some(n => !got.seasons[String(n)]);
             }
-            pending.push({ cid, incomplete: !!got.incomplete,
-                           ingest: buildIngest(q.item, got.data, tmdbType, got.seasons, q.category) });
-            if (pending.length >= 50) await flush();
+            const ingest = buildIngest(q.item, got.data, tmdbType, got.seasons, q.category);
+            // checkpointed for its people only when TMDB sent them (the credits append can be absent)
+            pending.push({ cid, incomplete: !!got.incomplete, episodes: seasonNumbers.length > 0,
+                           credits: !!ingest.raw_enrichment.tmdb.credits, ingest });
+            // 50 titles a call, or less when they are big (a long series with every episode's crew and guest stars
+            // can be tens of MB): the gateway gets at most ~16 MB of JSON at once
+            pendingBytes += JSON.stringify(pending[pending.length - 1].ingest).length;
+            if (pending.length >= 50 || pendingBytes >= 16 * 1024 * 1024) { await flush(); pendingBytes = 0; }
         } catch (e) {
             if (!(e instanceof Stop)) throw e;
             stop = e.message;

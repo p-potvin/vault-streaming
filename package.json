@@ -1,6 +1,6 @@
 {
   "name": "vault-streaming",
-  "version": "2.10.0",
+  "version": "2.10.1",
   "description": "Vault Streaming Desktop App - TMDB movie & series browser.",
   "main": "main.js",
   "scripts": {
