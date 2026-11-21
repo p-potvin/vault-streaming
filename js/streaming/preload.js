@@ -13,6 +13,7 @@
 
     let current = null;   // { key, streamUrl, source, list, at, warm, media }
     let pending = null;   // key being resolved
+    let pendingDone = null;   // its promise (Play next waits for it rather than resolving the same link twice)
 
     window.PRELOAD_BEFORE_END_S = PRELOAD_BEFORE_END_S;
 
@@ -67,6 +68,12 @@
         const tracks = probe && probe.success && Array.isArray(probe.tracks) ? probe.tracks : [];
         const audioIndex = probe && probe.chosenAudioIndex != null ? probe.chosenAudioIndex : 0;
         const track = tracks.find(x => x.audioIndex === audioIndex) || null;
+        // a track without a language tag can be swapped by the play's speech detection (player.js): the read would be
+        // of another track under the same key. Left to the play's own hand-over then.
+        if (!track || !track.lang || track.lang === 'und') {
+            console.log(`[preload] Moments for ${window.episodeLabel(season, episode)}: left to playback (audio language not tagged)`);
+            return;
+        }
         const release = String(got.source.desc || '').replace(/^📄\s*/, '');
         const label = window.qualityLabelOf ? window.qualityLabelOf(got.source) : null;
         const src = window.momentsSourceFor
@@ -88,6 +95,8 @@
         const key = keyOf(show.tmdbId || show.title, next.season, next.episode);
         if (pending === key || (current && current.key === key)) return;
         pending = key;
+        let settle;
+        pendingDone = new Promise(r => { settle = r; });
         const label = window.episodeLabel(next.season, next.episode);
         console.log(`[preload] ${show.title} ${label}: resolving the next episode`);
         try {
@@ -106,13 +115,16 @@
         } catch (e) {
             console.warn('[preload] failed:', e && e.message);
         } finally {
-            if (pending === key) pending = null;
+            if (pending === key) { pending = null; pendingDone = null; }
+            settle();
         }
     };
 
-    /** The pre-loaded stream for this episode (taken: used once), or null. */
-    window.takePreloadedEpisode = function (idOrTitle, season, episode) {
-        if (!current || current.key !== keyOf(idOrTitle, season, episode)) return null;
+    /** The pre-loaded stream for this episode (taken: used once), or null; waits for one still resolving. */
+    window.takePreloadedEpisode = async function (idOrTitle, season, episode) {
+        const key = keyOf(idOrTitle, season, episode);
+        if (pending === key && pendingDone) await pendingDone;   // still resolving this one: its result, not a 2nd try
+        if (!current || current.key !== key) return null;
         const p = current;
         current = null;
         if (p.warm) clearInterval(p.warm);

@@ -89,6 +89,14 @@
 
     /** Close the dialog the way its own close button does (the flow checks display 'none' to stop). */
     function cancel() {
+        if (typeof window.stopStreamRequest === 'function') window.stopStreamRequest();   // the flow, not only the card
+        // in the player: back to the episode still loaded there (titles, prev / next, Up next follow it again)
+        const prev = window._prevStreamingMedia;
+        if (inPlayer() && prev && prev.streamUrl && prev !== window.activeStreamingMedia) {
+            window.activeStreamingMedia = prev;
+            if (typeof window.updatePlayerTitles === 'function') window.updatePlayerTitles();
+            if (typeof window.seriesControlsOnPlay === 'function') window.seriesControlsOnPlay();
+        }
         dialog.style.display = 'none';
         if (backdrop) backdrop.style.display = 'none';
     }
@@ -98,6 +106,8 @@
     function chooseSource() {
         if (!listHasSources() && manualVisible()) { chooseBtn.click(); return; }
         if (!listHasSources()) return;
+        // the viewer picks: the automatic pick (and its source tries) stops, as the flow's own "Choose Manually" does
+        if (!listShown() && typeof window.stopStreamRequest === 'function') window.stopStreamRequest();
         leavePlayerMode();
         list.style.display = listShown() ? 'none' : 'flex';
         render();
@@ -105,6 +115,8 @@
 
     function leavePlayerMode() {
         if (!inPlayer()) return;
+        // the list is a page dialog: fullscreen (the video wrapper in the top layer) would hide it
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
         dialog.classList.remove('in-player');
         if (backdrop) backdrop.classList.remove('in-player');
         if (typeof window.upNextLoading === 'function') window.upNextLoading(null);
@@ -123,6 +135,9 @@
 
     function onClose() {
         open = false;
+        // closed without playing (the dialog's other ways out: a click outside, Esc): the request stops too
+        const m = window.activeStreamingMedia;
+        if (m && !m.streamUrl && typeof window.stopStreamRequest === 'function') window.stopStreamRequest();
         if (inPlayer() && typeof window.upNextLoading === 'function') window.upNextLoading(null);
         dialog.classList.remove('in-player', 'list-open');
         if (backdrop) backdrop.classList.remove('in-player', 'over-player');

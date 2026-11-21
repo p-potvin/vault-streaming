@@ -244,7 +244,8 @@
         if (!state || state.ended) return;
         state.ended = true;
         const next = await state.next;
-        if (!next) return;
+        if (!next) { console.log('[up next] no next episode (end of the show, or TMDB has none)'); return; }
+        console.log(`[up next] ${window.autoplayMode === 'off' ? 'autoplay off: showing the card' : 'next in 5 s'}: ${window.episodeLabel(next.season, next.episode)}`);
         if (window.autoplayMode === 'off') { state.card = 'shown'; renderCard(next, null); return; }
         let n = 5;
         state.card = 'shown';
@@ -368,9 +369,11 @@
             const media = state.media;
             Promise.resolve(state.next).then((n) => { if (n && window.activeStreamingMedia === media) window.preloadNextEpisode(media, n); });
         }
-        // the credits point counts as the end (the player's own "ended" covers episodes without one)
+        // the credits point counts as the end; so does the last second of the file: a debrid stream often stalls a
+        // moment before its last frame and the player's own "ended" never comes (Play next then never started)
         const end = effectiveEnd();
-        if (end < vp.duration && vp.currentTime >= end && !state.ended) {
+        if (!state.ended && vp.currentTime >= Math.min(end, vp.duration - 1)) {
+            console.log(`[up next] ${window.episodeLabel(state.media.season, state.media.episode)} reached its end (${Math.round(vp.currentTime)} / ${Math.round(vp.duration)} s)`);
             state.media.creditsDone = true;   // later saves (tick, close) keep it watched (player.js)
             window.electronAPI.markWatched({
                 mediaType: 'tv', tmdbId: state.media.tmdbId, title: state.media.title, season: state.media.season,
@@ -385,6 +388,24 @@
         vp = el('video-player');
         if (!vp) return;
         vp.addEventListener('timeupdate', onTime);
+        // a stream that stops for good a few seconds short of its end (the last bytes never come): after 4 s without
+        // progress there, the episode counts as ended and Up next takes over
+        let stallTimer = null;
+        vp.addEventListener('waiting', () => {
+            clearTimeout(stallTimer);
+            if (!state || state.ended || !(vp.duration >= 60) || vp.duration - vp.currentTime > 5) return;
+            const at = vp.currentTime, media = state.media;
+            stallTimer = setTimeout(() => {
+                // (a viewer's pause is not a stall: a stalled video is still "playing", only waiting for data)
+                if (!state || state.ended || state.media !== media || vp.paused || Math.abs(vp.currentTime - at) > 0.25) return;
+                console.log(`[up next] ${window.episodeLabel(media.season, media.episode)} stalled ${Math.round(vp.duration - at)} s before its end: counting it as ended`);
+                state.media.creditsDone = true;
+                window.electronAPI.markWatched({ mediaType: 'tv', tmdbId: media.tmdbId, title: media.title, season: media.season,
+                    episode: media.episode, poster: media.poster, year: media.year });
+                window.upNextOnEnded();
+            }, 4000);
+        });
+        vp.addEventListener('playing', () => clearTimeout(stallTimer));
         // seeking back before the card's point hides it again
         vp.addEventListener('seeked', () => {
             if (!state) return;

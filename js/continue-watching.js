@@ -22,15 +22,26 @@
     /** One entry per title: a series shows only its most recently played episode (finished or not); the history is
      *  already sorted most recent first. Same show = same TMDB id (compared as text), else the same title. */
     function latestPerTitle(history) {
-        const seen = new Set();
+        const seen = new Set();         // films by key, series by TMDB id
+        const titles = new Map();       // series title -> the ids seen under it ('' for an episode saved without one)
         const out = [];
         for (const item of history) {
-            // a series: its id and its title both name it (an episode may have been saved without the id)
-            const keys = item.mediaType === 'tv'
-                ? [item.tmdbId != null && item.tmdbId !== '' ? `tv:id:${item.tmdbId}` : null, item.title ? `tv:title:${item.title}` : null].filter(Boolean)
-                : [item.key || `${item.mediaType}:${item.tmdbId || item.title}`];
-            if (keys.some(k => seen.has(k))) continue;
-            keys.forEach(k => seen.add(k));
+            if (item.mediaType !== 'tv') {
+                const key = item.key || `${item.mediaType}:${item.tmdbId || item.title}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push(item);
+                continue;
+            }
+            const id = item.tmdbId != null && item.tmdbId !== '' ? `tv:${item.tmdbId}` : '';
+            const under = titles.get(item.title) || new Set();
+            // the same series: its id; an episode saved without an id goes with the series of that title (and the
+            // other way round). Two series sharing a title but with different ids stay apart.
+            const same = id ? (seen.has(id) || under.has('')) : under.size > 0;
+            under.add(id);
+            titles.set(item.title, under);
+            if (id) seen.add(id);
+            if (same) continue;
             out.push(item);
         }
         return out;
@@ -64,7 +75,7 @@
         let items = [];
         try {
             // most recent first: enough entries to fill the row once a series' episodes collapse into one card
-            const res = await window.electronAPI.getWatchHistory({ limit: 200 });
+            const res = await window.electronAPI.getWatchHistory({ limit: 100000 });   // all of it: grouping comes after
             items = (res && res.success && Array.isArray(res.items)) ? latestPerTitle(res.items).slice(0, COUNT) : [];
         } catch (_) { items = []; }
         if (!items.length) { section.style.display = 'none'; return; }
