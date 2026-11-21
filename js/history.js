@@ -142,7 +142,7 @@ window.renderWatchHistoryTab = async function() {
                 <div class="filename-container" style="padding:12px; text-align:left;">
                    <div class="card-badge-row">
                       <div class="size-badge" style="background:var(--vault-accent); color:var(--vt-primary); font-weight:800; position:absolute; bottom: 8px; left: 8px; padding: 3px 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); text-align: center;">
-                      <span>${percent > 0 ? `${percent}%` : 'WATCHED'}</span>
+                      <span>${percent > 0 ? `${percent}%` : tr('watchedBadge', 'Watched').toUpperCase()}</span>
                    </div>
                    </div>
                    <div style="font-weight:700; font-size:13px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono);">${window.escapeHtml(item.title)} ${tvLabel ? `<span style="color:var(--vault-accent); font-size:11px; margin-left:4px;">${tvLabel}</span>` : ''}</div>

@@ -132,7 +132,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     } else if (streamingMode === 'hybrid') {
         statusText.innerHTML = `${window.icons ? window.icons.search('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Scraping Torrents & Usenet for:<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>...`;
     } else {
-        statusText.innerHTML = `${window.icons ? window.icons.search('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Querying Comet for cached streams:<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>...`;
+        statusText.innerHTML = `${window.icons ? window.icons.search('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} ${window.escapeHtml(tr('statusQueryingComet', 'Querying Comet for cached streams:'))}<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>...`;
     }
 
     const preferredQuality = getPreferredQuality();
@@ -278,7 +278,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
 
         if (torrents.length === 0) {
             loadingStatus.querySelector('.spinner').style.display = 'none';
-            statusText.innerHTML = `${window.icons ? window.icons.close('tab-icon', 'width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4px; stroke:var(--vault-signal-alert);') : ''} No media sources found for:<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>.`;
+            statusText.innerHTML = `${window.icons ? window.icons.close('tab-icon', 'width:13px; height:13px; display:inline-block; vertical-align:middle; margin-right:4px; stroke:var(--vault-signal-alert);') : ''} ${window.escapeHtml(tr('statusNoSources', 'No media sources found for:'))}<br><strong>${window.escapeHtml(movieTitle)}${epLabel}</strong>.`;
             return;
         }
 
@@ -377,7 +377,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
         });
 
         // ── Auto-start the best result (filtering out CAM/3D/promo releases) ──
-        statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} Auto-selecting best ${preferredQuality} ${preferredLang !== 'en' ? preferredLang.toUpperCase() + ' ' : ''}stream...`;
+        statusText.innerHTML = `${window.icons ? window.icons.lightning('tab-icon spinner-inline', 'width:13px; height:13px; display:inline-block; vertical-align:middle; color:var(--vault-accent); margin-right:4px;') : ''} ${window.escapeHtml(tr('statusAutoSelecting', 'Auto-selecting the best {q} stream...').replace('{q}', `${preferredQuality}${preferredLang !== 'en' ? ' ' + preferredLang.toUpperCase() : ''}`))}`;
         await new Promise(r => setTimeout(r, 400));
         if (currentRequestNum !== _torrentRequestCounter) return;
         
@@ -405,7 +405,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     } catch (e) {
         console.error('[streaming] triggerRDStream failed:', e);
         loadingStatus.querySelector('.spinner').style.display = 'none';
-        statusText.innerText = streamingMode === 'usenet-only' ? 'Error scraping Usenet indexers.' : (streamingMode === 'hybrid' ? 'Error scraping media indexes.' : 'Error scraping torrent index.');
+        statusText.innerText = streamingMode === 'usenet-only' ? 'Error scraping Usenet indexers.' : (streamingMode === 'hybrid' ? 'Error scraping media indexes.' : tr('statusSearchError', 'Error searching for sources.'));
     }
 };
 

@@ -41,6 +41,17 @@ That is the one manual sync point in the whole design.
 - **Local library files** — `/api/media?path=…`, with full byte-range support
   (including suffix ranges), restricted to the configured vault roots.
 
+## Safari (iPhone / iPad / Mac): HLS
+
+Safari on iOS only plays progressive video from a server that answers byte ranges, and the piped transcode below
+has neither a length nor ranges: the iPhone refused it ("cannot play this format") and the iPad saw a few-second
+duration, which the player's provider-error-clip guard paused. `web/public/web-overrides.js` sends Safari to
+`/api/hls/index.m3u8?src=…` instead (`web/hls-route.js`): a VOD playlist of the whole title (duration from
+ffprobe), 6-second MPEG-TS segments made by ffmpeg as Safari asks for them, a seek far ahead restarting ffmpeg
+there (`-output_ts_offset` keeps every run on one timeline; `-forced-idr` makes NVENC cut on the boundaries).
+ffmpeg stops when it is 20 segments ahead of the viewer or nobody asked for 2 minutes. Other browsers keep the
+piped route.
+
 ## Playback: why transcoding is the normal path
 
 The desktop build runs castlabs Electron, which ships proprietary codecs, so it

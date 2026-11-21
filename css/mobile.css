@@ -172,8 +172,9 @@
   }
 
   /* 2-Column Responsive Poster Grid */
+  /* (no display here: the tabs hide the grids they are not on with an inline display:none, which a
+     display:grid !important beat — Library and History then showed under Discover) */
   .tmdb-grid, #library-grid, #history-grid {
-    display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 12px !important;
     padding: 12px 14px calc(76px + env(safe-area-inset-bottom, 0px)) 14px !important;
@@ -208,42 +209,6 @@
   /* Hide desktop sub-nav bar on mobile */
   #sub-nav-streaming {
     display: none !important;
-  }
-
-  /* iOS Bottom Sheet for Media Details */
-  #streaming-details-modal {
-    align-items: flex-end !important;
-    padding: 0 !important;
-    background: rgba(0, 0, 0, 0.75) !important;
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
-  }
-
-  #streaming-details-modal .modal-content,
-  #streaming-details-modal .streaming-details-card {
-    width: 100% !important;
-    max-width: 100vw !important;
-    border-radius: 22px 22px 0 0 !important;
-    max-height: 88vh !important;
-    overflow-y: auto !important;
-    margin: 0 !important;
-    padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px)) 16px !important;
-    box-sizing: border-box !important;
-    animation: slideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  }
-
-  @keyframes slideUpSheet {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-  }
-
-  .sheet-drag-handle {
-    display: block !important;
-    width: 36px !important;
-    height: 5px !important;
-    background: rgba(255, 255, 255, 0.3) !important;
-    border-radius: 3px !important;
-    margin: 0 auto 14px auto !important;
   }
 
   /* Video player controls touch adjustments */
@@ -407,4 +372,198 @@
   text-align: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+
+/* ── Phones: the current screens (Sat 21 Nov 2026) ───────────────────────────────────────────────────────────────
+   The rules above predate the details window, settings, player and overlays as they are now (they targeted
+   .modal-content / .streaming-details-card, which no longer exist). Each screen below takes the whole phone screen
+   or fits inside it, above the bottom tab bar (z-index 10005) where it must. */
+@media (max-width: 768px) {
+  /* search: the input on a row of its own (it was squeezed to a few letters), Search and Advanced below */
+  .streaming-toolbar-right {
+    flex-wrap: wrap !important;
+    row-gap: 8px !important;
+  }
+  .tmdb-search-wrapper {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+  .tmdb-search-btn,
+  .tmdb-advanced-toggle {
+    flex: 1 1 0 !important;
+  }
+
+  /* details window: a full screen of its own, one column */
+  #streaming-details-modal {
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    /* no top padding: the sticky header below carries the safe-area inset itself, so it never scrolls under a notch */
+    padding: 0 14px calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    z-index: 20010 !important;   /* above the app's top bar (20000), which hid the close button */
+    box-sizing: border-box !important;
+  }
+  #streaming-details-modal .streaming-details-poster-frame {
+    width: 112px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+  }
+  #streaming-details-modal .modal-header-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: inherit;   /* the window's own (the theme variables differ between the desktop and web palettes) */
+    margin: 0 -14px 10px !important;
+    padding: max(env(safe-area-inset-top, 0px), 8px) 14px 8px !important;
+  }
+  #streaming-details-modal .modal-close-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0 !important;
+  }
+  #streaming-details-modal .streaming-details-layout {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    gap: 14px !important;
+  }
+  #streaming-details-modal .streaming-details-left-col {
+    flex: none !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 12px !important;
+    align-items: flex-start !important;
+  }
+  #streaming-details-modal .streaming-details-left-col img,
+  #streaming-details-poster {
+    width: 112px !important;
+    max-width: 112px !important;
+    height: auto !important;
+    flex: none !important;
+  }
+  #streaming-details-modal .streaming-details-right-col {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #streaming-details-modal iframe,
+  #streaming-details-modal video {
+    max-width: 100% !important;
+  }
+  #streaming-details-modal table {
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  #streaming-details-modal td,
+  #streaming-details-modal th {
+    overflow-wrap: anywhere;
+  }
+
+  /* settings: full screen, one column, each setting on its own lines */
+  .settings-panel {
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    padding: max(env(safe-area-inset-top, 0px), 12px) 16px calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+    box-sizing: border-box !important;
+  }
+  .settings-panel-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .settings-panel-close {
+    width: 40px;
+    height: 40px;
+    padding: 0 !important;
+  }
+
+  /* player: room for both rows of buttons, smaller buttons */
+  .player-controls-container {
+    row-gap: 6px !important;
+    column-gap: 6px !important;
+  }
+  /* the groups may shrink and wrap within the screen (the base rule keeps them at their full width) */
+  .controls-left,
+  .controls-right {
+    gap: 4px !important;
+    flex-wrap: wrap;
+    flex-shrink: 1 !important;
+    min-width: 0;
+    max-width: 100%;
+  }
+  #custom-controls .ctrl-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px !important;
+  }
+  #custom-controls .ctrl-btn-label {
+    display: none;
+  }
+
+  /* the overlays added for series: within the screen */
+  #up-next-card {
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    bottom: 128px !important;
+    height: 124px !important;
+  }
+  #up-next-card .unc-still,
+  #up-next-card.unc-loading .unc-still {
+    width: 112px !important;
+  }
+  #up-next-card .unc-overview {
+    display: none;
+  }
+  #episodes-panel {
+    width: 100% !important;
+  }
+  #rd-stream-dialog,
+  #rd-stream-dialog.list-open {
+    width: min(540px, calc(100vw - 24px)) !important;
+  }
+  #rd-stream-dialog:not(.list-open) {
+    width: min(320px, calc(100vw - 24px)) !important;
+  }
+}
+
+/* The player owns the screen on phones and tablets (Sat, 21 Nov 2026: on the iPad, wider than the phone rules, the
+   app's top and bottom bars covered the player's controls). body.vw-player-open is set by js/mobile.js; the web
+   client also keys on body.is-mobile (any touch device, js/mobile.js), so a tablet whose width or pointer misses the
+   media query is covered too. */
+@media (max-width: 768px), (pointer: coarse) {
+  html body.vw-player-open #mobile-bottom-nav,
+  html body.vw-player-open div.titlebar {
+    display: none !important;
+  }
+  html body.vw-player-open #video-modal:not(.minimized) {
+    top: 0 !important;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+  }
+}
+html.vw-web-client body.is-mobile.vw-player-open #mobile-bottom-nav,
+html.vw-web-client body.is-mobile.vw-player-open div.titlebar {
+  display: none !important;
+}
+html.vw-web-client body.is-mobile.vw-player-open #video-modal:not(.minimized) {
+  top: 0 !important;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
 }

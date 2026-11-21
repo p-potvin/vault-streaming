@@ -979,7 +979,7 @@ function initPlayer() {
                 }
 
                 window.autoplayCountdown = (window.autoplayMode === '3s') ? 3 : 5;
-                countdownEl.innerText = `Next video in ${window.autoplayCountdown} seconds... (Click to play now)`;
+                countdownEl.innerText = tr('endedNextIn', 'Next video in {n} seconds... (Click to play now)').replace('{n}', window.autoplayCountdown);
                 countdownEl.style.cursor = 'pointer';
                 overlay.style.display = 'flex';
 
@@ -991,7 +991,7 @@ function initPlayer() {
                         overlay.style.display = 'none';
                         playItem(nextIdx);
                     } else {
-                        countdownEl.innerText = `Next video in ${window.autoplayCountdown} seconds... (Click to play now)`;
+                        countdownEl.innerText = tr('endedNextIn', 'Next video in {n} seconds... (Click to play now)').replace('{n}', window.autoplayCountdown);
                     }
                 }, 1000);
             } else {
@@ -1253,7 +1253,7 @@ function initPlayer() {
             const isActive = currentLabel === entry.label;
             const activeBg = 'rgba(245,185,41,0.18)';
             opt.style.cssText = `padding:6px 12px; cursor:pointer; text-align:left; font-family:var(--font-mono); font-size:11px; transition:background 0.2s; color:${isActive ? 'var(--vault-accent)' : 'var(--vault-text)'}; font-weight:${isActive ? '700' : '500'}; background:${isActive ? activeBg : 'transparent'}; border-left:3px solid ${isActive ? 'var(--vault-accent)' : 'transparent'};`;
-            const nowPlaying = isActive ? ` <span style="color:var(--vault-accent); font-weight:700; font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">● now playing</span>` : '';
+            const nowPlaying = isActive ? ` <span style="color:var(--vault-accent); font-weight:700; font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">● ${window.currentLang === 'fr' ? 'en cours' : 'now playing'}</span>` : '';
             const sizeStr = entry.torrent.size ? ` <span style="color:var(--vault-slate); font-weight:400; font-size:10px;">${entry.torrent.size}</span>` : '';
             opt.innerHTML = `${entry.label.toUpperCase()}${sizeStr}${nowPlaying}`;
             opt.addEventListener('mouseenter', () => { opt.style.background = 'rgba(245,185,41,0.08)'; });

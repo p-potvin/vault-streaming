@@ -395,6 +395,12 @@
     streamRDTorrent: inv('rd-stream-torrent'),
     streamDeepbrid: inv('deepbrid-stream'),
     keepStreamWarm: inv('stream-keep-warm'),
+    // vault-raggae catalog resolution & media index (preload.js parity)
+    raggaeResolve: inv('raggae-resolve'),
+    raggaeByPath: inv('raggae-by-path'),
+    raggaeSearch: inv('raggae-search'),
+    raggaeIngest: inv('raggae-ingest'),
+    raggaeHealth: inv('raggae-health'),
     getTorrentStatus: inv('rd-torrent-status'),
     debridURL: inv('rd-unrestrict-url'),
     downloadDebridFile: inv('rd-download-file'),

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.10.1 -->
+<!-- v2.10.2 -->
 <html lang="en">
 
 <head>
@@ -77,7 +77,7 @@
     <span id="titlebar-video-title" class="titlebar-video-title"></span>
     <div id="titlebar-menus" class="titlebar-menus">
       <div class="titlebar-menu-wrapper">
-        <button id="settings-trigger" aria-label="Open Settings" title="Settings"
+        <button id="settings-trigger" data-i18n-title="settings" aria-label="Open Settings" title="Settings"
           style="background:none; border:none; padding:4px; cursor:pointer; -webkit-app-region:no-drag; display:flex; align-items:center; gap:5px; color:var(--vault-text);">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--vault-gold)" stroke-width="1.8"
             stroke-linecap="round" stroke-linejoin="round" style="display:block;">
@@ -164,8 +164,8 @@
         <div class="filter-group">
           <span class="filter-label" data-i18n="filterFormat">Format</span>
           <div class="filter-btn-row">
-            <button id="filter-format-movies" class="filter-pill active filter-pill-active">Movies</button>
-            <button id="filter-format-series" class="filter-pill filter-pill-inactive">Series</button>
+            <button id="filter-format-movies" class="filter-pill active filter-pill-active" data-i18n="i18nMovies">Movies</button>
+            <button id="filter-format-series" class="filter-pill filter-pill-inactive" data-i18n="i18nSeries">Series</button>
           </div>
         </div>
         <div class="filter-group">
@@ -285,7 +285,7 @@
       </svg>
       <span id="confirm-title" data-i18n="systemActionRequired">System Action Required</span>
     </div>
-    <div id="confirm-message" class="confirm-dialog-message">Are you sure you want to proceed?</div>
+    <div id="confirm-message" class="confirm-dialog-message" data-i18n="confirmProceed">Are you sure you want to proceed?</div>
     <div class="confirm-dialog-btns">
       <button id="btn-confirm-cancel" class="confirm-btn-cancel" data-i18n="cancel">Cancel</button>
       <button id="btn-confirm-ok" data-i18n="confirm" class="confirm-btn-ok">Confirm</button>
@@ -311,7 +311,7 @@
           <label for="settings-default-lang" data-i18n="settingAppLanguage" class="settings-label">App Language:</label>
           <select id="settings-default-lang" class="settings-select">
             <option value="en">English</option>
-            <option value="fr">Québécois</option>
+            <option value="fr">Français (fr-CA)</option>
           </select>
         </div>
 
@@ -321,7 +321,7 @@
             <option value="original" data-i18n="subOriginal">Original Language (Default)</option>
             <option value="und" data-i18n="subNone">None / Off</option>
             <option value="en">English (EN)</option>
-            <option value="fr">Québécois (QC)</option>
+            <option value="fr">French (fr-CA)</option>
           </select>
         </div>
 
@@ -373,7 +373,7 @@
           </span>
         </div>
 
-        <div class="settings-toggle-row" title="Start trailers muted (they play at 80% volume otherwise).">
+        <div class="settings-toggle-row" title="Start trailers muted (they play at 80% volume otherwise)." data-i18n-title="tipTrailersMuted">
           <span class="settings-toggle-label" data-i18n="settingMuteTrailers">Mute Trailers by Default:</span>
           <input type="checkbox" id="settings-mute-trailers" class="settings-checkbox" />
         </div>
@@ -390,7 +390,7 @@
         </div>
 
         <div class="settings-toggle-row"
-          title="Show all toasts and console logs. When off, only errors and essential notifications appear.">
+          title="Show all toasts and console logs. When off, only errors and essential notifications appear." data-i18n-title="tipDevMode">
           <span class="settings-toggle-label" data-i18n="settingDevMode">Dev Mode (verbose toasts/logs):</span>
           <input type="checkbox" id="settings-dev-mode" class="settings-checkbox" />
         </div>
@@ -536,7 +536,7 @@
       <div id="rd-loading-status">
         <div class="spinner" style="margin: 0 auto 12px;"></div>
         <div id="rd-status-text">Searching movies...</div>
-        <button id="btn-rd-choose-manually" type="button">
+        <button id="btn-rd-choose-manually" type="button" data-i18n="showAllSources">
           <svg class="tab-icon modal-header-icon-margin" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <line x1="8" y1="6" x2="21" y2="6" />
@@ -581,21 +581,21 @@
         <!-- Modal Actions: Library & Follow -->
         <div class="streaming-details-actions">
           <button id="btn-modal-library" class="btn-modal-action">
-            <span>Add to Library</span>
+            <span data-i18n="addToLibrary">Add to Library</span>
           </button>
           <button id="btn-modal-follow" class="btn-modal-action">
-            <span>Follow Show</span>
+            <span data-i18n="followShow">Follow Show</span>
           </button>
 
           <!-- Movie Actions Container inside Left Column -->
           <div id="movie-actions-container">
-            <button id="btn-stream-movie">
+            <button id="btn-stream-movie" data-i18n="playMovie">
               <svg class="tab-icon modal-header-icon-margin" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
               </svg>Play Movie
             </button>
-            <button id="btn-watch-trailer-browser">
+            <button id="btn-watch-trailer-browser" data-i18n="watchTrailerYoutube">
               <svg class="tab-icon modal-header-icon-margin" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -626,7 +626,7 @@
                 <circle cx="12" cy="12" r="10" />
                 <line x1="2" y1="12" x2="22" y2="12" />
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>External Watch & Trailer Links
+              </svg><span data-i18n="externalLinks">External Watch & Trailer Links</span>
             </div>
             <div id="external-links-badges">
               <!-- Badges will be dynamically populated here -->
@@ -661,7 +661,7 @@
         <span class="tv-resume-note" id="tv-resume-note"></span>
       </div>
 
-      <div class="tv-skip-row" title="Applies to every episode of this series">
+      <div class="tv-skip-row" title="Applies to every episode of this series" data-i18n-title="tipSkipSeries">
         <label class="tv-season-label" for="tv-skip-intro" data-i18n="skipIntroLabel">Skip intro:</label>
         <input type="number" id="tv-skip-intro" class="tv-skip-input" min="0" max="900" step="5" value="0" />
         <span class="tv-skip-unit">s</span>
@@ -703,11 +703,11 @@
         <button class="player-corner-btn" id="minimize-modal" aria-label="Picture-in-Picture"
           title="Picture-in-Picture"><span data-icon="pip"
             data-icon-style="width:15px;height:15px;vertical-align:middle;"></span></button>
-        <button class="player-corner-btn" id="close-modal" aria-label="Close" title="Close (Esc)"><span
+        <button class="player-corner-btn" id="close-modal" data-i18n-title="tipCloseEsc" aria-label="Close" title="Close (Esc)"><span
             data-icon="close"></span></button>
       </div>
     </div>
-    <button id="pip-close-btn" aria-label="Close" title="Close"><span data-icon="close"></span></button>
+    <button id="pip-close-btn" data-i18n-title="tipClose" aria-label="Close" title="Close"><span data-icon="close"></span></button>
     <div class="video-wrapper">
       <video id="video-player" autoplay></video>
       <!-- Shown while the player shell is up but the stream is still being
@@ -719,16 +719,16 @@
       </div>
       <!-- PiP Controls Hover Overlay -->
       <div id="pip-controls-overlay">
-        <button id="pip-btn-prev" class="pip-ctrl-btn" title="Previous"><span data-icon="skipBack"
+        <button id="pip-btn-prev" data-i18n-title="tipPrevious" class="pip-ctrl-btn" title="Previous"><span data-icon="skipBack"
             data-icon-style="width:14px;height:14px;vertical-align:middle;"></span></button>
-        <button id="pip-btn-play" class="pip-ctrl-btn" title="Play/Pause"><span data-icon="play"
+        <button id="pip-btn-play" data-i18n-title="tipPlayPause" class="pip-ctrl-btn" title="Play/Pause"><span data-icon="play"
             data-icon-style="width:14px;height:14px;vertical-align:middle;"></span></button>
-        <button id="pip-btn-next" class="pip-ctrl-btn" title="Next"><span data-icon="skipForward"
+        <button id="pip-btn-next" data-i18n-title="tipNext" class="pip-ctrl-btn" title="Next"><span data-icon="skipForward"
             data-icon-style="width:14px;height:14px;vertical-align:middle;"></span></button>
       </div>
       <div id="video-ended-overlay">
         <div class="video-ended-btns">
-          <div id="ended-play-btn" class="ctrl-btn-sm video-ended-btn" title="Play Next">
+          <div id="ended-play-btn" data-i18n-title="tipPlayNext" class="ctrl-btn-sm video-ended-btn" title="Play Next">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
               stroke-linejoin="round" style="width:22px; height:22px; margin-left: 2px;">
               <path d="M 8 5 L 19 12 L 8 19 Z" />
@@ -748,16 +748,16 @@
 
           <!-- Left controls: Prev, Play, Next, Volume -->
           <div class="controls-left">
-            <button id="btn-prev" class="ctrl-btn" title="Previous" aria-label="Previous">
+            <button id="btn-prev" data-i18n-title="tipPrevious" class="ctrl-btn" title="Previous" aria-label="Previous">
               <span data-icon="skipBack" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
-            <button id="btn-playpause" class="ctrl-btn" title="Play/Pause (Space)" aria-label="Play or Pause">
+            <button id="btn-playpause" data-i18n-title="tipPlayPauseSpace" class="ctrl-btn" title="Play/Pause (Space)" aria-label="Play or Pause">
               <span data-icon="pause" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
-            <button id="btn-next" class="ctrl-btn" title="Next" aria-label="Next">
+            <button id="btn-next" data-i18n-title="tipNext" class="ctrl-btn" title="Next" aria-label="Next">
               <span data-icon="skipForward" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
-            <button id="btn-clip" class="ctrl-btn" title="Create Clip (C)" aria-label="Create Clip">
+            <button id="btn-clip" data-i18n-title="tipClip" class="ctrl-btn" title="Create Clip (C)" aria-label="Create Clip">
               <span data-icon="zap" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
             <div class="volume-container">
@@ -788,7 +788,7 @@
           <div class="controls-right">
             <span id="time-display">0:00 / 0:00</span>
 
-            <button id="btn-autoplay" class="ctrl-btn-sm" title="Toggle Autoplay" aria-label="Toggle Autoplay">
+            <button id="btn-autoplay" data-i18n-title="tipAutoplay" class="ctrl-btn-sm" title="Toggle Autoplay" aria-label="Toggle Autoplay">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                 stroke-linejoin="round" style="width:16px; height:16px; display:block;">
                 <path
@@ -800,7 +800,7 @@
 
             <!-- Stream quality picker -->
             <div id="quality-dropdown-container" class="quality-dropdown-container">
-              <button id="btn-quality" class="ctrl-btn-sm" title="Stream quality" aria-label="Stream quality">
+              <button id="btn-quality" data-i18n-title="tipQuality" class="ctrl-btn-sm" title="Stream quality" aria-label="Stream quality">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                   stroke-linejoin="round" style="width:14px; height:14px; display:block;">
                   <rect x="3" y="6" width="18" height="12" rx="2" />
@@ -813,14 +813,14 @@
             </div>
 
             <!-- Episodes panel (series only; js/player/series-controls.js) -->
-            <button id="btn-episodes" class="ctrl-btn-sm" title="Episodes" aria-label="Episodes" style="display:none;">
+            <button id="btn-episodes" data-i18n-title="tipEpisodes" class="ctrl-btn-sm" title="Episodes" aria-label="Episodes" style="display:none;">
                 <span data-icon="list" data-icon-style="width:15px; height:15px; display:block;"></span>
                 <span class="ctrl-btn-label" data-i18n="playerEpisodes">Episodes</span>
               </button>
 
             <!-- Audio track picker (shown only when a source has >1 audio track) -->
             <div id="audio-dropdown-container" class="quality-dropdown-container" style="display:none;">
-              <button id="btn-audio" class="ctrl-btn-sm" title="Audio track" aria-label="Audio track">
+              <button id="btn-audio" data-i18n-title="tipAudio" class="ctrl-btn-sm" title="Audio track" aria-label="Audio track">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                   stroke-linejoin="round" style="width:14px; height:14px; display:block;">
                   <path d="M3 10v4h4l5 4V6L7 10H3z" />
@@ -832,7 +832,7 @@
             </div>
 
             <div class="subtitle-dropdown-container">
-              <button id="btn-subtitles" class="ctrl-btn-sm" title="Subtitles (CC)" aria-label="Subtitles">
+              <button id="btn-subtitles" data-i18n-title="tipSubtitles" class="ctrl-btn-sm" title="Subtitles (CC)" aria-label="Subtitles">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                   stroke-linejoin="round" style="width:14px; height:14px; display:block;">
                   <path
@@ -854,18 +854,18 @@
                 <div id="subtitle-search-results"></div>
                 <div class="subtitle-divider"></div>
                 <div id="subtitle-sync-row">
-                  <span title="Shift subtitle timing to fix A/V sync" data-i18n="syncDelay">Sync delay</span>
+                  <span title="Shift subtitle timing to fix A/V sync" data-i18n="syncDelay" data-i18n-title="tipSyncShift">Sync delay</span>
                   <div class="subtitle-offset-btns">
-                    <button id="subtitle-offset-minus" title="Subtitles earlier by 0.25s">−0.25</button>
+                    <button id="subtitle-offset-minus" data-i18n-title="tipSubEarlier" title="Subtitles earlier by 0.25s">−0.25</button>
                     <span id="subtitle-offset-value">+0.00s</span>
-                    <button id="subtitle-offset-plus" title="Subtitles later by 0.25s">+0.25</button>
+                    <button id="subtitle-offset-plus" data-i18n-title="tipSubLater" title="Subtitles later by 0.25s">+0.25</button>
                   </div>
                 </div>
                 <div class="subtitle-option-upload" id="opt-upload-subtitle" data-i18n="subUploadFile">Upload SRT/VTT…</div>
               </div>
             </div>
 
-            <button id="btn-upscale" class="ctrl-btn-sm" title="RTX VSR Upscale" aria-label="Toggle AI Upscale">
+            <button id="btn-upscale" data-i18n-title="tipUpscale" class="ctrl-btn-sm" title="RTX VSR Upscale" aria-label="Toggle AI Upscale">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                 stroke-linejoin="round" style="width:16px; height:16px; display:block;">
                 <path d="M12 3l1.6 4.6L18 9l-4.4 1.4L12 15l-1.6-4.6L6 9l4.4-1.4z" fill="currentColor" stroke="none" />
@@ -873,7 +873,7 @@
               </svg>
             </button>
 
-            <button id="btn-fullscreen" class="ctrl-btn" title="Fullscreen (F)" aria-label="Toggle Fullscreen">
+            <button id="btn-fullscreen" data-i18n-title="tipFullscreen" class="ctrl-btn" title="Fullscreen (F)" aria-label="Toggle Fullscreen">
               <span data-icon="fullscreen" data-icon-style="width:16px; height:16px; display:block;"></span>
             </button>
           </div>

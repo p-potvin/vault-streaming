@@ -50,7 +50,7 @@
       clearBtn.type = 'button';
       clearBtn.className = 'mobile-search-clear';
       clearBtn.innerHTML = '✕';
-      clearBtn.title = 'Clear search';
+      clearBtn.title = tr('tipClearSearch', 'Clear search');
       clearBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         searchInput.value = '';
@@ -70,6 +70,16 @@
 
     // Mount iOS Bottom Tab Navigation Bar
     mountBottomNav();
+
+    // body.vw-player-open while the player is open (not minimized): css/mobile.css hides the app's top and bottom
+    // bars then, on phones and tablets alike (they covered the player's own controls on the iPad).
+    const modal = document.getElementById('video-modal');
+    if (modal) {
+      const sync = () => document.body.classList.toggle('vw-player-open',
+        modal.style.display === 'flex' && !modal.classList.contains('minimized'));
+      new MutationObserver(sync).observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
+      sync();
+    }
   }
 
   function mountBottomNav() {
@@ -87,19 +97,19 @@
     nav.innerHTML = `
       <div class="mobile-nav-item active" data-tab="discover">
         <span class="mobile-nav-icon">${discSvg}</span>
-        <span>Discover</span>
+        <span data-i18n="tabDiscover">${tr('tabDiscover', 'Discover')}</span>
       </div>
       <div class="mobile-nav-item" data-tab="library">
         <span class="mobile-nav-icon">${libSvg}</span>
-        <span>Library</span>
+        <span data-i18n="tabLibrary">${tr('tabLibrary', 'Library')}</span>
       </div>
       <div class="mobile-nav-item" data-tab="history">
         <span class="mobile-nav-icon">${histSvg}</span>
-        <span>History</span>
+        <span data-i18n="navHistory">${tr('navHistory', 'History')}</span>
       </div>
       <div class="mobile-nav-item" data-tab="settings">
         <span class="mobile-nav-icon">${setSvg}</span>
-        <span>Settings</span>
+        <span data-i18n="settings">${tr('settings', 'Settings')}</span>
       </div>
     `;
 
@@ -107,9 +117,11 @@
 
     const items = nav.querySelectorAll('.mobile-nav-item');
     items.forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
         const tab = item.dataset.tab;
         if (tab === 'settings') {
+          // this tap must not reach the settings panel's click-outside handler (it closed the panel it just opened)
+          e.stopPropagation();
           const trigger = document.getElementById('settings-trigger');
           if (trigger) trigger.click();
           return;
@@ -156,22 +168,22 @@
           </div>
           <button class="ios-quick-action-btn primary" id="action-play-now">
             <span>▶️</span>
-            <span>Play Now (Instant Stream)</span>
+            <span>${tr('qsPlayNow', 'Play Now (Instant Stream)')}</span>
           </button>
           <button class="ios-quick-action-btn" id="action-toggle-library">
             <span>${inLib ? '➖' : '➕'}</span>
-            <span>${inLib ? 'Remove from Library' : 'Add to Library'}</span>
+            <span>${inLib ? tr('removeFromLibrary', 'Remove from Library') : tr('addToLibrary', 'Add to Library')}</span>
           </button>
           <button class="ios-quick-action-btn" id="action-view-details">
             <span>ℹ️</span>
-            <span>View Details</span>
+            <span>${tr('moreDetails', 'View Details')}</span>
           </button>
           <button class="ios-quick-action-btn" id="action-mark-watched">
             <span>👁️</span>
-            <span>Mark as Watched</span>
+            <span>${tr('qsMarkWatched', 'Mark as Watched')}</span>
           </button>
         </div>
-        <button class="ios-quick-action-cancel" id="action-cancel">Cancel</button>
+        <button class="ios-quick-action-cancel" id="action-cancel">${tr('cancel', 'Cancel')}</button>
       </div>
     `;
 
