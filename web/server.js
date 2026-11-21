@@ -375,6 +375,8 @@ app.get('/api/media', (req, res) => {
 
 // On-the-fly remux/transcode so browsers can play MKV/HEVC/lossless-audio sources.
 require('./transcode-route').registerTranscodeRoute(app);
+// Safari on iPhone / iPad: HLS (web/hls-route.js)
+require('./hls-route').registerHlsRoute(app);
 
 app.get('/api/health', (_req, res) => res.json({
     ok: true,

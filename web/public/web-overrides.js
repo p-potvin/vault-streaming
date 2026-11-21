@@ -33,6 +33,16 @@
   const COMET_PLAYBACK = /\/playback\//;
   const mediaSrc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
 
+  // Safari (iPhone, iPad, Mac) gets HLS (web/hls-route.js): it plays a piped MP4 with no length badly or not at all
+  // (iPhone: "cannot play this format"; iPad: a few-second duration the player took for a provider error clip).
+  // Other browsers keep the piped transcode, which they play fine.
+  const ua = navigator.userAgent;
+  const IS_APPLE_TOUCH = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const IS_SAFARI = /Safari\//.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|Edg|Android/.test(ua);
+  const USE_HLS = (IS_APPLE_TOUCH || IS_SAFARI)
+    && !!document.createElement('video').canPlayType('application/vnd.apple.mpegurl');
+  window.__vwUsesHls = USE_HLS;
+
   function toPlayableUrl(value) {
     const url = String(value == null ? '' : value);
     if (!/^https?:\/\//i.test(url)) return url;
@@ -40,7 +50,7 @@
     try { parsed = new URL(url, location.href); } catch (_) { return url; }
     if (parsed.origin === location.origin) return url;
     if (!COMET_PLAYBACK.test(parsed.pathname)) return url;
-    return '/api/transcode?src=' + encodeURIComponent(url);
+    return (USE_HLS ? '/api/hls/index.m3u8?src=' : '/api/transcode?src=') + encodeURIComponent(url);
   }
 
   Object.defineProperty(HTMLMediaElement.prototype, 'src', {
@@ -66,4 +76,22 @@
   );
 
   document.documentElement.classList.add('vw-web-client');
+
+  // iPhone Safari plays a video without playsinline in its own fullscreen player, out of the app's player (its
+  // controls, Up next, episodes); the app's fullscreen button still takes the video fullscreen.
+  const vp = document.getElementById('video-player');
+  if (vp) {
+    vp.setAttribute('playsinline', '');
+    vp.setAttribute('webkit-playsinline', '');
+  }
+  // Fullscreen on Apple devices: older iPad Safari names it webkitRequestFullscreen; the iPhone has no element
+  // fullscreen at all, only the video's own (webkitEnterFullscreen), which the player's button then uses.
+  if (!Element.prototype.requestFullscreen) {
+    Element.prototype.requestFullscreen = function () {
+      if (this.webkitRequestFullscreen) return Promise.resolve(this.webkitRequestFullscreen());
+      const v = this.tagName === 'VIDEO' ? this : this.querySelector('video');
+      if (v && v.webkitEnterFullscreen) { v.webkitEnterFullscreen(); return Promise.resolve(); }
+      return Promise.reject(new Error('fullscreen is not available'));
+    };
+  }
 })();

@@ -380,11 +380,6 @@
    .modal-content / .streaming-details-card, which no longer exist). Each screen below takes the whole phone screen
    or fits inside it, above the bottom tab bar (z-index 10005) where it must. */
 @media (max-width: 768px) {
-  /* the tab bar is for the browsing screens: not over the player */
-  body:has(#video-modal[style*="flex"]:not(.minimized)) #mobile-bottom-nav {
-    display: none !important;
-  }
-
   /* search: the input on a row of its own (it was squeezed to a few letters), Search and Advanced below */
   .streaming-toolbar-right {
     flex-wrap: wrap !important;
@@ -544,4 +539,31 @@
   #rd-stream-dialog:not(.list-open) {
     width: min(320px, calc(100vw - 24px)) !important;
   }
+}
+
+/* The player owns the screen on phones and tablets (Sat, 21 Nov 2026: on the iPad, wider than the phone rules, the
+   app's top and bottom bars covered the player's controls). body.vw-player-open is set by js/mobile.js; the web
+   client also keys on body.is-mobile (any touch device, js/mobile.js), so a tablet whose width or pointer misses the
+   media query is covered too. */
+@media (max-width: 768px), (pointer: coarse) {
+  html body.vw-player-open #mobile-bottom-nav,
+  html body.vw-player-open div.titlebar {
+    display: none !important;
+  }
+  html body.vw-player-open #video-modal:not(.minimized) {
+    top: 0 !important;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+  }
+}
+html.vw-web-client body.is-mobile.vw-player-open #mobile-bottom-nav,
+html.vw-web-client body.is-mobile.vw-player-open div.titlebar {
+  display: none !important;
+}
+html.vw-web-client body.is-mobile.vw-player-open #video-modal:not(.minimized) {
+  top: 0 !important;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
 }

@@ -70,6 +70,16 @@
 
     // Mount iOS Bottom Tab Navigation Bar
     mountBottomNav();
+
+    // body.vw-player-open while the player is open (not minimized): css/mobile.css hides the app's top and bottom
+    // bars then, on phones and tablets alike (they covered the player's own controls on the iPad).
+    const modal = document.getElementById('video-modal');
+    if (modal) {
+      const sync = () => document.body.classList.toggle('vw-player-open',
+        modal.style.display === 'flex' && !modal.classList.contains('minimized'));
+      new MutationObserver(sync).observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
+      sync();
+    }
   }
 
   function mountBottomNav() {
