@@ -303,18 +303,6 @@ async function initApp() {
         });
     }
 
-    // Focus Lost (Window Blur) -> Pause hover webms cleanly
-    window.addEventListener('blur', () => {
-        console.log('[window] Blur focus lost: pausing previews.');
-        if (window.killAllHoverVideos) {
-            window.killAllHoverVideos();
-        }
-        document.querySelectorAll('.file-card').forEach(card => {
-            const mainImg = card.querySelector('.thumbnail');
-            if (mainImg) mainImg.style.display = 'block';
-        });
-    });
-
     // Failsafe: Clear task badge after 5 minutes to prevent stuck messages
     setInterval(() => {
         const badge = el('task-badge');

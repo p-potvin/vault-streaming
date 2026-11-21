@@ -63,29 +63,191 @@
   margin-right: 4.5px;
 }
 
-/* ===== RD Stream Dialog ===== */
+/* ===== Stream loading card (#rd-stream-dialog, js/streaming/loading-card.js) =====
+   Like the start-up splash (css/splash.css), smaller: a card over a light dim, the app still visible around it. The
+   flow's own status block stays in the DOM (the card reads it) but is not shown; the ranked list opens below the card
+   ("Choose source", or by itself when only CAM / 3D releases exist). */
 #rd-stream-backdrop {
   display: none;
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(3px);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
   z-index: 3300;
 }
 
 #rd-stream-dialog {
   z-index: 3350;
-  width: 500px;
+  width: 320px;
   max-height: 80vh;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(176, 124, 255, 0.25);
+  background: radial-gradient(120% 120% at 50% 0%, #22202e 0%, #16131f 60%, #0f0c17 100%);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6), 0 0 40px rgba(176, 124, 255, 0.12);
+  overflow: hidden;
 }
+
+#rd-stream-dialog.list-open {
+  width: 540px;
+}
+
+/* opened while the player is open: the player's card shows the loading (series-controls.js, upNextLoading) */
+#rd-stream-dialog.in-player,
+#rd-stream-backdrop.in-player {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* shown over the player (the list): above #video-modal (10000) */
+#rd-stream-dialog.over-player { z-index: 10050; }
+#rd-stream-backdrop.over-player { z-index: 10040; }
+
+#rd-stream-dialog > .modal-header-bar,
+#rd-stream-dialog #rd-loading-status {
+  display: none !important;
+}
+
+#rd-stream-dialog:not(.list-open) #rd-dialog-body {
+  display: none;
+}
+
+.sl-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 22px 24px 18px;
+  text-align: center;
+}
+
+.sl-logo {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 18px rgba(176, 124, 255, 0.35));
+  animation: sl-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes sl-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+.sl-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.sl-sub {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--vault-slate);
+}
+
+.sl-sub:empty { display: none; }
+
+.sl-bar {
+  position: relative;
+  width: 200px;
+  height: 3px;
+  margin: 6px 0 2px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sl-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, #B07CFF, #F5B929, transparent);
+  animation: sl-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes sl-slide { to { left: 100%; } }
+
+.sl-bar > span {
+  display: none;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #B07CFF, #F5B929);
+  transition: width 0.4s ease;
+}
+
+.sl-bar.determinate::after { display: none; }
+.sl-bar.determinate > span { display: block; }
+
+.sl-status {
+  min-height: 1.3em;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sl-detail {
+  max-width: 100%;
+  font-size: 10.5px;
+  color: var(--vault-slate);
+  overflow-wrap: anywhere;
+}
+
+.sl-detail:empty { display: none; }
+
+.sl-choose {
+  margin-top: 2px;
+  padding: 2px 4px;
+  background: none;
+  border: none;
+  color: var(--vault-accent);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.sl-choose:hover { background: none; color: #fff; }
+
+.sl-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sl-close:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.sl-close svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+.sl-card.error .sl-bar { background: rgba(255, 107, 122, 0.45); }
+.sl-card.error .sl-bar::after,
+.sl-card.error .sl-bar > span { display: none; }
+.sl-card.error .sl-status { color: var(--vault-signal-alert, #FF6B7A); }
+.sl-card.error .sl-logo { animation: none; opacity: 0.55; }
 
 #rd-dialog-body {
   overflow-y: auto;
   max-height: 50vh;
-  margin-bottom: 15px;
+  padding: 0 16px 16px;
 }
 
 #rd-loading-status {

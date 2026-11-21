@@ -8,7 +8,9 @@ body.player-idle #video-modal #player-topbar {
   transition: opacity 0.3s ease;
 }
 
-body.player-idle #video-modal .video-wrapper {
+/* every element of the player: the video itself sets cursor: pointer, which won over the wrapper's none */
+body.player-idle #video-modal .video-wrapper,
+body.player-idle #video-modal .video-wrapper * {
   cursor: none !important;
 }
 
@@ -579,9 +581,11 @@ video::cue {
 /* Up next card, bottom-left over the video (above the controls) */
 #up-next-card {
   position: absolute;
-  left: 20px;
+  right: 20px;   /* bottom-right, above the controls */
   bottom: 96px;
-  z-index: 25;
+  height: 140px;   /* fixed: the same size whatever it shows (Up next, loading, an error) */
+  align-items: center;
+  z-index: 210;   /* above the player's top bar (202) and overlays: always over the video */
   display: flex;
   width: min(460px, calc(100% - 40px));
   overflow: hidden;
@@ -591,7 +595,7 @@ video::cue {
   backdrop-filter: blur(8px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateX(16px);
   pointer-events: none;
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
@@ -616,6 +620,8 @@ video::cue {
 #up-next-card .unc-body {
   flex: 1;
   min-width: 0;
+  max-height: 100%;
+  overflow: hidden;
   padding: 10px 12px;
 }
 
@@ -653,6 +659,8 @@ video::cue {
 }
 
 #up-next-card .unc-dismiss {
+  padding: 0;   /* the app's button padding left no room: the icon shrank to nothing */
+  flex-shrink: 0;
   width: 28px;
   border: 1px solid var(--vault-border);
   border-radius: 4px;
@@ -663,6 +671,68 @@ video::cue {
   align-items: center;
   justify-content: center;
 }
+
+#up-next-card .unc-dismiss svg,
+#episodes-panel .ep-panel-close svg {
+  flex-shrink: 0;
+}
+
+/* The card as the stream loading indicator (upNextLoading): status lines, a ring on the right, a cancel corner */
+#up-next-card.unc-loading { align-items: center; }
+#up-next-card.unc-loading .unc-body { padding-right: 4px; }
+#up-next-card.unc-loading .unc-still { width: 150px; }
+#up-next-card .unc-status { font-size: 11px; color: rgba(255, 255, 255, 0.85); margin-top: 4px; }
+#up-next-card .unc-detail { font-size: 10px; color: rgba(255, 255, 255, 0.55); margin-top: 2px; overflow-wrap: anywhere; }
+#up-next-card .unc-detail:empty { display: none; }
+#up-next-card .unc-choose {
+  margin-top: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--vault-accent);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+#up-next-card .unc-ring {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  margin: 0 18px 0 6px;
+}
+#up-next-card .unc-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+#up-next-card .unc-ring circle { fill: none; stroke-width: 3; }
+#up-next-card .unc-ring-track { stroke: rgba(255, 255, 255, 0.12); }
+#up-next-card .unc-ring-fill {
+  stroke: var(--vault-accent);
+  stroke-linecap: round;
+  stroke-dasharray: 25 100;
+  transition: stroke-dasharray 0.4s ease;
+}
+#up-next-card .unc-ring:not(.determinate) svg { animation: vw-preparing-spin 0.9s linear infinite; }
+#up-next-card.error .unc-ring { display: none; }
+#up-next-card.error .unc-status { color: var(--vault-signal-alert, #FF6B7A); }
+#up-next-card .unc-cancel {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+}
+#up-next-card .unc-cancel:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+#up-next-card .unc-cancel svg { flex-shrink: 0; }
 
 /* Episodes panel: a drawer on the right of the video */
 #episodes-panel {
@@ -710,6 +780,8 @@ video::cue {
 }
 
 #episodes-panel .ep-panel-close {
+  padding: 0;   /* the app's button padding left no room: the icon shrank to nothing */
+  flex-shrink: 0;
   width: 30px;
   height: 30px;
   border: 1px solid var(--vault-border);

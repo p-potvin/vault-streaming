@@ -13,6 +13,13 @@ window.findOtherSources = function () {
         { poster: m.poster, year: m.year, skipLastSource: true });
 };
 
+/** Stop the running stream request: the search / auto-pick (request counter) and the source tries (flow id). Used
+ *  when the viewer cancels or opens the source list to choose (js/streaming/loading-card.js). */
+window.stopStreamRequest = function () {
+    _torrentRequestCounter++;
+    window.activeRDFlowId = null;
+};
+
 /**
  * Play the source that worked last time for the active title (saved as `lastSource` with its watch progress).
  * Resolves true when it is playing; false (after a short notice) when there is none or it no longer resolves.
@@ -73,6 +80,8 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     _torrentRequestCounter++;
     const currentRequestNum = _torrentRequestCounter;
 
+    // a source tried for the previous request must not open under this one (startRDDebridFlow checks its flow id)
+    window.activeRDFlowId = null;
     window._rdDialogJustOpened = true;
     setTimeout(() => { window._rdDialogJustOpened = false; }, 100);
 
@@ -137,6 +146,7 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
     // A position kept for a quality / source switch belongs to that title (episode) only: another one (Play next, an
     // episode picked while playing) starts at its own saved position, not where the previous episode was.
     const prevMedia = window.activeStreamingMedia;
+    window._prevStreamingMedia = prevMedia;   // a cancel in the player goes back to it (js/streaming/loading-card.js)
     const sameItem = prevMedia && String(prevMedia.tmdbId || prevMedia.title) === String(tmdbId || movieTitle)
         && (prevMedia.season || null) === (isTV ? (season || 1) : null) && (prevMedia.episode || null) === (isTV ? (episode || 1) : null);
     if (!sameItem) {
@@ -173,6 +183,26 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
         // Cancel output if another search was triggered during the stagger delay
         if (currentRequestNum !== _torrentRequestCounter) {
             console.log(`[streaming] Cancelled outdated torrent search stagger for: ${movieTitle}`);
+            return;
+        }
+
+        // The next episode, resolved ahead while the previous one ended (js/streaming/preload.js): open it at once.
+        const pre = isTV && !(meta && meta.skipLastSource) && typeof window.takePreloadedEpisode === 'function'
+            ? await window.takePreloadedEpisode(tmdbId || movieTitle, season || 1, episode || 1) : null;
+        if (currentRequestNum !== _torrentRequestCounter) return;
+        if (pre) {
+            const m = window.activeStreamingMedia;
+            const src = pre.source || {};
+            statusText.innerHTML = `${window.currentLang === 'fr' ? 'Ouverture de l\'épisode préchargé' : 'Opening the pre-loaded episode'}`;
+            window.currentTorrentList = pre.list && pre.list.length ? pre.list : [src];
+            window.currentMovieTitle = movieTitle;
+            if (typeof window.qualityLabelOf === 'function') window._activeStreamLabel = window.qualityLabelOf(src);
+            m.quality = src.quality || '';
+            m.release = String(src.desc || '').replace(/^📄\s*/, '');
+            m.lastSource = src.url ? { url: src.url, hash: src.hash || null, name: src.name || '', desc: src.desc || '',
+                quality: src.quality || '', size: src.size || '', savedAt: new Date().toISOString() } : null;
+            console.log('[streaming] playing the pre-loaded episode:', (src.desc || src.name || '').slice(0, 80));
+            window.playStream(pre.streamUrl, movieTitle);
             return;
         }
 
@@ -830,6 +860,8 @@ window.startRDDebridFlow = async function(torrent, movieTitle, index = 0) {
                     savedAt: new Date().toISOString() }
                 : null;
         }
+        // another title was asked for while this one resolved: never play this source under it
+        if (cancelled() || (window.activeStreamingMedia && window.activeStreamingMedia !== media)) return;
         window.playStream(response.streamUrl, movieTitle);
         if (response.provider === 'deepbrid') {
             window.showToast(fr ? 'Flux Deepbrid chargé.' : 'Deepbrid stream loaded.', 'success');

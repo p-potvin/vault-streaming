@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.9.1 -->
+<!-- v2.10.0 -->
 <html lang="en">
 
 <head>
@@ -40,6 +40,8 @@
   <script src="js/streaming/trailer.js" defer></script>
   <script src="js/streaming/details-modal.js" defer></script>
   <script src="js/streaming/rd-flow.js" defer></script>
+  <script src="js/streaming/loading-card.js" defer></script>
+  <script src="js/streaming/preload.js" defer></script>
   <script src="js/hover-card.js" defer></script>
   <script src="js/favorites.js" defer></script>
   <script src="js/history.js" defer></script>
@@ -506,6 +508,18 @@
   <div id="rd-stream-backdrop"></div>
   <div id="rd-stream-dialog" class="vw-console-shell modal-base" role="dialog" aria-modal="true"
     aria-label="Vault Streaming Client">
+    <!-- The loading card (js/streaming/loading-card.js): what the stream flow below reports, shown like the start-up
+         splash. The flow's own status / list elements stay in the dialog (hidden) and drive it. -->
+    <div class="sl-card" aria-live="polite">
+      <button type="button" class="sl-close" aria-label="Cancel"><span data-icon="close"></span></button>
+      <img class="sl-logo" src="public/vault-streaming-logo.png" alt="">
+      <div class="sl-title"></div>
+      <div class="sl-sub"></div>
+      <div class="sl-bar"><span></span></div>
+      <div class="sl-status"></div>
+      <div class="sl-detail"></div>
+      <button type="button" class="sl-choose"></button>
+    </div>
     <div class="modal-header-bar">
       <div class="modal-header-left">
         <svg class="tab-icon modal-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
