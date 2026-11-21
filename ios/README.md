@@ -22,5 +22,5 @@
 ## Building on Windows + GitHub Actions CI
 
 Because Xcode requires macOS, this repository uses a manually dispatched workflow:
-- Workflow: `.github/workflows/ios-unsigned-build.yml` (`macos-14`, `xcodebuild clean build -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO`).
+- Workflow: `.github/workflows/ios-unsigned-build.yml` (`macos-15`, `xcodebuild clean build -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO`).
 - Output: Download `VaultStreaming-Unsigned-IPA` from GitHub Actions artifacts and sideload onto your iPhone/iPad with **Sideloadly** or **AltStore** using your Apple ID, or open `ios/VaultStreaming.xcodeproj` in Xcode on a Mac to sign and install directly.

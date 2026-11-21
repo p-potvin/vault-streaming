@@ -8,7 +8,8 @@ on:
 jobs:
   build-unsigned-ipa:
     name: Build Unsigned IPA
-    runs-on: macos-14
+    # macos-14 was retired ("configuration not supported", Sat, 21 Nov 2026)
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
