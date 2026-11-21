@@ -3,12 +3,12 @@
 // so the app reads them from vault-raggae instead of asking TMDB on each first view.
 //
 // Who: IMDb films with >= --movie-votes votes (default 600) and series with >= --tv-votes (default 600, lowered from
-// 1,000 on Sat 21 Nov 2026), most voted first. Series with at most --max-episodes episodes (default 500, counted locally
-// from IMDb's title.episode dump) also get every season's episodes: they come in the same request as the details (up to
-// 14 seasons appended), so they cost next to nothing, while the long-running soaps / talk / game shows (10,000+
-// episodes) are skipped (operator, Wed 18 Nov 2026). --episodes-top N keeps only the N most voted of those (default 0:
-// all of them; it was 3000 until Sat 21 Nov 2026). A series stored before without its episodes (outside that old top
-// 3000) is asked again for them: backfill-episodes-done.txt lists the series whose episodes are stored.
+// 1,000 on Sat 21 Nov 2026), most voted first. Every series also gets all its seasons' episodes, specials (season 0)
+// included: up to 14 seasons come in the details request itself, the rest 20 a request. By default there is no cap
+// (operator, Sat 21 Nov 2026: the long-running soaps / talk / game shows too); --max-episodes N leaves out the episodes
+// of series longer than N (counted locally from IMDb's title.episode dump), and --episodes-top N keeps only the N most
+// voted series (both 0 by default; until Sat 21 Nov 2026 they were 500 and 3000). A series stored before without all
+// its episodes is asked again for them: backfill-episodes-done-v2.txt lists the series whose episodes are stored.
 //
 // As much as possible per request (TMDB's append_to_response):
 //   1. GET /find/{imdb id}                      -> the TMDB id (skipped when the catalog already has it)
@@ -90,7 +90,9 @@ const TOKEN = process.env.TMDB_BEARER_TOKEN;
 const STATE_DIR = path.join(process.env.LOCALAPPDATA || os.homedir(), 'VaultWares', 'vault-streaming');
 const DONE_FILE = path.join(STATE_DIR, 'backfill-done.txt');
 const MISS_FILE = path.join(STATE_DIR, 'backfill-misses.txt');
-const EPISODES_DONE_FILE = path.join(STATE_DIR, 'backfill-episodes-done.txt');   // series whose episodes are stored
+// series whose episodes are stored, specials (season 0) included: the -v2 file restarts the list (Sat 21 Nov 2026: the
+// first file's series were checkpointed without their specials, so they are asked again)
+const EPISODES_DONE_FILE = path.join(STATE_DIR, 'backfill-episodes-done-v2.txt');
 const CREDITS_DONE_FILE = path.join(STATE_DIR, 'backfill-credits-done.txt');     // titles whose cast / crew are stored
 
 // ── bounded TMDB requests ────────────────────────────────────────────────────
@@ -410,18 +412,24 @@ async function main() {
             if (!got) continue;
             if (got.notFound) { miss(cid, `details-404:${tmdbType}/${tmdbId}`); continue; }
             if (tmdbType !== q.category) crossed++;
-            // a series with more seasons than asked for up front
-            if (seasonNumbers.length && got.data.number_of_seasons > seasonNumbers.length) {
-                const rest = Array.from({ length: got.data.number_of_seasons - seasonNumbers.length }, (_, k) => k + seasonNumbers.length + 1);
-                for (let j = 0; j < rest.length; j += 20) {
-                    const chunk = rest.slice(j, j + 20);
+            // every season TMDB lists with episodes that the details request did not carry: those past the 14th,
+            // the specials (season 0), and any that came back empty; 20 a request. A series still missing one is
+            // stored as far as it goes and not checkpointed (asked again by the next run)
+            if (seasonNumbers.length) {
+                const listed = (Array.isArray(got.data.seasons) ? got.data.seasons : [])
+                    .filter(s => s.season_number >= 0 && s.episode_count > 0).map(s => s.season_number);
+                const missing = listed.filter(n => !got.seasons[String(n)]);
+                for (let j = 0; j < missing.length; j += 20) {
+                    const chunk = missing.slice(j, j + 20);
                     const more = await tmdb(`/tv/${tmdbId}?language=en-US&append_to_response=${chunk.map(n => `season/${n}`).join(',')}`);
                     if (more && !more.notFound) chunk.forEach(n => { const s = more[`season/${n}`]; if (s && s.episodes) got.seasons[String(n)] = T.slimSeason(s); });
-                    else got.incomplete = true;
                 }
+                got.incomplete = listed.some(n => !got.seasons[String(n)]);
             }
-            pending.push({ cid, incomplete: !!got.incomplete, episodes: seasonNumbers.length > 0, credits: true,
-                           ingest: buildIngest(q.item, got.data, tmdbType, got.seasons, q.category) });
+            const ingest = buildIngest(q.item, got.data, tmdbType, got.seasons, q.category);
+            // checkpointed for its people only when TMDB sent them (the credits append can be absent)
+            pending.push({ cid, incomplete: !!got.incomplete, episodes: seasonNumbers.length > 0,
+                           credits: !!ingest.raw_enrichment.tmdb.credits, ingest });
             // 50 titles a call, or less when they are big (a long series with every episode's crew and guest stars
             // can be tens of MB): the gateway gets at most ~16 MB of JSON at once
             pendingBytes += JSON.stringify(pending[pending.length - 1].ingest).length;
