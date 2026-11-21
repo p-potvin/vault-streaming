@@ -159,7 +159,7 @@ public enum StreamPicker {
 
         // Size sanity (flag suspiciously small fake 4K/1080p)
         if bytes > 0 {
-            let gb = pow(1024.0, 3)
+            let gb: Double = 1024 * 1024 * 1024
             if tq == 4 && bytes < 6 * gb { score -= 8 }
             else if tq == 3 && bytes < 1.2 * gb { score -= 6 }
         }

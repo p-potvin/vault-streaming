@@ -242,7 +242,7 @@ public struct MovieDetailsSheet: View {
                     externalBadgeButton(
                         title: "YouTube",
                         icon: "play.rectangle.fill",
-                        tint: Color(hex: "#FF3B30"),
+                        tint: Color(hex: 0xFF3B30),
                         url: ytURL
                     )
                 }

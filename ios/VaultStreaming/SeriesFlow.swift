@@ -279,7 +279,7 @@ public final class NextEpisodePreloader {
             let streamURLString = resolved.streamURL.absoluteString
             // kept warm for its lifetime only, then evicted whether or not it was played (leaving the player near the
             // end of an episode used to keep the server warming the next one every minute, indefinitely)
-            let warmTask = Task { [weak self] in
+            let warmTask = Task { [weak preloader = self] in
                 let deadline = Date().addingTimeInterval(Self.keepTTLSeconds)
                 while !Task.isCancelled && Date() < deadline {
                     try? await Task.sleep(nanoseconds: 60_000_000_000)
@@ -288,7 +288,7 @@ public final class NextEpisodePreloader {
                 }
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    if let self, self.cached?.key == key { self.cached = nil }
+                    if let preloader, preloader.cached?.key == key { preloader.cached = nil }
                 }
             }
             self.cached = CachedPreload(key: key, outcome: resolved, createdAt: Date(), warmTask: warmTask)
