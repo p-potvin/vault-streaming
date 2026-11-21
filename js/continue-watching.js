@@ -19,6 +19,24 @@
         return item.year ? String(item.year) : '';
     }
 
+    /** One entry per title: a series shows only its most recently played episode (finished or not); the history is
+     *  already sorted most recent first. Same show = same TMDB id (compared as text), else the same title. */
+    function latestPerTitle(history) {
+        const seen = new Set();
+        const out = [];
+        for (const item of history) {
+            // a series: its id and its title both name it (an episode may have been saved without the id)
+            const keys = item.mediaType === 'tv'
+                ? [item.tmdbId != null && item.tmdbId !== '' ? `tv:id:${item.tmdbId}` : null, item.title ? `tv:title:${item.title}` : null].filter(Boolean)
+                : [item.key || `${item.mediaType}:${item.tmdbId || item.title}`];
+            if (keys.some(k => seen.has(k))) continue;
+            keys.forEach(k => seen.add(k));
+            out.push(item);
+        }
+        return out;
+    }
+    window._continueWatchingLatestPerTitle = latestPerTitle;   // (tests)
+
     function resume(item) {
         // A finished episode: open the series on its next episode (the details modal offers "Next: S02E06")
         // instead of replaying the one already watched.
@@ -45,8 +63,9 @@
         }
         let items = [];
         try {
-            const res = await window.electronAPI.getWatchHistory({ limit: COUNT });
-            items = (res && res.success && Array.isArray(res.items)) ? res.items.slice(0, COUNT) : [];
+            // most recent first: enough entries to fill the row once a series' episodes collapse into one card
+            const res = await window.electronAPI.getWatchHistory({ limit: 200 });
+            items = (res && res.success && Array.isArray(res.items)) ? latestPerTitle(res.items).slice(0, COUNT) : [];
         } catch (_) { items = []; }
         if (!items.length) { section.style.display = 'none'; return; }
 

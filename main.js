@@ -56,7 +56,11 @@ if (process.platform === 'win32') {
 // Keep reading/writing the settings folder the app has always used; setName()
 // would otherwise move userData to %APPDATA%\Vault Streaming and orphan
 // vault-settings.json and the watch history.
-app.setPath('userData', path.join(app.getPath('appData'), 'vault-streaming'));
+// GUI tests (VAULT_STREAMING_E2E=1) may name their own folder (VAULT_STREAMING_USER_DATA), so a test never writes the
+// operator's watch history or settings while the real app runs.
+app.setPath('userData', (process.env.VAULT_STREAMING_E2E === '1' && process.env.VAULT_STREAMING_USER_DATA)
+    ? path.resolve(process.env.VAULT_STREAMING_USER_DATA)
+    : path.join(app.getPath('appData'), 'vault-streaming'));
 
 // Every log line also goes to %APPDATA%\vault-streaming\logs\vault-streaming.log, with debrid keys cut out.
 require('./src/app-log').install(app.getPath('userData'));

@@ -176,6 +176,25 @@ window.triggerRDStream = async function(movieTitle, tmdbId = null, mediaType = '
             return;
         }
 
+        // The next episode, resolved ahead while the previous one ended (js/streaming/preload.js): open it at once.
+        const pre = isTV && !(meta && meta.skipLastSource) && typeof window.takePreloadedEpisode === 'function'
+            ? window.takePreloadedEpisode(tmdbId || movieTitle, season || 1, episode || 1) : null;
+        if (pre) {
+            const m = window.activeStreamingMedia;
+            const src = pre.source || {};
+            statusText.innerHTML = `${window.currentLang === 'fr' ? 'Ouverture de l\'épisode préchargé' : 'Opening the pre-loaded episode'}`;
+            window.currentTorrentList = pre.list && pre.list.length ? pre.list : [src];
+            window.currentMovieTitle = movieTitle;
+            if (typeof window.qualityLabelOf === 'function') window._activeStreamLabel = window.qualityLabelOf(src);
+            m.quality = src.quality || '';
+            m.release = String(src.desc || '').replace(/^📄\s*/, '');
+            m.lastSource = src.url ? { url: src.url, hash: src.hash || null, name: src.name || '', desc: src.desc || '',
+                quality: src.quality || '', size: src.size || '', savedAt: new Date().toISOString() } : null;
+            console.log('[streaming] playing the pre-loaded episode:', (src.desc || src.name || '').slice(0, 80));
+            window.playStream(pre.streamUrl, movieTitle);
+            return;
+        }
+
         // The source this title (episode) played from last time: open it directly — no search, no picking. Only if
         // it no longer resolves (dropped from the debrid account, …) does the normal search run.
         if (!(meta && meta.skipLastSource) && await playLastSource(currentRequestNum, movieTitle, epLabel, statusText)) return;

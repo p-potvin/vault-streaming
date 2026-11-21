@@ -1161,6 +1161,8 @@ function initPlayer() {
     document.addEventListener('mousedown', markActive);
     document.addEventListener('mouseup', markActive);
     document.addEventListener('keydown', markActive);
+    // playback starting under a still mouse: the 2 s count starts there too (it only ran from a mouse move)
+    vp.addEventListener('playing', markActive);
 
     // ── Autoplay toggle Switch ──────────────────────────────
     if (el('btn-autoplay')) {
@@ -1752,11 +1754,11 @@ function trackMomentsPlayback(vp) {
  * momentsCopyCandidates), else the played stream. A copy is resolved through Comet like a play (at most 3 tries) and
  * its audio track is the one in the language being heard. { url, audioIndex?, release? }.
  */
-async function momentsSource(playedUrl, media, lang) {
+async function momentsSource(playedUrl, media, lang, sources = window.currentTorrentList, label = window._activeStreamLabel) {
     const played = { url: playedUrl };
     try {
         const list = window.momentsCopyCandidates
-            ? window.momentsCopyCandidates(window.currentTorrentList, window._activeStreamLabel, media.release) : [];
+            ? window.momentsCopyCandidates(sources, label, media.release) : [];
         for (const t of list.slice(0, 3)) {
             const r = await window.electronAPI.streamRDTorrent({ magnet: t.magnet, hash: t.hash, url: t.url, name: t.name,
                                                                  cached: !!t.isRDCached });
@@ -1788,6 +1790,9 @@ async function momentsSource(playedUrl, media, lang) {
     }
     return played;
 }
+
+// (js/streaming/preload.js: the next episode's read, with that episode's own source list)
+window.momentsSourceFor = momentsSource;
 
 async function playStream(url, title) {
     // a new playback: its own 15-second count before it is handed to Moments (streams only, not library files)

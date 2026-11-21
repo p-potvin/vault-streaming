@@ -137,8 +137,67 @@
 
     function hideCard() {
         if (state && state.countdown) { clearInterval(state.countdown); state.countdown = null; }
-        if (card) card.classList.remove('visible');
+        if (card) { card.classList.remove('visible', 'unc-loading', 'error'); card._loadingFor = undefined; }
     }
+
+    /**
+     * The card as the stream loading indicator while the player is open (js/streaming/loading-card.js): the title
+     * being opened (an episode: its still, label and name), the flow's status, and a ring on the right (spinning, or
+     * filled to `pct`). null hides it. { media, status, detail, pct, error, canChoose, onCancel, onChoose }.
+     */
+    window.upNextLoading = function (o) {
+        if (!o) {
+            if (card && card.classList.contains('unc-loading')) hideCard();
+            return;
+        }
+        const c = cardEl();
+        const m = o.media || {};
+        const isEp = m.mediaType === 'tv' && m.season != null && m.episode != null;
+        if (state && state.countdown) { clearInterval(state.countdown); state.countdown = null; }
+        if (c._loadingFor !== m) {
+            c._loadingFor = m;
+            c.classList.remove('error');
+            c.innerHTML = `
+                <div class="unc-still unc-still-empty"></div>
+                <div class="unc-body">
+                  <div class="unc-kicker">${window.escapeHtml(tx('Loading', 'Chargement'))}${isEp ? ` · ${window.escapeHtml(window.episodeLabel(m.season, m.episode))}` : ''}</div>
+                  <div class="unc-title"></div>
+                  <div class="unc-status"></div>
+                  <div class="unc-detail"></div>
+                  <button type="button" class="unc-choose">${window.escapeHtml(tx('Choose source', 'Choisir la source'))}</button>
+                </div>
+                <div class="unc-ring" aria-hidden="true">
+                  <svg viewBox="0 0 36 36"><circle class="unc-ring-track" cx="18" cy="18" r="15"/><circle class="unc-ring-fill" cx="18" cy="18" r="15" pathLength="100"/></svg>
+                </div>
+                <button type="button" class="unc-cancel" title="${window.escapeHtml(tx('Cancel', 'Annuler'))}"
+                  aria-label="${window.escapeHtml(tx('Cancel', 'Annuler'))}">${window.icons ? window.icons.close('', 'width:12px;height:12px;') : '×'}</button>`;
+            c.querySelector('.unc-title').textContent = isEp ? (m.episodeName || m.title || '') : (m.title || '');
+            if (isEp) {
+                window.tvEpisodeInfo(m.tmdbId, m.season, m.episode).then((info) => {
+                    if (c._loadingFor !== m || !info) return;
+                    if (info.name) c.querySelector('.unc-title').textContent = info.name;
+                    if (info.still_path) {
+                        const img = document.createElement('img');
+                        img.className = 'unc-still';
+                        img.alt = '';
+                        img.src = STILL(info.still_path);
+                        c.querySelector('.unc-still').replaceWith(img);
+                    }
+                }).catch(() => {});
+            }
+        }
+        c.querySelector('.unc-status').textContent = o.status || '';
+        c.querySelector('.unc-detail').textContent = o.detail || '';
+        const choose = c.querySelector('.unc-choose');
+        choose.style.display = o.canChoose ? '' : 'none';
+        choose.onclick = (e) => { e.stopPropagation(); if (o.onChoose) o.onChoose(); };
+        c.querySelector('.unc-cancel').onclick = (e) => { e.stopPropagation(); hideCard(); if (o.onCancel) o.onCancel(); };
+        const ring = c.querySelector('.unc-ring');
+        ring.classList.toggle('determinate', o.pct != null);
+        ring.querySelector('.unc-ring-fill').style.strokeDasharray = o.pct != null ? `${o.pct} 100` : '';
+        c.classList.toggle('error', !!o.error);
+        c.classList.add('unc-loading', 'visible');
+    };
 
     function renderCard(next, countdownSec) {
         const c = cardEl();
@@ -301,6 +360,14 @@
             }
         }
         maybeShowCard();
+        // 30 s before the end (the credits point when set): the next episode is resolved and its Moments read queued
+        // (js/streaming/preload.js), so Play next opens it at once
+        if (!state.preloaded && typeof window.preloadNextEpisode === 'function'
+            && effectiveEnd() - vp.currentTime <= (window.PRELOAD_BEFORE_END_S || 30) && vp.currentTime < effectiveEnd()) {
+            state.preloaded = true;
+            const media = state.media;
+            Promise.resolve(state.next).then((n) => { if (n && window.activeStreamingMedia === media) window.preloadNextEpisode(media, n); });
+        }
         // the credits point counts as the end (the player's own "ended" covers episodes without one)
         const end = effectiveEnd();
         if (end < vp.duration && vp.currentTime >= end && !state.ended) {

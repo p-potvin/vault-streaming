@@ -510,7 +510,9 @@ document.addEventListener('click', (e) => {
     }
 
     const rdDialog = document.getElementById('rd-stream-dialog');
-    if (rdDialog && rdDialog.style.display === 'flex' && !window._rdDialogJustOpened) {
+    // (with the player open the loading shows on the player's card, which has its own cancel: playing with the video
+    // must not stop the next episode's loading)
+    if (rdDialog && rdDialog.style.display === 'flex' && !window._rdDialogJustOpened && !rdDialog.classList.contains('in-player')) {
         if (!rdDialog.contains(e.target)) {
             rdDialog.style.display = 'none';
             const backdrop = document.getElementById('rd-stream-backdrop');
@@ -531,7 +533,7 @@ document.addEventListener('keydown', (e) => {
         }
 
         const rdDialog = document.getElementById('rd-stream-dialog');
-        if (rdDialog && rdDialog.style.display === 'flex') {
+        if (rdDialog && rdDialog.style.display === 'flex' && !rdDialog.classList.contains('in-player')) {
             rdDialog.style.display = 'none';
             const backdrop = document.getElementById('rd-stream-backdrop');
             if (backdrop) backdrop.style.display = 'none';
