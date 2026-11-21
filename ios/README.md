@@ -1,71 +1,26 @@
-# VaultStreaming iOS App & Unsigned Build Pipeline
+# Vault Streaming — Native iOS & iPadOS App (`v2.10.3`)
 
-Native iOS container app for Vault Streaming, packaged with SwiftUI and WebKit, providing persistent streaming storage, video playback optimizations (inline playback, PiP, AirPlay, full landscape rotation), native Face ID biometric locking, pull-to-refresh, Tailnet connectivity diagnostics, and an automated unsigned build pipeline.
+100% native SwiftUI & AVPlayer app for iOS 16+ / iPadOS 16+, connecting over Tailscale/Tailnet to the Vault Streaming HTTP/SSE backend (`streaming.vaultwares.ca` or a local workstation worker).
 
----
+## Architecture
 
-## Architecture Overview
+- **Authentication & First-Run Gate**: `FirstRunConnectView.swift` validates server URL + `VW_WEB_TOKEN` with one `POST /api/invoke` call (`trailer-cache:stats`) (supports pasting an invite URL with `?token=`) and stores the token in the iOS Keychain via `KeychainHelper.swift`. No hardcoded tokens exist in the bundle.
+- **Networking (`StreamingBackend.swift` / `Api.shared`)**: Wraps `POST /api/invoke` (IPC channels) and authenticates all media, subtitle, trailer and HLS requests with the `x-vw-token` and `x-vw-client` headers (never a `?token=` in the URL). Catalog calls send `fr-FR` / `en-US`, the keys the catalog stores (the app's own text is fr-CA).
+- **Localization (`L10n.swift` & `Localizable.xcstrings`)**: Dynamic English (`en`) and Quebec French (`fr-CA`) switching (`LanguageManager.shared`), passed as `language` (`en-US` / `fr-CA`) to catalog/TMDB/RAGGAE endpoints.
+- **Discovery, Search, Library & History**:
+  - `DiscoverView.swift`: Horizontal Continue Watching strip, Featured hero banner, Netflix / Disney+ / Apple TV+ / Prime Video provider filters, Popular / Top Rated / Newest sorting, and paginated responsive grids (`AdaptiveGrid.swift`: 4–5 columns on iPad, 2–3 on iPhone).
+  - `ContentView.swift`: `TabView` on iPhone and `NavigationSplitView` sidebar on iPadOS.
+  - `HistoryView.swift`: Fetches `watch-history:get-all` grouped per series (`SeriesFlow.swift`), with swipe-to-delete (`watch-history:remove`) and direct resume.
+- **Details & Trailers (`MovieDetailsSheet.swift` & `TrailerPlayerView.swift`)**:
+  - Autoplays server-cached trailers from `/trailers/<id>.h264.mp4` (authenticated via `AVURLAssetHTTPHeaderFieldsKey`, `.mp4` and YouTube thumbnail fallbacks, KinoCheck 3 s intro skip, persistent mute toggle).
+  - Shows external links (YouTube, IMDb, TMDB, JustWatch, Apple TV), Cast carousel, series season selector + per-episode progress, and per-series intro/outro skip timers.
+- **Playback (`StreamPicker.swift`, `PlayerViewModel.swift`, `NativePlayerView.swift`)**:
+  - Client-side torrent ranking + `rd-stream-torrent` / `deepbrid-stream` resolution and `lastSource` resume.
+  - `AVPlayer` HLS playback via `/api/hls/index.m3u8?src=...&audio=N&h=1080` with audio track probing (`probe-audio-tracks`), side-loaded WebVTT subtitles (`subtitles:search` -> `download-subtitle-track`) & AI transcript polling (`subtitles:transcript`) parsed by `WebVTTParser.swift`, dead-link auto-reload + candidate failover, Next Episode background preloading (`NextEpisodePreloader`), and Up Next countdown overlay.
+- **Security**: Optional Face ID / Touch ID / Optic ID lock screen on launch and background return (`BiometricAuth.swift`).
 
-- **Engine**: Pure native Swift / SwiftUI hosting a high-performance `WKWebView` with `WKWebsiteDataStore.default()` (preventing iOS Safari 7-day storage eviction for watch history and favorites).
-- **Streaming Optimizations**: Inline media playback enabled without requiring user tap initiation, Picture-in-Picture (PiP), AirPlay route pickers, and complete portrait + landscape rotation support for full-screen movie viewing.
-- **Tailnet-First**: Preconfigured by default for `http://100.67.25.118:5173` (Comet instance running on OVH VPS). Media streams and indexer queries resolve directly against Comet. When transcoding is required for formats incompatible with iOS WebKit, jobs are dispatched through the VaultWares API gateway on OVH (`https://api.vaultwares.ca`) to the operator's desktop workstation (`100.71.101.21`).
+## Building on Windows + GitHub Actions CI
 
----
-
-## Automated CI Pipeline (GitHub Actions)
-
-Every push to `main` or `vw-codex-*` branches triggers `.github/workflows/ios-unsigned-build.yml`:
-
-1. Boots a clean `macos-14` (Apple Silicon M1) runner with Xcode 15/16.
-2. Compiles `ios/VaultStreaming.xcodeproj` with `CODE_SIGNING_ALLOWED=NO`.
-3. Packages `VaultStreaming.app` into `build/VaultStreaming-unsigned.ipa`.
-4. Uploads `VaultStreaming-iOS-Unsigned` as a downloadable artifact.
-
----
-
-## How to Sign and Install onto iPhone
-
-### Option 1: Direct in Xcode (Zero Extra Tools, Free Apple ID)
-
-1. Open `ios/VaultStreaming.xcodeproj` in Xcode on your Mac.
-2. In the project navigator, select the **VaultStreaming** target.
-3. Under **Signing & Capabilities**:
-   - Check **Automatically manage signing**.
-   - Select your Personal Team (associated with your standard free Apple ID).
-   - Change the Bundle Identifier if needed (e.g., `ca.vaultwares.streaming.yourname`).
-4. Connect your iPhone via USB or Wi-Fi.
-5. Select your device in the top bar and press **Run** (`⌘R`).
-6. On your iPhone: Go to **Settings → General → VPN & Device Management** and tap **Trust [Your Apple ID]**.
-
-*Note: Free Apple ID certificates remain valid on-device for 7 days and can be refreshed anytime by re-running in Xcode.*
-
-### Option 2: Sideloading the Unsigned IPA (Sideloadly / AltStore / SideStore)
-
-1. Go to your repository's **Actions** tab on GitHub.
-2. Select the latest **Build Unsigned iOS App** run.
-3. Download the **`VaultStreaming-iOS-Unsigned`** artifact (unzip to get `VaultStreaming-unsigned.ipa`).
-4. Sideload via your preferred tool:
-   - **Sideloadly**: Drag and drop `VaultStreaming-unsigned.ipa`, enter your Apple ID, and click **Start**.
-   - **AltStore / SideStore**: Import `VaultStreaming-unsigned.ipa` into AltStore/SideStore directly from your Files app.
-5. The tool signs the IPA using Apple's free developer provisioning profile and installs it on your iPhone.
-
----
-
-## Local Development & Manual Build
-
-To build the unsigned IPA locally on a Mac:
-
-```bash
-cd ios
-xcodebuild clean build \
-  -project VaultStreaming.xcodeproj \
-  -scheme VaultStreaming \
-  -sdk iphoneos \
-  -configuration Release \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGN_IDENTITY="" \
-  BUILD_DIR=build
-
-./scripts/package-unsigned-ipa.sh build/Release-iphoneos build/VaultStreaming-unsigned.ipa
-```
+Because Xcode requires macOS, this repository uses a manually dispatched workflow:
+- Workflow: `.github/workflows/ios-unsigned-build.yml` (`macos-15`, `xcodebuild clean build -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO`).
+- Output: Download `VaultStreaming-Unsigned-IPA` from GitHub Actions artifacts and sideload onto your iPhone/iPad with **Sideloadly** or **AltStore** using your Apple ID, or open `ios/VaultStreaming.xcodeproj` in Xcode on a Mac to sign and install directly.

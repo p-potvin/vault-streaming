@@ -1,0 +1,524 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Access Token (VW_WEB_TOKEN)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Access Token (VW_WEB_TOKEN)" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Jeton d'accès (VW_WEB_TOKEN)" } }
+      }
+    },
+    "Add to Library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add to Library" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter à la bibliothèque" } }
+      }
+    },
+    "AI Transcript" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AI Transcript" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Transcription IA" } }
+      }
+    },
+    "All" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Tous" } }
+      }
+    },
+    "All Genres" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All Genres" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Tous les genres" } }
+      }
+    },
+    "App & Catalog Language" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "App & Catalog Language" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Langue de l'application :" } }
+      }
+    },
+    "App Version" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "App Version" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Version de l'application" } }
+      }
+    },
+    "Audio Track" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Audio Track" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Piste audio" } }
+      }
+    },
+    "Autoplay Next Episode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Autoplay Next Episode" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Lecture suivante automatique" } }
+      }
+    },
+    "Available Streams" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Available Streams" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Flux disponibles" } }
+      }
+    },
+    "Cached" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cached" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "En cache" } }
+      }
+    },
+    "Cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } }
+      }
+    },
+    "Cast" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cast" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Distribution" } }
+      }
+    },
+    "Choose Source" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose Source" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Choisir la source" } }
+      }
+    },
+    "Clear Token / Disconnect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear Token / Disconnect" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Effacer le jeton / Déconnecter" } }
+      }
+    },
+    "Close" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Fermer" } }
+      }
+    },
+    "Continue Watching" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue Watching" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Reprendre le visionnement" } }
+      }
+    },
+    "Continue Watching on Discover" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue Watching on Discover" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Reprendre le visionnement dans Découvrir" } }
+      }
+    },
+    "Could not reach backend" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Could not reach backend" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de joindre le serveur" } }
+      }
+    },
+    "Default Subtitles" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Default Subtitles" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Sous-titres par défaut :" } }
+      }
+    },
+    "Details" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Details" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Plus de détails" } }
+      }
+    },
+    "Disabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disabled" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Désactivés" } }
+      }
+    },
+    "Discover" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Discover" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Découvrir" } }
+      }
+    },
+    "Episodes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Episodes" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Épisodes" } }
+      }
+    },
+    "External Links" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "External Links" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Liens externes : visionnement et bandes-annonces" } }
+      }
+    },
+    "Face ID / Biometric Lock" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Face ID / Biometric Lock" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Verrouillage Face ID / biométrique" } }
+      }
+    },
+    "FEATURED" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "FEATURED" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "À LA UNE" } }
+      }
+    },
+    "French" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "French" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Français" } }
+      }
+    },
+    "Hide" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Masquer" } }
+      }
+    },
+    "History" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "History" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Historique" } }
+      }
+    },
+    "IMDb Rating" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "IMDb Rating" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Note IMDb" } }
+      }
+    },
+    "Language" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Language" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Langue" } }
+      }
+    },
+    "Library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Library" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Bibliothèque" } }
+      }
+    },
+    "Load More" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load More" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Afficher plus" } }
+      }
+    },
+    "Loading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Chargement" } }
+      }
+    },
+    "Mark as Watched at" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mark as Watched at" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Marquer comme vu à :" } }
+      }
+    },
+    "Max Stream Quality" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Max Stream Quality" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Qualité maximale de diffusion :" } }
+      }
+    },
+    "Movie" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Movie" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Film" } }
+      }
+    },
+    "Movies" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Movies" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Films" } }
+      }
+    },
+    "Mute Trailers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mute Trailers" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Couper le son des bandes-annonces :" } }
+      }
+    },
+    "Next" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Next" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Suivant" } }
+      }
+    },
+    "No Watch History" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Watch History" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Votre historique de visionnement est vide" } }
+      }
+    },
+    "Overview" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Overview" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Synopsis" } }
+      }
+    },
+    "Play" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Lire" } }
+      }
+    },
+    "Play Movie" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play Movie" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Lire le film" } }
+      }
+    },
+    "Play now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play now" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Lire maintenant" } }
+      }
+    },
+    "Popularity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Popularity" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Popularité" } }
+      }
+    },
+    "Preferred Stream Language" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preferred Stream Language" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Langue de diffusion préférée :" } }
+      }
+    },
+    "Preparing stream…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preparing stream…" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Préparation du flux…" } }
+      }
+    },
+    "Previous" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Previous" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Précédent" } }
+      }
+    },
+    "Rating" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rating" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Note" } }
+      }
+    },
+    "Release Date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Release Date" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Date de sortie" } }
+      }
+    },
+    "Reload Stream" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reload Stream" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Recharger le flux" } }
+      }
+    },
+    "Remove from Library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove from Library" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Retirer de la bibliothèque" } }
+      }
+    },
+    "Resume" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Reprendre" } }
+      }
+    },
+    "Retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Retry" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Réessayer" } }
+      }
+    },
+    "Save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer" } }
+      }
+    },
+    "Saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Enregistré" } }
+      }
+    },
+    "Search" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher" } }
+      }
+    },
+    "Search movies, TV shows..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search movies, TV shows..." } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher films et séries…" } }
+      }
+    },
+    "Series" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Series" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Séries" } }
+      }
+    },
+    "Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Paramètres" } }
+      }
+    },
+    "Show All Sources" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show All Sources" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Afficher toutes les sources" } }
+      }
+    },
+    "Skip Credits" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Skip Credits" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Passer le générique :" } }
+      }
+    },
+    "Skip Intro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Skip Intro" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Passer l'intro :" } }
+      }
+    },
+    "Skip KinoCheck Trailer Intro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Skip KinoCheck Trailer Intro" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Sauter l'intro des bandes-annonces KinoCheck :" } }
+      }
+    },
+    "Subtitles" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Subtitles" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Sous-titres (CC)" } }
+      }
+    },
+    "System" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "System" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Système" } }
+      }
+    },
+    "Up next" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Up next" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "À suivre" } }
+      }
+    },
+    "Up Next Card Before End" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Up Next Card Before End" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Carte « À suivre » avant la fin :" } }
+      }
+    },
+    "Verify & Connect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Verify & Connect" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Vérifier et connecter" } }
+      }
+    },
+    "Watch Trailer on YouTube" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Watch Trailer on YouTube" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Voir la bande-annonce sur YouTube" } }
+      }
+    },
+    "Watched" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Watched" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Vu" } }
+      }
+    },
+    "Your Library is Empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your Library is Empty" } },
+        "fr-CA" : { "stringUnit" : { "state" : "translated", "value" : "Votre bibliothèque est vide" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

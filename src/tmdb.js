@@ -261,11 +261,11 @@ function tmdbHeaders() {
 
 /** A local catalog item as the renderer's card / modal expect it. `id` is the TMDB id when the catalog knows it,
  *  else the bare IMDb id (tt…), which the TMDB handlers below map to a TMDB id on demand. */
-function catalogToCard(item) {
+function catalogToCard(item, language = null) {
     const ext = item.external_ids || {};
     const imdb = ext.imdb || (String(item.catalog_id || '').startsWith('imdb:') ? item.catalog_id.slice(5) : null);
     const credits = Array.isArray(item.cast_or_credits) ? item.cast_or_credits : [];
-    return {
+    const card = {
         id: ext.tmdb || imdb || item.catalog_id,
         imdb_id: imdb,
         catalog_id: item.catalog_id,
@@ -279,12 +279,65 @@ function catalogToCard(item) {
         votes: item.votes || 0,
         source: 'raggae'
     };
+    const b = isLocalized(language) ? tmdbBlob(item, language) : null;
+    return b ? applyLanguageBlob(card, b, language) : card;
+}
+
+function isLocalized(language) {
+    return !!language && language !== 'en-US';
+}
+
+/** A card with the title, overview, genres and poster of the catalog's TMDB copy in another language. */
+function applyLanguageBlob(card, b, language) {
+    const title = card.media_type === 'tv' ? (b.name || b.title) : (b.title || b.name);
+    const genres = (Array.isArray(b.genres) && b.genres.length)
+        ? b.genres.slice(0, 3).map(g => (g && g.name) || g).filter(Boolean).join(', ') : null;
+    return {
+        ...card,
+        title: title || card.title,
+        overview: b.overview || card.overview,
+        genres: genres || card.genres,
+        poster: b.poster_path ? tmdbImage(b.poster_path) : card.poster,
+        localized: language,
+    };
+}
+
+// catalog id + language -> the few fields a card needs from that language's TMDB copy (null: there is none)
+const languageBlobCache = new Map();
+
+async function languageBlobFor(catalogId, language) {
+    const key = `${catalogId}|${language}`;
+    if (languageBlobCache.has(key)) return languageBlobCache.get(key);
+    let slim = null;
+    try {
+        const item = await raggae.getItem(catalogId, { raw: true });
+        const b = item && tmdbBlob(item, language);
+        if (b) slim = { title: b.title, name: b.name, overview: b.overview, poster_path: b.poster_path, genres: b.genres };
+    } catch (_) {
+        return null;   // not remembered: the gateway may answer next time
+    }
+    languageBlobCache.set(key, slim);
+    if (languageBlobCache.size > 5000) languageBlobCache.delete(languageBlobCache.keys().next().value);
+    return slim;
+}
+
+/**
+ * Cards in `language`. Browse and search rows come without the catalog's raw TMDB copies (only the stored lists
+ * carry them), so each card not localized yet is looked up once by its catalog id (cached).
+ */
+async function localizeCards(cards, language) {
+    if (!isLocalized(language) || !Array.isArray(cards)) return cards;
+    return Promise.all(cards.map(async card => {
+        if (!card || card.localized || card.source !== 'raggae' || !card.catalog_id) return card;
+        const b = await languageBlobFor(card.catalog_id, language);
+        return b ? applyLanguageBlob(card, b, language) : card;
+    }));
 }
 
 async function searchLocalCatalog(query, options = {}) {
     if (!query) return [];
     const hits = await raggae.searchTitles(query, { limit: options.limit || 20 });
-    return hits.map(catalogToCard);
+    return localizeCards(hits.map(it => catalogToCard(it, options.language || null)), options.language);
 }
 
 /** Local hits are enough on their own when there are several and at least one well-known title among them. */
@@ -487,12 +540,12 @@ async function fetchOmdbDetails({ imdbId, title, year }) {
 }
 
 /** The catalog's "popular" page (most voted films and series), when TMDB trending is not available. */
-async function localPopular(page = 1) {
+async function localPopular(page = 1, language = 'en-US') {
     const per = 10;
-    const pageOf = category => filteredPage(`popular:${category}`, page, per,
+    const pageOf = category => filteredPage(`popular:${category}:${language}`, page, per,
         (offset, limit) => raggae.browse({ category, sort: 'votes', limit, offset, minVotes: minVotesFor(category) }),
-        row => { const card = catalogToCard(row); return hasPoster(card) ? card : null; });
-    const [movies, shows] = await Promise.all([pageOf('movie'), pageOf('tv')]);
+        row => { const card = catalogToCard(row, language); return hasPoster(card) ? card : null; });
+    const [movies, shows] = await Promise.all([pageOf('movie'), pageOf('tv')].map(p => p.then(c => localizeCards(c, language))));
     const out = [];
     for (let i = 0; i < per; i++) {
         if (movies[i]) out.push(movies[i]);
@@ -642,7 +695,8 @@ async function findCatalogItem(id, category, raw = true) {
 function tmdbBlob(item, language) {
     const tmdb = item && item.raw_enrichment && item.raw_enrichment.tmdb;
     if (!tmdb || typeof tmdb !== 'object') return null;
-    return tmdb[language] || null;
+    // the backfill stores French under fr-FR (scripts/backfill-catalog.js); a fr-CA client reads that copy
+    return tmdb[language] || (/^fr/i.test(String(language)) ? (tmdb['fr-FR'] || tmdb['fr-CA']) : null) || null;
 }
 
 /** A catalog item (+ its TMDB copy in `language`, when there is one) in the TMDB details shape the modal reads. */
@@ -668,6 +722,8 @@ function catalogDetails(item, blob, category) {
         backdrop: tmdbImage(b.backdrop_path, 'w1280'),
         runtime: item.runtime_mins || b.runtime || null,
         videos: b.videos || { results: [] },
+        credits: (item.raw_enrichment && item.raw_enrichment.tmdb && item.raw_enrichment.tmdb.credits) || null,
+        cast_or_credits: Array.isArray(item.cast_or_credits) ? item.cast_or_credits : [],
         source: 'raggae'
     };
     delete base.season_details;
@@ -922,7 +978,7 @@ async function cachedList(key) {
  * One Discover page from the catalog. Provider rows come from the stored lists, filtered locally; "All providers"
  * with filters is a catalog browse (genre, decade, rating / year / votes).
  */
-async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres, decade, region, sort, watchRegion }) {
+async function discoverFromCatalog({ providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort, watchRegion }) {
     const category = mediaType === 'tv' ? 'tv' : 'movie';
     page = Math.max(1, parseInt(page, 10) || 1);
     const genreNames = genreSpec(withGenres);
@@ -939,14 +995,14 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres
 
     if (items && (provider !== 'all' || !filtered || origin)) {
         // the stored lists come from TMDB's pages; a title the catalog has no poster for yet is left out
-        let rows = items.filter(it => listItemMatches(it, { genreNames, range, origin }) && hasPoster(catalogToCard(it)));
+        let rows = items.filter(it => listItemMatches(it, { genreNames, range, origin }) && hasPoster(catalogToCard(it, language)));
         if (sort && sort.startsWith('vote_average')) rows = [...rows].sort((a, b) => (b.rating || 0) - (a.rating || 0));
         else if (bySort) {
             // newest first, but nothing not yet released (the lists are popularity pages and hold upcoming titles)
             rows = rows.filter(it => isReleased(it, todayIso))
                 .sort((a, b) => String(b.release_date || b.year || '').localeCompare(String(a.release_date || a.year || '')));
         }
-        const results = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(catalogToCard);
+        const results = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(it => catalogToCard(it, language));
         return { success: true, source: 'raggae', list: true, results };
     }
 
@@ -958,10 +1014,10 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres
 
     // "All providers" with filters, or no list stored yet: the catalog's own browse
     const browseSort = sort && sort.startsWith('vote_average') ? 'rating' : (sort && /release_date|air_date/.test(sort) ? 'year' : 'votes');
-    const browseKey = JSON.stringify([category, browseSort, page, genreNames, range]);
+    const browseKey = JSON.stringify([category, browseSort, page, language, genreNames, range]);
     const hit = browseCache.get(browseKey);
     if (hit && Date.now() - hit.ts < LIST_CACHE_MS) return { success: true, source: 'raggae', list: false, results: hit.results };
-    const results = await filteredPage(JSON.stringify([category, browseSort, genreNames, range]), page, PAGE_SIZE,
+    let results = await filteredPage(JSON.stringify([category, browseSort, language, genreNames, range]), page, PAGE_SIZE,
         (offset, limit) => raggae.browse({
             category, sort: browseSort, limit, offset,
             // every sort keeps to the backfill's floor (src/catalog-coverage.js: films 600, series 1,000 votes):
@@ -974,32 +1030,33 @@ async function discoverFromCatalog({ providerId, mediaType, page = 1, withGenres
         }),
         it => {
             if (!listItemMatches(it, { genreNames, range: null, origin: null }) || (bySort && !isReleased(it, todayIso))) return null;
-            const card = catalogToCard(it);
+            const card = catalogToCard(it, language);
             return hasPoster(card) ? card : null;
         });
+    results = await localizeCards(results, language);
     if (results.length) browseCache.set(browseKey, { ts: Date.now(), results });
     if (browseCache.size > 200) browseCache.delete(browseCache.keys().next().value);
     return { success: true, source: 'raggae', list: false, results };
 }
 
 /** The trending row (no query): the stored trending list, else the catalog's most voted. */
-async function trendingFromCatalog(page = 1) {
+async function trendingFromCatalog(page = 1, language = 'en-US') {
     page = Math.max(1, parseInt(page, 10) || 1);
     const items = await cachedList(listKeys.trending());
     if (items) {
-        const shown = items.map(catalogToCard).filter(hasPoster);
+        const shown = items.map(it => catalogToCard(it, language)).filter(hasPoster);
         return { success: true, source: 'raggae', results: shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) };
     }
-    return { success: true, source: 'raggae', results: await localPopular(page) };
+    return { success: true, source: 'raggae', results: await localPopular(page, language) };
 }
 
 /** TMDB search hits the catalog already holds (by TMDB id) are served as the catalog's cards. */
-async function preferCatalogCards(outside) {
+async function preferCatalogCards(outside, language = 'en-US') {
     return Promise.all(outside.map(async card => {
         if (card.source !== 'tmdb' || !/^\d+$/.test(String(card.id))) return card;
-        const item = await raggae.byExternal('tmdb', card.media_type === 'tv' ? 'tv' : 'movie', card.id);
+        const item = await raggae.byExternal('tmdb', card.media_type === 'tv' ? 'tv' : 'movie', card.id, { raw: language !== 'en-US' });
         if (!item) return card;
-        const local = catalogToCard(item);
+        const local = catalogToCard(item, language);
         // a catalog item with no poster yet keeps the TMDB card's
         if (local.poster === PLACEHOLDER_POSTER && card.poster !== PLACEHOLDER_POSTER) local.poster = card.poster;
         return { ...local, id: card.id };
@@ -1009,10 +1066,10 @@ async function preferCatalogCards(outside) {
 const localSearchCache = new Map();
 
 /** Local hits for a query, kept for the following pages of the same search (at most 50 queries). */
-async function localHitsFor(query) {
-    const key = query.toLowerCase();
+async function localHitsFor(query, language = 'en-US') {
+    const key = `${language}:${query.toLowerCase()}`;
     if (localSearchCache.has(key)) return localSearchCache.get(key);
-    const hits = await searchLocalCatalog(query, { limit: 20 });
+    const hits = await searchLocalCatalog(query, { limit: 20, language });
     localSearchCache.set(key, hits);
     if (localSearchCache.size > 50) localSearchCache.delete(localSearchCache.keys().next().value);
     return hits;
@@ -1037,7 +1094,7 @@ function registerTmdbHandlers(ipcMain) {
             // pages through TMDB (OMDb when TMDB has nothing), never repeating a title page 1 showed.
             if (query) {
                 page = Math.max(1, parseInt(page) || 1);
-                const hits = await localHitsFor(query);
+                const hits = await localHitsFor(query, language);
                 // local hits with a poster lead; the ones without come last on page 1, after TMDB's (which may have
                 // the same title with a poster: that one is shown instead)
                 const local = hits.filter(hasPoster);
@@ -1053,7 +1110,7 @@ function registerTmdbHandlers(ipcMain) {
                     return { success: true, source: 'raggae', results: withBare(local) };
                 }
                 const outsidePage = enough ? page - 1 : page;
-                let outside = await preferCatalogCards(await searchTmdbApi(query, outsidePage, language));
+                let outside = await preferCatalogCards(await searchTmdbApi(query, outsidePage, language), language);
                 let source = 'tmdb';
                 if (!outside.length) {
                     outside = await searchOmdbApi(query, outsidePage);
@@ -1067,7 +1124,7 @@ function registerTmdbHandlers(ipcMain) {
             }
 
             // No query: the trending row, from the catalog (scripts/ingest-front-page.js keeps it current)
-            return await trendingFromCatalog(page);
+            return await trendingFromCatalog(page, language);
         } catch (err) {
             console.error('[Search] Handler Error:', err);
             return { success: false, error: err.message };
@@ -1166,7 +1223,7 @@ function registerTmdbHandlers(ipcMain) {
     ipcMain.handle('discover-tmdb', async (event, { providerId, mediaType, page = 1, language = 'en-US', withGenres, decade, region, sort, watchRegion }) => {
         try {
             // From the catalog's front-page lists (scripts/ingest-front-page.js), never live TMDB
-            return await discoverFromCatalog({ providerId, mediaType, page, withGenres, decade, region, sort, watchRegion });
+            return await discoverFromCatalog({ providerId, mediaType, page, language, withGenres, decade, region, sort, watchRegion });
         } catch (e) {
             console.error('[TMDB] discover-tmdb failed:', e);
             return { success: false, error: e.message };

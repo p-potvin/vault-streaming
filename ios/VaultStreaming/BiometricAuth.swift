@@ -38,9 +38,9 @@ public class BiometricAuth {
     }
     
     /// Requests biometric authentication with fallback to device passcode.
-    public func authenticate(reason: String = "Unlock Vault Streaming", completion: @escaping (Bool, Error?) -> Void) {
+    public func authenticate(reason: String = tr("Unlock Vault Streaming", "Déverrouiller Vault Streaming"), completion: @escaping (Bool, Error?) -> Void) {
         let context = LAContext()
-        context.localizedCancelTitle = "Cancel"
+        context.localizedCancelTitle = tr("Cancel", "Annuler")
         
         var error: NSError?
         if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {

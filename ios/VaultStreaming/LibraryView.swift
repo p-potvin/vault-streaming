@@ -1,17 +1,14 @@
 import SwiftUI
 
-/// Native iOS Library View displaying saved and watchlisted media items.
+/// Displays the user's saved/watchlisted media items in a responsive iPhone/iPad grid.
 public struct LibraryView: View {
-    let watchlistedItems: [MediaItem]
-    let onSelectMedia: (MediaItem) -> Void
-    let onPlayMedia: (MediaItem) -> Void
-    let onToggleWatchlist: (MediaItem) -> Void
-    
-    private let columns = [
-        GridItem(.flexible(), spacing: 14),
-        GridItem(.flexible(), spacing: 14)
-    ]
-    
+    public let watchlistedItems: [MediaItem]
+    public let onSelectMedia: (MediaItem) -> Void
+    public let onPlayMedia: (MediaItem) -> Void
+    public let onToggleWatchlist: (MediaItem) -> Void
+
+    @ObservedObject private var lang = LanguageManager.shared
+
     public init(
         watchlistedItems: [MediaItem],
         onSelectMedia: @escaping (MediaItem) -> Void,
@@ -23,54 +20,55 @@ public struct LibraryView: View {
         self.onPlayMedia = onPlayMedia
         self.onToggleWatchlist = onToggleWatchlist
     }
-    
+
     public var body: some View {
         NavigationStack {
             ZStack {
-                Theme.background
-                    .ignoresSafeArea()
-                
+                Theme.background.ignoresSafeArea()
+
                 if watchlistedItems.isEmpty {
                     emptyLibraryPrompt
                 } else {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVGrid(columns: columns, spacing: 18) {
-                            ForEach(watchlistedItems) { item in
-                                MediaCardView(
-                                    item: item,
-                                    isWatchlisted: true,
-                                    onTap: { onSelectMedia(item) },
-                                    onPlay: { onPlayMedia(item) },
-                                    onWatchlistToggle: { onToggleWatchlist(item) }
-                                )
+                    GeometryReader { geo in
+                        let columns = AdaptiveGrid.posterColumns(for: max(geo.size.width - 32, 300), spacing: 14)
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 18) {
+                                ForEach(watchlistedItems) { item in
+                                    MediaCardView(
+                                        item: item,
+                                        isWatchlisted: true,
+                                        onTap: { onSelectMedia(item) },
+                                        onPlay: { onPlayMedia(item) },
+                                        onToggleWatchlist: { onToggleWatchlist(item) }
+                                    )
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 32)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .padding(.bottom, 24)
                     }
                 }
             }
-            .navigationTitle("Library")
+            .navigationTitle(L10n.tabLibrary)
             .navigationBarTitleDisplayMode(.large)
+            .environment(\.locale, lang.locale)
         }
     }
-    
+
     private var emptyLibraryPrompt: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             Image(systemName: "bookmark.slash")
-                .font(.system(size: 44))
+                .font(.system(size: 52))
                 .foregroundColor(Theme.textTertiary)
-            Text("Your Library is Empty")
+            Text(tr("Your Library is Empty", "Votre bibliothèque est vide"))
                 .font(.headline)
-                .foregroundColor(.white)
-            Text("Tap the bookmark icon or long-press any title on Discover or Search to add it here.")
-                .font(.caption)
-                .foregroundColor(Theme.textTertiary)
+                .foregroundColor(Theme.textPrimary)
+            Text(tr("Tap the bookmark icon or long-press any title on Discover or Search to add it here.", "Appuyez sur le signet ou maintenez un titre sur Découvrir ou Rechercher pour l'ajouter ici."))
+                .font(.subheadline)
+                .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 40)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 80)
     }
 }

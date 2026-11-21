@@ -1,25 +1,33 @@
 import SwiftUI
 
-/// Native iOS Search View featuring full-width searchable input,
-/// live debounced query execution, category filters, and a responsive 2-column grid.
+/// Native Search view supporting debounced live catalog queries across TMDB and RAGGAE,
+/// media type filters (`all` / `movie` / `tv`), live localization, and responsive iPad/iPhone grids.
 public struct SearchView: View {
-    let onSelectMedia: (MediaItem) -> Void
-    let onPlayMedia: (MediaItem) -> Void
-    let watchlistIds: Set<Int>
-    let onToggleWatchlist: (MediaItem) -> Void
-    
+    public let onSelectMedia: (MediaItem) -> Void
+    public let onPlayMedia: (MediaItem) -> Void
+    public let watchlistIds: Set<Int>
+    public let onToggleWatchlist: (MediaItem) -> Void
+
+    @ObservedObject private var lang = LanguageManager.shared
+
     @State private var query: String = ""
-    @State private var searchFilter: String = "all"
+    @State private var selectedFilter: String = "all"
     @State private var results: [MediaItem] = []
     @State private var isSearching: Bool = false
     @State private var errorMessage: String? = nil
     @State private var searchTask: Task<Void, Never>? = nil
-    
-    private let columns = [
-        GridItem(.flexible(), spacing: 14),
-        GridItem(.flexible(), spacing: 14)
-    ]
-    
+
+    private var filteredResults: [MediaItem] {
+        switch selectedFilter {
+        case "movie":
+            return results.filter { $0.effectiveMediaType == "movie" }
+        case "tv":
+            return results.filter { $0.effectiveMediaType == "tv" }
+        default:
+            return results
+        }
+    }
+
     public init(
         onSelectMedia: @escaping (MediaItem) -> Void,
         onPlayMedia: @escaping (MediaItem) -> Void,
@@ -31,232 +39,211 @@ public struct SearchView: View {
         self.watchlistIds = watchlistIds
         self.onToggleWatchlist = onToggleWatchlist
     }
-    
+
     public var body: some View {
         NavigationStack {
             ZStack {
-                Theme.background
-                    .ignoresSafeArea()
-                
+                Theme.background.ignoresSafeArea()
+
                 VStack(spacing: 0) {
-                    // Custom Search Bar with Clear Button
-                    searchBarHeader
-                    
-                    // Filter Chips
-                    filterChipsRow
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                    
-                    // Results Container
-                    ScrollView(.vertical, showsIndicators: false) {
-                        if isSearching {
-                            searchingIndicator
-                        } else if let error = errorMessage {
-                            searchErrorView(error)
-                        } else if results.isEmpty && !query.isEmpty {
-                            emptyResultsView
-                        } else if results.isEmpty {
-                            initialPromptView
-                        } else {
-                            resultsGrid
-                                .padding(.horizontal, 16)
-                                .padding(.top, 10)
-                                .padding(.bottom, 24)
-                        }
+                    if !results.isEmpty {
+                        filterChipsRow
+                    }
+
+                    if isSearching && results.isEmpty {
+                        searchingIndicator
+                    } else if let errorMessage, results.isEmpty {
+                        searchErrorView(message: errorMessage)
+                    } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && results.isEmpty {
+                        initialPromptView
+                    } else if filteredResults.isEmpty && !isSearching {
+                        emptyResultsView
+                    } else {
+                        resultsGrid
                     }
                 }
             }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-    
-    // MARK: - Subviews
-    
-    private var searchBarHeader: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(Theme.accent)
-                    .font(.system(size: 16))
-                
-                TextField("Search movies, TV shows...", text: $query)
-                    .foregroundColor(.white)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .onChange(of: query) { newQuery in
-                        scheduleSearch(newQuery)
-                    }
-                
-                if !query.isEmpty {
-                    Button(action: {
-                        query = ""
-                        results = []
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Theme.textTertiary)
-                            .font(.system(size: 16))
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Theme.cardBackground)
-            .cornerRadius(Theme.radiusMedium)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusMedium)
-                    .stroke(Theme.cardBorder, lineWidth: 0.8)
+            .navigationTitle(L10n.tabSearch)
+            .navigationBarTitleDisplayMode(.large)
+            .searchable(
+                text: $query,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: Text(tr("Search movies, series...", "Rechercher films, séries…"))
             )
+            .autocorrectionDisabled(true)
+            .textInputAutocapitalization(.never)
+            .environment(\.locale, lang.locale)
+            .onChange(of: query) { newValue in
+                scheduleSearch(for: newValue)
+            }
+            .onSubmit(of: .search) {
+                scheduleSearch(for: query, immediate: true)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .vaultStreamingLanguageChanged)) { _ in
+                if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    scheduleSearch(for: query, immediate: true)
+                }
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
     }
-    
+
+    // MARK: - Subviews
+
     private var filterChipsRow: some View {
-        HStack(spacing: 10) {
-            chipButton(title: "All", id: "all")
-            chipButton(title: "Movies", id: "movie")
-            chipButton(title: "Series", id: "tv")
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                filterChip(id: "all", label: L10n.all)
+                filterChip(id: "movie", label: L10n.movies)
+                filterChip(id: "tv", label: L10n.series)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func filterChip(id: String, label: String) -> some View {
+        let isSelected = selectedFilter == id
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedFilter = id
+            }
+        } label: {
+            Text(label)
+                .font(.caption.bold())
+                .foregroundColor(isSelected ? .white : Theme.textSecondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 7)
+                .background(isSelected ? Theme.accent : Theme.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radiusPill)
+                        .stroke(isSelected ? Theme.accent : Theme.cardBorder, lineWidth: 1)
+                )
+                .cornerRadius(Theme.radiusPill)
+        }
+    }
+
+    private var resultsGrid: some View {
+        GeometryReader { geo in
+            let columns = AdaptiveGrid.posterColumns(for: max(geo.size.width - 32, 300), spacing: 14)
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 18) {
+                    ForEach(filteredResults) { item in
+                        MediaCardView(
+                            item: item,
+                            isWatchlisted: watchlistIds.contains(item.id),
+                            onTap: { onSelectMedia(item) },
+                            onPlay: { onPlayMedia(item) },
+                            onToggleWatchlist: { onToggleWatchlist(item) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 32)
+            }
+        }
+    }
+
+    private var searchingIndicator: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            ProgressView()
+                .tint(Theme.accent)
+                .scaleEffect(1.3)
+            Text(tr("Searching catalog...", "Recherche dans le catalogue…"))
+                .font(.subheadline)
+                .foregroundColor(Theme.textSecondary)
             Spacer()
         }
     }
-    
-    private func chipButton(title: String, id: String) -> some View {
-        let isSelected = (searchFilter == id)
-        return Button(action: {
-            searchFilter = id
-            scheduleSearch(query)
-        }) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Theme.accent : Theme.cardBackground)
-                .foregroundColor(isSelected ? .black : .white)
-                .cornerRadius(Theme.radiusPill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.radiusPill)
-                        .stroke(isSelected ? Theme.accent : Theme.cardBorder, lineWidth: 0.8)
-                )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    private var resultsGrid: some View {
-        LazyVGrid(columns: columns, spacing: 18) {
-            ForEach(filteredResults) { item in
-                MediaCardView(
-                    item: item,
-                    isWatchlisted: watchlistIds.contains(item.id),
-                    onTap: { onSelectMedia(item) },
-                    onPlay: { onPlayMedia(item) },
-                    onWatchlistToggle: { onToggleWatchlist(item) }
-                )
-            }
-        }
-    }
-    
-    private var filteredResults: [MediaItem] {
-        if searchFilter == "all" { return results }
-        return results.filter { $0.effectiveMediaType == searchFilter }
-    }
-    
-    private var searchingIndicator: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: Theme.accent))
-                .scaleEffect(1.2)
-            Text("Searching catalog...")
-                .font(.subheadline)
-                .foregroundColor(Theme.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
-    }
-    
+
     private var initialPromptView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "sparkle.magnifyingglass")
-                .font(.system(size: 40))
+        VStack(spacing: 14) {
+            Spacer()
+            Image(systemName: "magnifyingglass.circle.fill")
+                .font(.system(size: 56))
                 .foregroundColor(Theme.accent.opacity(0.6))
-            Text("Find Anything")
+            Text(tr("Find Anything", "Trouvez n'importe quoi"))
                 .font(.headline)
-                .foregroundColor(.white)
-            Text("Search across TMDB, Comet streams, and indexers.")
-                .font(.caption)
-                .foregroundColor(Theme.textTertiary)
+                .foregroundColor(Theme.textPrimary)
+            Text(tr("Search across TMDB, Comet streams, and indexers.", "Recherchez sur TMDB, Comet et les indexeurs."))
+                .font(.subheadline)
+                .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
     }
-    
+
     private var emptyResultsView: some View {
         VStack(spacing: 12) {
+            Spacer()
             Image(systemName: "film.stack")
-                .font(.system(size: 40))
+                .font(.system(size: 44))
                 .foregroundColor(Theme.textTertiary)
-            Text("No results found for \"\(query)\"")
+            Text(tr("No Results Found", "Aucun résultat trouvé"))
                 .font(.headline)
-                .foregroundColor(.white)
-            Text("Try searching with different keywords or title spelling.")
+                .foregroundColor(Theme.textPrimary)
+            Text(tr("Try another keyword or adjust the category filter.", "Essayez un autre mot-clé ou changez le filtre."))
                 .font(.caption)
-                .foregroundColor(Theme.textTertiary)
+                .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
-        .padding(.horizontal, 24)
     }
-    
-    private func searchErrorView(_ error: String) -> some View {
-        VStack(spacing: 8) {
+
+    private func searchErrorView(message: String) -> some View {
+        VStack(spacing: 12) {
+            Spacer()
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 32))
+                .font(.system(size: 40))
                 .foregroundColor(.orange)
-            Text("Search Error")
-                .font(.headline)
-                .foregroundColor(.white)
-            Text(error)
+            Text(message)
                 .font(.caption)
-                .foregroundColor(Theme.textTertiary)
+                .foregroundColor(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
     }
-    
-    // MARK: - Search Scheduling & Debounce
-    
-    private func scheduleSearch(_ text: String) {
+
+    // MARK: - Search Debounce
+
+    private func scheduleSearch(for text: String, immediate: Bool = false) {
         searchTask?.cancel()
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
         guard !trimmed.isEmpty else {
             results = []
             isSearching = false
+            errorMessage = nil
             return
         }
-        
+
         searchTask = Task {
-            // Debounce 300ms
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            if !immediate {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
             if Task.isCancelled { return }
-            
-            await MainActor.run { isSearching = true }
+
+            await MainActor.run {
+                isSearching = true
+                errorMessage = nil
+            }
+
             do {
-                let fetched = try await StreamingBackend.shared.searchMedia(query: trimmed)
-                if !Task.isCancelled {
-                    await MainActor.run {
-                        results = fetched
-                        isSearching = false
-                        errorMessage = nil
-                    }
+                let fetched = try await Api.shared.searchMedia(query: trimmed, page: 1)
+                if Task.isCancelled { return }
+                await MainActor.run {
+                    results = fetched
+                    isSearching = false
                 }
             } catch {
-                if !Task.isCancelled {
-                    await MainActor.run {
-                        errorMessage = error.localizedDescription
-                        isSearching = false
-                    }
+                if Task.isCancelled { return }
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isSearching = false
                 }
             }
         }
