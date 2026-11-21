@@ -10,6 +10,8 @@ public struct MediaCardView: View {
     let onTap: () -> Void
     let onPlay: () -> Void
     let onWatchlistToggle: () -> Void
+
+    @ObservedObject private var lang = LanguageManager.shared
     
     public init(
         item: MediaItem,
@@ -23,6 +25,22 @@ public struct MediaCardView: View {
         self.onTap = onTap
         self.onPlay = onPlay
         self.onWatchlistToggle = onWatchlistToggle
+    }
+
+    public init(
+        item: MediaItem,
+        isWatchlisted: Bool = false,
+        onTap: @escaping () -> Void,
+        onPlay: @escaping () -> Void,
+        onToggleWatchlist: @escaping () -> Void
+    ) {
+        self.init(
+            item: item,
+            isWatchlisted: isWatchlisted,
+            onTap: onTap,
+            onPlay: onPlay,
+            onWatchlistToggle: onToggleWatchlist
+        )
     }
     
     public var body: some View {
@@ -93,7 +111,7 @@ public struct MediaCardView: View {
                         
                         Spacer()
                         
-                        Text(item.effectiveMediaType == "tv" ? "SERIES" : "FILM")
+                        Text(item.effectiveMediaType == "tv" ? tr("SERIES", "SÉRIE") : tr("FILM", "FILM"))
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(Theme.accent)
                             .padding(.horizontal, 4)
@@ -112,7 +130,7 @@ public struct MediaCardView: View {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 onPlay()
             }) {
-                Label("Play Now", systemImage: "play.fill")
+                Label(L10n.playNow, systemImage: "play.fill")
             }
             
             Button(action: {
@@ -120,7 +138,9 @@ public struct MediaCardView: View {
                 onWatchlistToggle()
             }) {
                 Label(
-                    isWatchlisted ? "Remove from Library" : "Add to Library",
+                    isWatchlisted
+                        ? tr("Remove from Library", "Retirer de la bibliothèque")
+                        : tr("Add to Library", "Ajouter à la bibliothèque"),
                     systemImage: isWatchlisted ? "bookmark.slash.fill" : "bookmark.fill"
                 )
             }
@@ -129,7 +149,7 @@ public struct MediaCardView: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 onTap()
             }) {
-                Label("View Details", systemImage: "info.circle")
+                Label(tr("View Details", "Voir les détails"), systemImage: "info.circle")
             }
         }
     }
