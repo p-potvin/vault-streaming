@@ -585,12 +585,46 @@ function slimDetails(d, category) {
     };
 }
 
+/**
+ * A person as TMDB lists them in a credit, with the TMDB person id kept so the cast catalog (vault-raggae) can join on
+ * it later (operator, Sat 21 Nov 2026). `extra` holds the credit's own fields (character / job, order, roles…).
+ */
+function slimPerson(p, extra) {
+    return {
+        id: p.id, name: p.name || null, original_name: p.original_name && p.original_name !== p.name ? p.original_name : undefined,
+        gender: p.gender || 0, known_for_department: p.known_for_department || null, profile_path: p.profile_path || null,
+        popularity: p.popularity || 0, ...extra
+    };
+}
+
+/** A title's people: movie `credits` (cast with character / order, crew with job / department) or a series'
+ *  `aggregate_credits` (every role / job across its episodes, with episode counts). null when TMDB sent none. */
+function slimCredits(c, aggregate = false) {
+    if (!c || (!Array.isArray(c.cast) && !Array.isArray(c.crew))) return null;
+    const cast = (c.cast || []).map(p => slimPerson(p, aggregate
+        ? { order: p.order, total_episode_count: p.total_episode_count || 0,
+            roles: (p.roles || []).map(r => ({ character: r.character || null, episode_count: r.episode_count || 0, credit_id: r.credit_id })) }
+        : { character: p.character || null, order: p.order, credit_id: p.credit_id }));
+    const crew = (c.crew || []).map(p => slimPerson(p, aggregate
+        ? { department: p.department || null, total_episode_count: p.total_episode_count || 0,
+            jobs: (p.jobs || []).map(j => ({ job: j.job || null, episode_count: j.episode_count || 0, credit_id: j.credit_id })) }
+        : { department: p.department || null, job: p.job || null, credit_id: p.credit_id }));
+    return { cast, crew, aggregate, fetched_at: new Date().toISOString() };
+}
+
+/** A season and every field TMDB gives its episodes (operator, Sat 21 Nov 2026: "everything TMDB has"), the episode's
+ *  crew and guest stars included, people with their TMDB ids. */
 function slimSeason(d) {
     return {
-        name: d.name || null, air_date: d.air_date || null, fetched_at: new Date().toISOString(),
+        id: d.id || null, name: d.name || null, overview: d.overview || null, air_date: d.air_date || null,
+        poster_path: d.poster_path || null, vote_average: d.vote_average || 0, fetched_at: new Date().toISOString(),
         episodes: (Array.isArray(d.episodes) ? d.episodes : []).map(e => ({
-            episode_number: e.episode_number, name: e.name, overview: e.overview || null, air_date: e.air_date || null,
-            vote_average: e.vote_average || 0, runtime: e.runtime || null, still_path: e.still_path || null
+            id: e.id || null, episode_number: e.episode_number, name: e.name, overview: e.overview || null,
+            air_date: e.air_date || null, vote_average: e.vote_average || 0, vote_count: e.vote_count || 0,
+            runtime: e.runtime || null, still_path: e.still_path || null, episode_type: e.episode_type || null,
+            production_code: e.production_code || null,
+            crew: (e.crew || []).map(p => slimPerson(p, { department: p.department || null, job: p.job || null, credit_id: p.credit_id })),
+            guest_stars: (e.guest_stars || []).map(p => slimPerson(p, { character: p.character || null, order: p.order, credit_id: p.credit_id }))
         }))
     };
 }
@@ -1260,6 +1294,6 @@ module.exports = {
     findCatalogItem,
     // for tests/test_raggae_integration.js
     _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, toTmdbRef, localSearchCache, tmdbIdCache,
-                  slimDetails, slimSeason, catalogDetails, listItemMatches, GENRE_CODES, genreSpec, isReleased, decadeRange, discoverFromCatalog,
+                  slimDetails, slimSeason, slimCredits, slimPerson, catalogDetails, listItemMatches, GENRE_CODES, genreSpec, isReleased, decadeRange, discoverFromCatalog,
                   trendingFromCatalog, detailsToIngest, tmdbImage }
 };

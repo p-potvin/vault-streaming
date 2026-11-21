@@ -5,7 +5,8 @@
 // The catalog panel shows everything in the inventory; these limits are for the viewer-facing lists only.
 
 /** The fewest IMDb votes a title needs to be backfilled (and so to have a poster): films, series. */
-const MIN_VOTES = Object.freeze({ movie: 600, tv: 1000 });
+// series lowered from 1,000 to 600 like the films (operator, Sat 21 Nov 2026)
+const MIN_VOTES = Object.freeze({ movie: 600, tv: 600 });
 
 /** The vote floor for a list of this category. */
 function minVotesFor(category) {
