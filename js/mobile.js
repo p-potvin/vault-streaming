@@ -107,9 +107,11 @@
 
     const items = nav.querySelectorAll('.mobile-nav-item');
     items.forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
         const tab = item.dataset.tab;
         if (tab === 'settings') {
+          // this tap must not reach the settings panel's click-outside handler (it closed the panel it just opened)
+          e.stopPropagation();
           const trigger = document.getElementById('settings-trigger');
           if (trigger) trigger.click();
           return;
