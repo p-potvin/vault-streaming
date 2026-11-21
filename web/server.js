@@ -192,7 +192,9 @@ app.use('/build', express.static(path.join(ROOT, 'build')));
 app.use('/vaultwares-themes', express.static(path.join(ROOT, 'vaultwares-themes')));
 // index.html pulls flag-icons from node_modules; expose only that package.
 app.use('/node_modules/flag-icons', express.static(path.join(ROOT, 'node_modules', 'flag-icons')));
-// Cached trailers (src/trailers.js): the .mp4 files only, with Range support for <video> seeking.
+// Cached trailers (src/trailers.js): <id>.h264.mp4 for clients without AV1 (web/trailer-h264-route.js), then the .mp4
+// files only, with Range support for <video> seeking.
+require('./trailer-h264-route').registerTrailerH264Route(app);
 app.use('/trailers', (req, res, next) => (/^\/[A-Za-z0-9_-]{6,20}\.mp4$/.test(req.path) ? next() : res.status(404).end()),
     express.static(require('../src/trailers').cacheDir(), { index: false, dotfiles: 'deny', fallthrough: false, maxAge: '30d' }));
 
