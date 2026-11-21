@@ -5,7 +5,7 @@
 // Who: IMDb films with >= --movie-votes votes (default 600) and series with >= --tv-votes (default 600, lowered from
 // 1,000 on Sat 21 Nov 2026), most voted first. Series with at most --max-episodes episodes (default 500, counted locally
 // from IMDb's title.episode dump) also get every season's episodes: they come in the same request as the details (up to
-// 15 seasons appended), so they cost next to nothing, while the long-running soaps / talk / game shows (10,000+
+// 14 seasons appended), so they cost next to nothing, while the long-running soaps / talk / game shows (10,000+
 // episodes) are skipped (operator, Wed 18 Nov 2026). --episodes-top N keeps only the N most voted of those (default 0:
 // all of them; it was 3000 until Sat 21 Nov 2026). A series stored before without its episodes (outside that old top
 // 3000) is asked again for them: backfill-episodes-done.txt lists the series whose episodes are stored.
@@ -80,6 +80,9 @@ const LIMIT = parseInt(arg('limit', '0'), 10) || 0;
 const ONLY = arg('category', '');
 const MAX_REQUESTS = int('max-requests', 200000);
 const INTERVAL_MS = Math.max(25, int('interval-ms', 100));
+// seasons asked in the details request itself: 20 appends, less videos, translations, external_ids, keywords, the
+// ratings and the credits (a 15th there cost every series a second request: Sat 21 Nov 2026)
+const FIRST_SEASONS = 14;
 const MAX_429_STREAK = 3;               // consecutive 429s before a cooldown
 const COOLDOWN_MS = 5 * 60 * 1000;
 const MAX_COOLDOWNS = 4;                // the 4th cooldown ends the run
@@ -304,9 +307,9 @@ async function main() {
         ` episodes for ${episodeSet.size} series (${episodeTotal} episodes; ${skippedLong} over ${MAX_EPISODES} episodes` +
         ` skipped); already done ${done.size} (asked again: ${againForEpisodes} series for their episodes, ${againForCredits} titles for their cast / crew), misses ${misses.size}${RETRY_MISSES ? ' (asked again: --retry-misses)' : ''}; ${videos.size} IMDb video titles left out` +
         `${KEEP_VIDEO ? ' (--keep-video: none)' : ''}`);
-    // episodes ride in the details request (15 seasons); a series past 15 seasons takes one more request per 20
+    // episodes ride in the details request (14 seasons); a series past 14 seasons takes one more request per 20
     console.log(`[backfill] to do: ${queue.length} titles; ~${needFind + queue.length} requests (+1 per 20 seasons past` +
-        ` the 15th), one per ${INTERVAL_MS} ms: ~${((needFind + queue.length) * INTERVAL_MS / 3600000).toFixed(1)} h;` +
+        ` the 14th), one per ${INTERVAL_MS} ms: ~${((needFind + queue.length) * INTERVAL_MS / 3600000).toFixed(1)} h;` +
         ` cap ${MAX_REQUESTS}`);
     if (!EXECUTE) {
         console.log('[backfill] dry run: nothing asked of TMDB (add --execute)');
@@ -385,7 +388,8 @@ async function main() {
                 tmdbType = ref.type;
             }
             // the season list comes with the details; ask for seasons 1..15 up front and the rest after
-            const seasonsFor = type => (type === 'tv' && episodeSet.has(cid) ? Array.from({ length: 15 }, (_, k) => k + 1) : []);
+            // as many seasons as fit in the details request (20 appends less the 6 others: 14); the rest after
+            const seasonsFor = type => (type === 'tv' && episodeSet.has(cid) ? Array.from({ length: FIRST_SEASONS }, (_, k) => k + 1) : []);
             let seasonNumbers = seasonsFor(tmdbType);
             let got = await details(tmdbType, tmdbId, seasonNumbers);
             if (got && got.notFound && storedId && !storedType) {
@@ -408,7 +412,7 @@ async function main() {
             if (tmdbType !== q.category) crossed++;
             // a series with more seasons than asked for up front
             if (seasonNumbers.length && got.data.number_of_seasons > seasonNumbers.length) {
-                const rest = Array.from({ length: got.data.number_of_seasons - seasonNumbers.length }, (_, k) => k + 16);
+                const rest = Array.from({ length: got.data.number_of_seasons - seasonNumbers.length }, (_, k) => k + seasonNumbers.length + 1);
                 for (let j = 0; j < rest.length; j += 20) {
                     const chunk = rest.slice(j, j + 20);
                     const more = await tmdb(`/tv/${tmdbId}?language=en-US&append_to_response=${chunk.map(n => `season/${n}`).join(',')}`);
