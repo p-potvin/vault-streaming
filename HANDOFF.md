@@ -28,9 +28,7 @@ ledger last (`..\agent-ledger\scripts\record-agent-change.ps1`). Act on Devin / 
   4. Later, ask the operator first (new batch of requests): TMDB person details (biography, birthday, imdb id) for
      the people in the most titles; face vectors of profiles vs the Celebrities exemplars (`method = face`).
 - **The operator is testing the web client on iPhone and iPad** (live server restarted 13:30 with the HLS route).
-  **The live server needs one more restart** for per-device data (§2): `Stop-ScheduledTask` leaves the node child
-  behind, so: kill the process listening on 8722, then `Start-ScheduledTask -TaskPath '\VaultWares\' -TaskName
-  VaultStreamingWeb`, and check `logs\web-server.log` shows `[web:hls] route registered`.
+  **Restarting the live server** is now `Stop-ScheduledTask` then `Start-ScheduledTask -TaskPath '\VaultWares' -TaskName VaultStreamingWeb`: the supervisor (`web/service/start-web.ps1`) holds node in a kill-on-close job and quits when the task's conhost does, so stopping the task frees 8722 (tested Sat, 21 Nov 2026).
 
 ## 1. PR #29 — what is in it
 
