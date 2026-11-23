@@ -136,7 +136,8 @@ window.renderTMDB = async function (query = '', append = false) {
     const grid = el('tmdb-results-grid');
     if (!grid) return;
     if (!append && typeof window.renderContinueWatching === 'function') {
-        window.renderContinueWatching(!!(query && String(query).trim()));
+        // an Ask question is a search too: recent titles step aside for its results
+        window.renderContinueWatching(!!(query && String(query).trim()) || !!window.tmdbCurrentAsk);
     }
 
     window.tmdbIsFetching = true;
@@ -434,6 +435,9 @@ function commitAsk(sentence) {
     if (!parser) return;
     const asked = parser.parseAsk(sentence);
     if (parser.isEmpty(asked)) { clearAsk(true); return; }
+    // the toolbar's own kind, put back if the sentence's kind chip is dropped
+    asked.toolbarMediaType = (window.tmdbCurrentAsk && window.tmdbCurrentAsk.toolbarMediaType)
+        || window.tmdbCurrentMediaType;
     window.tmdbCurrentAsk = asked;
     // the latest search wins: the title search is emptied
     const search = el('tmdb-search-input');
@@ -461,7 +465,15 @@ function clearAsk(rerender) {
 function dropAskPart(key, rerender) {
     const parser = window.vsAsk;
     if (!parser || !window.tmdbCurrentAsk) return;
-    const next = parser.dropPart(window.tmdbCurrentAsk, key);
+    const prev = window.tmdbCurrentAsk;
+    const next = parser.dropPart(prev, key);
+    next.toolbarMediaType = prev.toolbarMediaType;
+    // a chip click on the sentence's kind gives the switch back its own kind ("crime series" asked from Movies)
+    if (key === 'kind' && rerender && prev.filters.mediaType && prev.toolbarMediaType
+        && prev.toolbarMediaType !== window.tmdbCurrentMediaType) {
+        window.tmdbCurrentMediaType = prev.toolbarMediaType;
+        updateGenreOptions();
+    }
     if (parser.isEmpty(next)) { clearAsk(rerender); return; }
     window.tmdbCurrentAsk = next;
     renderAskChips();
@@ -524,7 +536,10 @@ window.initTMDBListeners = function () {
             const next = btn.dataset.media;
             if (next === window.tmdbCurrentMediaType) return;
             window.tmdbCurrentMediaType = next;
-            if (window.tmdbCurrentAsk) dropAskPart('kind', false);   // the switch overrides the sentence's kind
+            if (window.tmdbCurrentAsk) {   // the switch overrides the sentence's kind, and is the kind from now on
+                dropAskPart('kind', false);
+                if (window.tmdbCurrentAsk) window.tmdbCurrentAsk.toolbarMediaType = next;
+            }
             if (tmdbSearchInput) tmdbSearchInput.value = '';
             window.tmdbCurrentQuery = '';
             window.tmdbCurrentPage = 1;
@@ -589,6 +604,7 @@ window.initTMDBListeners = function () {
 
     if (filterGenre) {
         filterGenre.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentGenre = filterGenre.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -596,6 +612,7 @@ window.initTMDBListeners = function () {
     }
     if (filterDecade) {
         filterDecade.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentDecade = filterDecade.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -603,6 +620,7 @@ window.initTMDBListeners = function () {
     }
     if (filterRegion) {
         filterRegion.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentRegion = filterRegion.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -610,6 +628,7 @@ window.initTMDBListeners = function () {
     }
     if (filterSort) {
         filterSort.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentSort = filterSort.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -659,7 +678,10 @@ window.initTMDBListeners = function () {
     if (askInput) {
         askInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); commitAsk(askInput.value); }
-            else if (e.key === 'Escape' && window.tmdbCurrentAsk) { e.preventDefault(); clearAsk(true); }
+            else if (e.key === 'Escape' && (window.tmdbCurrentAsk || askInput.value)) {
+                e.preventDefault();
+                clearAsk(true);   // a draft too; the grid is asked again only if a question was showing
+            }
         });
         askInput.addEventListener('input', () => {
             if (askClear) askClear.style.display = askInput.value ? '' : 'none';

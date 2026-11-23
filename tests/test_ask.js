@@ -29,6 +29,13 @@ assert.deepStrictEqual(read('comédies drôles'), { genres: ['Comedy'], look: ''
 assert.deepStrictEqual(read('after 2010 heist'), { genres: [], yearMin: 2010, look: 'heist' });
 assert.deepStrictEqual(read('« la haine »'), { genres: [], look: 'la haine' });          // quotes kept as written
 assert.strictEqual(read('television').mediaType, undefined);                             // "tv" inside a word
+// review of #32: a filter word is cut where it stands, not inside an earlier word
+assert.deepStrictEqual(read('extraction action movies'), { genres: ['Action'], mediaType: 'movie', look: 'extraction' });
+// only joining words left: no question, the filters alone list titles
+assert.deepStrictEqual(read('films de science fiction des années 90'),
+    { genres: ['Sci-Fi'], mediaType: 'movie', yearMin: 1990, yearMax: 1999, look: '' });
+// quoted words stay where they were typed
+assert.strictEqual(read('movies like "Alien" but underwater').look, 'like Alien but underwater');
 
 const asked = parseAsk('90s comedy series in Montreal');
 assert.deepStrictEqual(asked.parts.map(p => p.key), ['genre:Comedy', 'kind', 'year', 'look']);

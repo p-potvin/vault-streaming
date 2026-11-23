@@ -41,6 +41,16 @@
         [w('sports?'), 'Sport'],
     ];
 
+    // Words that only join the others: left at either end once the filters are taken out, they are dropped (and a
+    // leftover made only of them is no question at all: "films de science fiction des années 90" lists films).
+    const CONNECTORS = new Set(['a', 'an', 'the', 'some', 'from', 'in', 'of', 'and', 'with', 'about', 'set', 'on',
+        'un', 'une', 'des', 'de', 'du', 'la', 'le', 'les', 'et', 'avec', 'en', 'dans', 'sur', 'au', 'aux', 'd', 'l']);
+
+    // Quoted words wait behind a placeholder of private-use characters (no letter, digit or space, so no filter
+    // pattern can match into them) and come back where they were typed.
+    const QUOTE_MARK = '\uE000';
+    const quoteKey = i => QUOTE_MARK + String.fromCharCode(0xE100 + i) + QUOTE_MARK;
+
     function decade(two) {
         const d = Number(two);
         return d <= 20 ? 2000 + d : 1900 + d;
@@ -54,11 +64,16 @@
         const filters = { genres: [] };
         const parts = [];
         const quoted = [];
-        // Quoted words are kept aside, untouched by the parser.
-        let text = String(sentence || '').replace(/["“«]\s*([^"”»]+?)\s*["”»]/g, (_, q) => { quoted.push(q); return ' '; });
+        // Quoted words are kept aside, untouched by the parser, and put back in place at the end.
+        let text = String(sentence || '').replace(/["“«]\s*([^"”»]+?)\s*["”»]/g, (_, q) => {
+            quoted.push(q);
+            return ` ${quoteKey(quoted.length - 1)} `;
+        });
+        // Cut out the match where it was found ("extraction action movies": the word "action", not the letters
+        // inside "extraction").
         const take = (re, fn) => {
             const m = text.match(re);
-            if (m) { fn(m); text = text.replace(m[0], ' '); }
+            if (m) { fn(m); text = text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length); }
             return !!m;
         };
 
@@ -95,11 +110,12 @@
         }) || take(/\b((?:18|19|20)\d{2})\b/, (m) => {
             filters.yearMin = filters.yearMax = Number(m[1]); parts.push({ key: 'year', label: m[1], kind: 'filter' });
         });
-        const leftover = text.replace(/[,;]+/g, ' ').replace(/(^|\s)[dlj]['’ ]\s*/gi, '$1')
-            .replace(/(^|\s)(from the|from|in the|of the|and|with|des|de la|du|de|et|avec|en)\s*$/i, '')
-            .replace(/^\s*(a|an|the|some|un|une|des|les|le|la)(?=\s|$)/i, '')
-            .replace(/\s+/g, ' ').trim();
-        const look = [leftover, ...quoted].filter(Boolean).join(' ');
+        const words = text.replace(/[,;]+/g, ' ').replace(/(^|\s)[dlj]['’]\s*/gi, '$1').split(/\s+/).filter(Boolean);
+        const joiner = w => CONNECTORS.has(w.toLowerCase());
+        while (words.length && joiner(words[0])) words.shift();
+        while (words.length && joiner(words[words.length - 1])) words.pop();
+        const look = words.join(' ')
+            .replace(new RegExp(`${QUOTE_MARK}(.)${QUOTE_MARK}`, 'g'), (_, c) => quoted[c.charCodeAt(0) - 0xE100]);
         if (look) parts.push({ key: 'look', label: look, kind: 'look' });
         return { filters, look, parts };
     }
