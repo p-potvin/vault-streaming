@@ -125,6 +125,9 @@ window.renderTMDB = async function (query = '', append = false) {
         }
     }
 
+    // Ask results come in one ranked list: nothing to page through
+    if (append && window.tmdbCurrentAsk && !window.tmdbCurrentQuery) return;
+
     if (window.tmdbIsFetching && append) {
         console.log('[TMDB] Fetch already in progress, ignoring duplicate load-more call.');
         return;
@@ -133,7 +136,8 @@ window.renderTMDB = async function (query = '', append = false) {
     const grid = el('tmdb-results-grid');
     if (!grid) return;
     if (!append && typeof window.renderContinueWatching === 'function') {
-        window.renderContinueWatching(!!(query && String(query).trim()));
+        // an Ask question is a search too: recent titles step aside for its results
+        window.renderContinueWatching(!!(query && String(query).trim()) || !!window.tmdbCurrentAsk);
     }
 
     window.tmdbIsFetching = true;
@@ -147,7 +151,9 @@ window.renderTMDB = async function (query = '', append = false) {
         grid.innerHTML = '';
         window.tmdbCurrentPage = 1;
         window.tmdbCurrentQuery = query;
-        grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--vault-slate); padding: 40px 0;"><div class="spinner" style="margin: 0 auto 12px;"></div>Searching TMDB...</div>';
+        const asking = !!(window.tmdbCurrentAsk && !query);
+        const searching = asking ? tr('askSearching', 'Searching the catalog...') : 'Searching TMDB...';
+        grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--vault-slate); padding: 40px 0;"><div class="spinner" style="margin: 0 auto 12px;"></div>${searching}</div>`;
         if (loadMoreContainer) loadMoreContainer.style.display = 'none';
     } else {
         if (loadMoreText) loadMoreText.innerText = 'Loading...';
@@ -160,7 +166,17 @@ window.renderTMDB = async function (query = '', append = false) {
     try {
         let response;
         const langCode = window.tmdbLanguage();
-        if (window.tmdbCurrentQuery) {
+        const ask = !window.tmdbCurrentQuery ? window.tmdbCurrentAsk : null;
+        if (ask) {
+            response = await window.electronAPI.raggaeAsk({
+                look: ask.look,
+                mediaType: window.tmdbCurrentMediaType,
+                yearMin: ask.filters.yearMin,
+                yearMax: ask.filters.yearMax,
+                genres: ask.filters.genres,
+                language: langCode,
+            });
+        } else if (window.tmdbCurrentQuery) {
             response = await window.electronAPI.searchTMDB(window.tmdbCurrentQuery, window.tmdbCurrentPage, langCode);
         } else {
             response = await window.electronAPI.discoverTMDB(
@@ -203,7 +219,7 @@ window.renderTMDB = async function (query = '', append = false) {
                     <div class="empty-state" style="grid-column: 1 / -1; padding: 40px 0;">
                        ${window.icons ? window.icons.error('', 'width: 48px; height: 48px; margin-bottom: 12px; stroke-width: 1.5; stroke: var(--vault-signal-alert, #FF6B7A);') : ''}
                        <h3>${t.tmdbFailedTitle || 'Could not load titles'}</h3>
-                       <p>${t.tmdbFailedBody || 'TMDB did not answer. Check your connection and try again.'}</p>
+                       <p>${ask ? (t.askFailedBody || 'The catalog did not answer. Ask again in a moment, or use the search.') : (t.tmdbFailedBody || 'TMDB did not answer. Check your connection and try again.')}</p>
                     </div>
                 `;
             } else {
@@ -219,8 +235,8 @@ window.renderTMDB = async function (query = '', append = false) {
                 grid.innerHTML = `
                     <div class="empty-state" style="grid-column: 1 / -1; padding: 40px 0;">
                        ${window.icons ? window.icons.search('', 'width: 48px; height: 48px; margin-bottom: 12px; stroke-width: 1.5; color: var(--vault-accent);') : ''}
-                       <h3>No TMDB Results Found</h3>
-                       <p>We couldn't find any movies or TV shows matching your criteria.</p>
+                       <h3>${ask ? tr('askEmptyTitle', 'Nothing matches') : 'No TMDB Results Found'}</h3>
+                       <p>${ask ? tr('askEmptyBody', 'Nothing in the catalog matches this question. Drop a part under the search, or ask differently.') : "We couldn't find any movies or TV shows matching your criteria."}</p>
                     </div>
                 `;
             } else {
@@ -293,9 +309,9 @@ window.renderTMDB = async function (query = '', append = false) {
             grid.appendChild(card);
         });
 
-        // Show pagination container if results are returned
+        // Show pagination container if results are returned (Ask results are one list)
         if (loadMoreContainer) {
-            loadMoreContainer.style.display = 'flex';
+            loadMoreContainer.style.display = ask ? 'none' : 'flex';
         }
 
         window.updateStatusBar();
@@ -385,6 +401,87 @@ function updateGenreOptions() {
     }
 }
 
+/* -- The Ask bar --------------------------------------------------------------
+   window.tmdbCurrentAsk holds the parsed sentence (js/streaming/ask.js); renderTMDB() with no query asks the
+   catalog with it. The toolbar's Movies / Series switch carries the kind. */
+
+function renderAskChips() {
+    const row = el('ask-readas');
+    const chips = el('ask-readas-chips');
+    const wrapper = el('ask-wrapper');
+    const asked = window.tmdbCurrentAsk;
+    if (wrapper) wrapper.classList.toggle('active', !!asked);
+    if (!row || !chips) return;
+    if (!asked) { row.style.display = 'none'; chips.innerHTML = ''; return; }
+    chips.innerHTML = '';
+    const dropTip = tr('askDropPart', 'Drop this part');
+    for (const part of asked.parts) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'ask-chip' + (part.kind === 'look' ? ' look' : '');
+        chip.title = dropTip;
+        const label = part.labelKey ? tr(part.labelKey, part.label) : part.label;
+        const shown = part.kind === 'look' ? `“${label}”` : label;
+        chip.innerHTML = `<span>${window.escapeHtml(shown)}</span><span class="ask-chip-x" aria-hidden="true">×</span>`;
+        chip.setAttribute('aria-label', `${dropTip}: ${label}`);
+        chip.addEventListener('click', () => dropAskPart(part.key, true));
+        chips.appendChild(chip);
+    }
+    row.style.display = 'flex';
+}
+
+function commitAsk(sentence) {
+    const parser = window.vsAsk;
+    if (!parser) return;
+    const asked = parser.parseAsk(sentence);
+    if (parser.isEmpty(asked)) { clearAsk(true); return; }
+    // the toolbar's own kind, put back if the sentence's kind chip is dropped
+    asked.toolbarMediaType = (window.tmdbCurrentAsk && window.tmdbCurrentAsk.toolbarMediaType)
+        || window.tmdbCurrentMediaType;
+    window.tmdbCurrentAsk = asked;
+    // the latest search wins: the title search is emptied
+    const search = el('tmdb-search-input');
+    if (search) search.value = '';
+    clearTimeout(window._tmdbSearchDebounce);
+    if (asked.filters.mediaType && asked.filters.mediaType !== window.tmdbCurrentMediaType) {
+        window.tmdbCurrentMediaType = asked.filters.mediaType;
+        updateGenreOptions();
+    }
+    renderAskChips();
+    window.renderTMDB('');
+}
+
+function clearAsk(rerender) {
+    const had = !!window.tmdbCurrentAsk;
+    window.tmdbCurrentAsk = null;
+    const input = el('ask-input');
+    if (input) input.value = '';
+    const clear = el('ask-clear');
+    if (clear) clear.style.display = 'none';
+    renderAskChips();
+    if (had && rerender) window.renderTMDB('');
+}
+
+function dropAskPart(key, rerender) {
+    const parser = window.vsAsk;
+    if (!parser || !window.tmdbCurrentAsk) return;
+    const prev = window.tmdbCurrentAsk;
+    const next = parser.dropPart(prev, key);
+    next.toolbarMediaType = prev.toolbarMediaType;
+    // a chip click on the sentence's kind gives the switch back its own kind ("crime series" asked from Movies)
+    if (key === 'kind' && rerender && prev.filters.mediaType && prev.toolbarMediaType
+        && prev.toolbarMediaType !== window.tmdbCurrentMediaType) {
+        window.tmdbCurrentMediaType = prev.toolbarMediaType;
+        updateGenreOptions();
+    }
+    if (parser.isEmpty(next)) { clearAsk(rerender); return; }
+    window.tmdbCurrentAsk = next;
+    renderAskChips();
+    if (rerender) window.renderTMDB('');
+}
+
+window.vsAskBar = { commit: commitAsk, clear: clearAsk, drop: dropAskPart };
+
 window.initTMDBListeners = function () {
     console.log('[tmdb] Initializing TMDB listeners...');
 
@@ -395,6 +492,7 @@ window.initTMDBListeners = function () {
     window.tmdbCurrentMediaType = 'movie';
     window.tmdbCurrentPage = 1;
     window.tmdbCurrentQuery = '';
+    window.tmdbCurrentAsk = null;
 
     // Advanced Filters State
     window.tmdbCurrentGenre = 'all';
@@ -427,6 +525,7 @@ window.initTMDBListeners = function () {
         tmdbSearchInput.addEventListener('input', () => {
             clearTimeout(window._tmdbSearchDebounce);
             const q = tmdbSearchInput.value.trim();
+            if (q && window.tmdbCurrentAsk) clearAsk(false);   // the latest search wins
             window._tmdbSearchDebounce = setTimeout(() => { window.renderTMDB(q); }, 380);
         });
     }
@@ -437,6 +536,10 @@ window.initTMDBListeners = function () {
             const next = btn.dataset.media;
             if (next === window.tmdbCurrentMediaType) return;
             window.tmdbCurrentMediaType = next;
+            if (window.tmdbCurrentAsk) {   // the switch overrides the sentence's kind, and is the kind from now on
+                dropAskPart('kind', false);
+                if (window.tmdbCurrentAsk) window.tmdbCurrentAsk.toolbarMediaType = next;
+            }
             if (tmdbSearchInput) tmdbSearchInput.value = '';
             window.tmdbCurrentQuery = '';
             window.tmdbCurrentPage = 1;
@@ -501,6 +604,7 @@ window.initTMDBListeners = function () {
 
     if (filterGenre) {
         filterGenre.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentGenre = filterGenre.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -508,6 +612,7 @@ window.initTMDBListeners = function () {
     }
     if (filterDecade) {
         filterDecade.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentDecade = filterDecade.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -515,6 +620,7 @@ window.initTMDBListeners = function () {
     }
     if (filterRegion) {
         filterRegion.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentRegion = filterRegion.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -522,6 +628,7 @@ window.initTMDBListeners = function () {
     }
     if (filterSort) {
         filterSort.addEventListener('change', () => {
+            clearAsk(false);   // the Advanced filters are Discover's: the question gives way to them
             window.tmdbCurrentSort = filterSort.value;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
@@ -540,6 +647,7 @@ window.initTMDBListeners = function () {
             window.tmdbCurrentSort = 'popularity.desc';
             window.tmdbCurrentPage = 1;
             window.tmdbCurrentQuery = '';
+            clearAsk(false);
 
             if (tmdbSearchInput) tmdbSearchInput.value = '';
             if (filterGenre) filterGenre.value = 'all';
@@ -557,11 +665,29 @@ window.initTMDBListeners = function () {
         btn.addEventListener('click', () => {
             if (tmdbSearchInput) tmdbSearchInput.value = '';
             window.tmdbCurrentQuery = '';
+            clearAsk(false);   // providers are TMDB's Discover, which the Ask bar does not filter
             window.tmdbCurrentProvider = btn.dataset.provider;
             window.tmdbCurrentPage = 1;
             window.renderTMDB();
         });
     });
+
+    // The Ask bar (js/streaming/ask.js): Enter asks, Escape or the cross clears
+    const askInput = el('ask-input');
+    const askClear = el('ask-clear');
+    if (askInput) {
+        askInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commitAsk(askInput.value); }
+            else if (e.key === 'Escape' && (window.tmdbCurrentAsk || askInput.value)) {
+                e.preventDefault();
+                clearAsk(true);   // a draft too; the grid is asked again only if a question was showing
+            }
+        });
+        askInput.addEventListener('input', () => {
+            if (askClear) askClear.style.display = askInput.value ? '' : 'none';
+        });
+    }
+    if (askClear) askClear.addEventListener('click', () => { clearAsk(true); if (askInput) askInput.focus(); });
 
     // TMDB Load More pagination click handler
     const tmdbLoadMoreBtn = el('tmdb-load-more-btn');

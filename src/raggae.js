@@ -3,6 +3,7 @@
 //   GET  /v1/catalog/search     full-text search (one category at a time)
 //   GET  /v1/catalog/{id}       one item (e.g. imdb:tt0133093); ?raw=true adds raw_enrichment (TMDB extras)
 //   GET  /v1/catalog/xref/tmdb/{movie|tv}/{id}   the item carrying a TMDB id
+//   GET  /v1/catalog/search?mode=hybrid  the Ask bar: words + meaning, with year / genre / vote filters
 //   GET  /v1/catalog/similar/{id} "more like this": nearest titles by the item's own stored vector
 //   POST /v1/moments/stream     queue the Moments + transcript of a stream being played (loopback only)
 //   GET  /v1/catalog/lists/{key} an ordered list (the Discover front page); POST replaces it (loopback only)
@@ -151,6 +152,42 @@ async function similarTo({ catalogId, mediaType, tmdbId, imdbId, k = 12, minVote
     return results.filter(r => r && r.catalog_id && r.catalog_id !== id);
 }
 
+/**
+ * The Ask bar (js/streaming/ask.js parses the sentence): `look` is searched by words and meaning together
+ * (GET /v1/catalog/search?mode=hybrid), the named year / genres filter it; with no `look`, the filters alone list the
+ * most voted titles (GET /v1/catalog/browse). Known titles only: most of the catalog is obscure, undated entries.
+ * The default floors (films 1,250 votes, series 250) keep each kind's set under the 60k titles the gateway scans
+ * exactly by meaning (vault-raggae 0.40.0); a lower floor falls back to its ANN index, which finds far fewer.
+ * Resolves the catalog items in rank order, or null when the gateway did not answer.
+ */
+async function ask({ look = '', mediaType = 'movie', yearMin, yearMax, genres = [], minVotes, limit = 60,
+                     timeoutMs = 30000 } = {}) {
+    const category = mediaType === 'tv' ? 'tv' : 'movie';
+    if (minVotes === undefined) minVotes = category === 'tv' ? 250 : 1250;
+    const qs = new URLSearchParams({ category, limit: String(Math.max(1, Math.min(limit, 100))) });
+    if (yearMin !== undefined && yearMin !== null) qs.set('year_min', String(yearMin));
+    if (yearMax !== undefined && yearMax !== null) qs.set('year_max', String(yearMax));
+    if (Array.isArray(genres) && genres.length) qs.set('genre', genres.join(','));   // every genre named
+    if (minVotes) qs.set('min_votes', String(minVotes));
+    let items;
+    if (look && String(look).trim()) {
+        qs.set('q', String(look).trim());
+        qs.set('mode', 'hybrid');
+        const data = await call('GET', `/v1/catalog/search?${qs}`, { timeoutMs, tripOnTimeout: false });
+        items = data && data.results;
+    } else {
+        qs.set('sort', 'votes');
+        const data = await call('GET', `/v1/catalog/browse?${qs}`, { timeoutMs, tripOnTimeout: false });
+        items = data && data.items;
+    }
+    if (!Array.isArray(items)) return null;
+    // the gateway filters (0.33.0+); an older one ignores the filters, so check again
+    return items.filter(it => it && it.catalog_id
+        && (yearMin == null || (it.year || 0) >= yearMin)
+        && (yearMax == null || (it.year || 9999) <= yearMax)
+        && (genres || []).every(g => (it.genres || []).includes(g)));
+}
+
 /** One ordered list (the Discover front page): { key, total, updated_at, items } or null. */
 async function getList(key, { limit = 100, offset = 0, raw = false } = {}) {
     if (!key) return null;
@@ -293,6 +330,7 @@ module.exports = {
     browse,
     similar,
     similarTo,
+    ask,
     ingest,
     posterFor,
     isOffline,

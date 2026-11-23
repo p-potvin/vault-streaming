@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.12.1 -->
+<!-- v2.13.0 -->
 <html lang="en">
 
 <head>
@@ -41,6 +41,7 @@
   <script src="js/streaming/ranking.js" defer></script>
   <script src="js/streaming/badges.js" defer></script>
   <script src="js/streaming/trailer.js" defer></script>
+  <script src="js/streaming/ask.js" defer></script>
   <script src="js/streaming/details-modal.js" defer></script>
   <script src="js/streaming/rd-flow.js" defer></script>
   <script src="js/streaming/loading-card.js" defer></script>
@@ -152,6 +153,20 @@
             <input type="text" id="tmdb-search-input" data-i18n-placeholder="searchMoviesPlaceholder" placeholder="Search Movies & TV…" class="tmdb-search-input">
           </div>
           <button id="tmdb-search-btn" data-i18n="searchAction" class="tmdb-search-btn">Search</button>
+          <!-- The Ask bar (js/streaming/ask.js): a sentence becomes filters, the rest is searched by meaning in
+               vault-raggae's catalog. A box of its own; the search beside it stays as it was. -->
+          <div id="ask-wrapper" class="ask-wrapper" data-i18n-title="askTip"
+            title="Ask in plain words. Films or series, a year or decade (90s, before 1980) and genres become filters; the rest is searched by meaning. Words in &quot;quotes&quot; are searched as written.">
+            <svg class="ask-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" aria-hidden="true">
+              <circle cx="9" cy="9" r="5.5" />
+              <circle cx="15" cy="9" r="5.5" />
+              <circle cx="12" cy="15" r="5.5" />
+            </svg>
+            <input type="text" id="ask-input" class="ask-input" data-i18n-placeholder="askPlaceholder"
+              placeholder="Ask… “90s heist in Paris”" aria-label="Ask" autocomplete="off" spellcheck="false">
+            <button id="ask-clear" class="ask-clear" type="button" aria-label="Clear" style="display:none;">×</button>
+          </div>
           <button id="tmdb-advanced-toggle" class="tmdb-advanced-toggle">
             <span data-i18n="advancedFilters">Advanced</span>
             <svg id="advanced-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -160,6 +175,12 @@
             </svg>
           </button>
         </div>
+      </div>
+
+      <!-- How the Ask bar read the sentence: one chip per part, a click drops it -->
+      <div id="ask-readas" class="ask-readas" style="display:none;" aria-live="polite">
+        <span class="ask-readas-label" data-i18n="askReadAs">Read as</span>
+        <div id="ask-readas-chips" class="ask-readas-chips"></div>
       </div>
 
       <!-- Advanced Filters Drawer -->
