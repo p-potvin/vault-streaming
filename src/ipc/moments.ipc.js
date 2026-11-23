@@ -37,7 +37,47 @@ async function streamKeyFor({ tmdbId, mediaType, season, episode } = {}) {
     return { key: `stream:${catalogId}${category === 'tv' ? episodeSuffix(season, episode) : ''}`, catalogId, category };
 }
 
+/**
+ * Jump-to inside the playing title (semantic plan section 3.3): a line, a scene or a sound in this stream's Moments.
+ * { tmdbId, mediaType, season, episode, q } -> { indexed, state, hits: [{ kind: 'said' | 'seen', t0, t1, said }] }. `indexed` false: the
+ * title has not been read yet (it is after 15 s of playback, src/ipc/moments.ipc.js above).
+ */
+async function jumpSearch(p = {}) {
+    const q = String(p.q || '').trim().slice(0, 200);
+    const sk = await streamKeyFor(p);
+    if (!sk || !q) return { indexed: false, state: null, hits: [] };
+    // Lines said first (the words typed), then scenes seen: fused in one list, a snowy shot outranked the line that
+    // says "winter". Sound alone is left out (it rarely answers a sentence).
+    const [said, seen, status] = await Promise.all([
+        raggae.momentsSearch(q, sk.key, { mode: 'said', k: 4 }),
+        raggae.momentsSearch(q, sk.key, { mode: 'look', k: 4 }),
+        raggae.streamStatus(sk.key).catch(() => null),
+    ]);
+    const hits = [];
+    const near = (t) => hits.some(h => Math.abs(h.t0 - t) < 10);
+    for (const [kind, list] of [['said', said], ['seen', seen]]) {
+        for (const h of list) {
+            if (!Number.isFinite(h.t0) || near(h.t0)) continue;
+            hits.push({ kind, t0: h.t0, t1: h.t1, said: h.said || '' });
+        }
+    }
+    return {
+        key: sk.key,
+        indexed: hits.length > 0 || !!(status && (status.windows || status.state === 'done')),
+        state: status ? status.state || null : null,
+        hits,
+    };
+}
+
 function registerMomentsIpc(ipcMain) {
+    ipcMain.handle('moments:jump-search', async (_e, p = {}) => {
+        try {
+            return await jumpSearch(p);
+        } catch (e) {
+            return { indexed: false, state: null, hits: [], error: e.message };
+        }
+    });
+
     ipcMain.handle('moments:index-playback', async (_e, p = {}) => {
         try {
             const url = String(p.url || '');
@@ -63,4 +103,4 @@ function registerMomentsIpc(ipcMain) {
     });
 }
 
-module.exports = { registerMomentsIpc, streamKeyFor, _episodeSuffix: episodeSuffix };
+module.exports = { registerMomentsIpc, streamKeyFor, jumpSearch, _episodeSuffix: episodeSuffix };

@@ -37,6 +37,7 @@
   <script src="js/player/episodes.js" defer></script>
   <script src="js/player/series-controls.js" defer></script>
   <script src="js/player/player.js" defer></script>
+  <script src="js/player/jump-to.js" defer></script>
   <script src="js/progress.js" defer></script>
   <script src="js/streaming/ranking.js" defer></script>
   <script src="js/streaming/badges.js" defer></script>
@@ -837,6 +838,23 @@
                   style="fill:currentColor;" />
               </svg>
             </button>
+
+            <!-- Jump to a line or a scene in the playing title (js/player/jump-to.js; streams of catalog titles only) -->
+            <div id="jump-dropdown-container" class="quality-dropdown-container" style="display:none;">
+              <button id="btn-jump" data-i18n-title="tipJumpTo" class="ctrl-btn-sm" title="Jump to a line or a scene"
+                aria-label="Jump to a line or a scene" aria-haspopup="true" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" style="width:14px; height:14px; display:block;">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.2" y2="16.2" />
+                </svg>
+              </button>
+              <div id="jump-menu" role="dialog" aria-label="Jump to">
+                <input id="jump-input" type="search" autocomplete="off" spellcheck="false"
+                  data-i18n-placeholder="jumpPlaceholder" placeholder="A line, or a scene…" />
+                <div id="jump-results"></div>
+              </div>
+            </div>
 
             <!-- Stream quality picker -->
             <div id="quality-dropdown-container" class="quality-dropdown-container">
