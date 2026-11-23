@@ -81,6 +81,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   raggaeIngest: (items) => ipcRenderer.invoke('raggae-ingest', items),
   raggaeHealth: () => ipcRenderer.invoke('raggae-health'),
   raggaeSimilar: (data) => ipcRenderer.invoke('raggae-similar', data),
+  raggaeEpisodes: (data) => ipcRenderer.invoke('raggae-episodes', data),
   raggaeAsk: (data) => ipcRenderer.invoke('raggae-ask', data),
   searchTorrents: (movieTitle) => ipcRenderer.invoke('search-torrents', movieTitle),
   streamRDTorrent: (data) => ipcRenderer.invoke('rd-stream-torrent', data),

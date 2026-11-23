@@ -402,6 +402,7 @@
     raggaeIngest: inv('raggae-ingest'),
     raggaeHealth: inv('raggae-health'),
     raggaeSimilar: inv('raggae-similar'),
+    raggaeEpisodes: inv('raggae-episodes'),
     raggaeAsk: inv('raggae-ask'),
     getTorrentStatus: inv('rd-torrent-status'),
     debridURL: inv('rd-unrestrict-url'),

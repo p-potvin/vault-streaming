@@ -727,6 +727,106 @@
   cursor: pointer;
 }
 
+/* Find an episode by scene: a quiet box beside the season picker, a short list under the row */
+.tv-episode-find {
+  margin-left: auto;
+  width: 220px;
+  max-width: 45%;
+  background: var(--vt-primary);
+  color: var(--vault-text);
+  border: 1px solid var(--vault-border);
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  outline: none;
+}
+
+.tv-episode-find:focus {
+  border-color: var(--vault-accent);
+}
+
+.tv-episode-find[hidden],
+.tv-episode-find-results[hidden] {
+  display: none;
+}
+
+.tv-episode-find-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--vault-border);
+  border-radius: 4px;
+  padding: 4px;
+  background: var(--vt-primary);
+}
+
+.tv-episode-find-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  padding: 4px;
+  color: var(--vault-text);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.tv-episode-find-row:hover,
+.tv-episode-find-row:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.tv-episode-find-row img {
+  width: 96px;
+  height: 54px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tv-episode-find-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tv-episode-find-head {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tv-episode-find-overview {
+  font-size: 11px;
+  color: var(--vault-slate);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tv-episode-find-note {
+  font-size: 11px;
+  color: var(--vault-slate);
+  padding: 6px;
+}
+
+@keyframes tv-ep-found-mark {
+  from { background: rgba(245, 185, 41, 0.22); }
+  to { background: transparent; }
+}
+
+.tv-ep-found {
+  animation: tv-ep-found-mark 2.4s ease-out;
+}
+
 .tv-episodes-container {
   max-height: 250px;
   overflow-y: auto;
