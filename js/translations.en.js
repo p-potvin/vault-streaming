@@ -329,6 +329,7 @@ window.translationsEn = {
   whoNoFrame: "This frame could not be read.",
   whoUnreachable: "The catalog did not answer. Try again in a moment.",
   whoInCast: "In the cast of this title",
+  whoProbably: "Probably: close to a member of this title's cast",
   whoFromGallery: "Recognised from the face gallery",
   jumpPlaceholder: "A line, or a scene…",
   findEpisodePlaceholder: "Find an episode…",

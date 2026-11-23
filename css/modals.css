@@ -1822,7 +1822,8 @@
   display: none;
   position: absolute;
   inset: 0;
-  z-index: 5;
+  /* no z-index: #custom-controls comes later in the wrapper and stays on top, so Play / the seek bar still work */
+  z-index: auto;
   cursor: pointer;
 }
 
@@ -1852,6 +1853,20 @@
   white-space: nowrap;
   font: 12px var(--font-body);
   color: var(--vault-text, #e8e8ee);
+}
+
+.who-tag.above {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.who-face.maybe {
+  border-style: dashed;
+}
+
+.who-tag.maybe b::after {
+  content: " ?";
+  color: var(--vault-slate);
 }
 
 .who-tag img {

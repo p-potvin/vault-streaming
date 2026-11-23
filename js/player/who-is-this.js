@@ -64,11 +64,14 @@
         const w = res.width || vp.videoWidth, h = res.height || vp.videoHeight;
         if (!w || !h) return;
         const r = contentRect(vp, w, h);
+        const room = layer.clientHeight || vp.clientHeight;
         let named = 0;
         for (const f of res.faces) {
             const [x1, y1, x2, y2] = f.bbox;
             const box = document.createElement('div');
-            box.className = 'who-face' + (f.name ? ' named' : '');
+            // a name under the threshold (a credited cast member close to it) is shown as a guess: dashed, with "?"
+            const maybe = !!f.name && !f.match;
+            box.className = 'who-face' + (f.name ? ' named' : '') + (maybe ? ' maybe' : '');
             Object.assign(box.style, {
                 left: `${r.left + x1 * r.scale}px`, top: `${r.top + y1 * r.scale}px`,
                 width: `${(x2 - x1) * r.scale}px`, height: `${(y2 - y1) * r.scale}px`,
@@ -76,7 +79,9 @@
             if (f.name) {
                 named++;
                 const tag = document.createElement('div');
-                tag.className = 'who-tag';
+                // a face at the bottom of the picture gets its name above it: below, the wrapper would clip it
+                const below = r.top + y2 * r.scale + 48 > room;
+                tag.className = 'who-tag' + (below ? ' above' : '') + (maybe ? ' maybe' : '');
                 if (f.picture) {
                     const img = document.createElement('img');
                     img.src = f.picture;
@@ -94,8 +99,9 @@
                     text.append(role);
                 }
                 tag.append(text);
-                tag.title = f.inCast ? tr('whoInCast', 'In the cast of this title')
-                    : tr('whoFromGallery', 'Recognised from the face gallery');
+                tag.title = maybe ? tr('whoProbably', "Probably: close to a member of this title's cast")
+                    : f.inCast ? tr('whoInCast', 'In the cast of this title')
+                        : tr('whoFromGallery', 'Recognised from the face gallery');
                 box.append(tag);
             }
             layer.append(box);
@@ -122,7 +128,9 @@
         let res = null;
         try {
             res = await window.electronAPI.whoIsThis({
-                image, url: image ? null : vp.currentSrc || vp.src, t: vp.currentTime,
+                // on the web build a Comet stream plays through a same-origin wrapper (web-overrides.js) that may
+                // redirect; ffmpeg has no cookie for it, so it reads the source the wrapper keeps
+                image, url: image ? null : vp._vwSourceUrl || vp.currentSrc || vp.src, t: vp.currentTime,
                 tmdbId: m.tmdbId, mediaType: m.mediaType, season: m.season, episode: m.episode,
             });
         } catch (_) { res = null; }

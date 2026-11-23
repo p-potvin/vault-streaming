@@ -72,3 +72,26 @@ const T = 'https://image.tmdb.org/t/p/h632/pacino.jpg';
 
     console.log('test_who_is_this: ok');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// grabFrame: a stalled ffmpeg is answered at the deadline, not when the process finally closes
+(async () => {
+    const cp = require('child_process');
+    const { EventEmitter } = require('events');
+    const real = cp.spawn;
+    let killed = false;
+    cp.spawn = () => {
+        const p = new EventEmitter();
+        p.stdout = new EventEmitter();
+        p.kill = () => { killed = true; };   // never emits 'close': a hung process
+        return p;
+    };
+    const { grabFrame } = require('../src/ipc/moments.ipc');
+    const t0 = Date.now();
+    const out = await grabFrame('https://comet.test/play/abc', 12, { timeoutMs: 200 });
+    cp.spawn = real;
+    assert.strictEqual(out, null);
+    assert.ok(killed, 'ffmpeg killed at the deadline');
+    assert.ok(Date.now() - t0 < 2000, 'answered at the deadline');
+    assert.strictEqual(await grabFrame('blob:abc', 1), null);
+    console.log('test_who_is_this grabFrame: ok');
+})().catch((e) => { console.error(e); process.exit(1); });

@@ -331,6 +331,7 @@ window.translationsFr = {
   whoNoFrame: "Cette image n’a pas pu être lue.",
   whoUnreachable: "Le catalogue n’a pas répondu. Réessayez dans un moment.",
   whoInCast: "Dans la distribution de ce titre",
+  whoProbably: "Probablement : proche d’un membre de la distribution",
   whoFromGallery: "Reconnu par la galerie de visages",
   jumpPlaceholder: "Une réplique, ou une scène…",
   findEpisodePlaceholder: "Trouver un épisode…",

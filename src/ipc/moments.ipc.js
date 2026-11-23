@@ -95,12 +95,14 @@ function grabFrame(url, t, { timeoutMs = 20000 } = {}) {
         }
         const chunks = [];
         let size = 0;
-        const timer = setTimeout(() => { try { proc.kill(); } catch (_) { /* gone */ } }, timeoutMs);
+        let settled = false;
+        const finish = (value) => { if (!settled) { settled = true; clearTimeout(timer); resolve(value); } };
+        // at the deadline the answer is given at once: a stalled stream may keep ffmpeg from closing for a while
+        const timer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch (_) { /* gone */ } finish(null); }, timeoutMs);
         proc.stdout.on('data', (c) => { size += c.length; if (size <= 16 * 2 ** 20) chunks.push(c); });
-        proc.on('error', () => { clearTimeout(timer); resolve(null); });
+        proc.on('error', () => finish(null));
         proc.on('close', (code) => {
-            clearTimeout(timer);
-            resolve(code === 0 && size > 0 && size <= 16 * 2 ** 20 ? Buffer.concat(chunks) : null);
+            finish(code === 0 && size > 0 && size <= 16 * 2 ** 20 ? Buffer.concat(chunks) : null);
         });
     });
 }
