@@ -13,7 +13,8 @@
   - `HistoryView.swift`: Fetches `watch-history:get-all` grouped per series (`SeriesFlow.swift`), with swipe-to-delete (`watch-history:remove`) and direct resume.
 - **Details & Trailers (`MovieDetailsSheet.swift` & `TrailerPlayerView.swift`)**:
   - Autoplays server-cached trailers from `/trailers/<id>.h264.mp4` (authenticated via `AVURLAssetHTTPHeaderFieldsKey`, `.mp4` and YouTube thumbnail fallbacks, KinoCheck 3 s intro skip, persistent mute toggle).
-  - Shows external links (YouTube, IMDb, TMDB, JustWatch, Apple TV), Cast carousel, series season selector + per-episode progress, and per-series intro/outro skip timers.
+  - Shows external links (YouTube, IMDb, TMDB, JustWatch, Apple TV), Cast carousel, a "More like this" poster row
+    (`raggae-similar`: nearest titles by meaning from vault-raggae; a tap opens that title), series season selector + per-episode progress, and per-series intro/outro skip timers.
 - **Playback (`StreamPicker.swift`, `PlayerViewModel.swift`, `NativePlayerView.swift`)**:
   - Client-side torrent ranking + `rd-stream-torrent` / `deepbrid-stream` resolution and `lastSource` resume.
   - `AVPlayer` HLS playback via `/api/hls/index.m3u8?src=...&audio=N&h=1080` with audio track probing (`probe-audio-tracks`), side-loaded WebVTT subtitles (`subtitles:search` -> `download-subtitle-track`) & AI transcript polling (`subtitles:transcript`) parsed by `WebVTTParser.swift`, dead-link auto-reload + candidate failover, Next Episode background preloading (`NextEpisodePreloader`), and Up Next countdown overlay.

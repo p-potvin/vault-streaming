@@ -11,6 +11,7 @@ public struct MovieDetailsSheet: View {
     public let onPlayEpisodeStream: ((TorrentStream, Int?, Int?) -> Void)?
     public let onToggleWatchlist: () -> Void
     public let onDismiss: () -> Void
+    public let onSelectSimilar: ((MediaItem) -> Void)?
 
     @ObservedObject private var lang = LanguageManager.shared
     @Environment(\.openURL) private var openURL
@@ -36,6 +37,7 @@ public struct MovieDetailsSheet: View {
     @State private var skipIntroSec: Int = 0
     @State private var skipOutroSec: Int = 0
     @State private var showSkipConfig: Bool = false
+    @State private var similar: [MediaItem] = []
 
     public init(
         item: MediaItem,
@@ -44,7 +46,8 @@ public struct MovieDetailsSheet: View {
         onPlayAuto: ((MediaItem, Int?, Int?, Double?) -> Void)? = nil,
         onPlayEpisodeStream: ((TorrentStream, Int?, Int?) -> Void)? = nil,
         onToggleWatchlist: @escaping () -> Void,
-        onDismiss: @escaping () -> Void
+        onDismiss: @escaping () -> Void,
+        onSelectSimilar: ((MediaItem) -> Void)? = nil
     ) {
         self.item = item
         self.isWatchlisted = isWatchlisted
@@ -53,6 +56,7 @@ public struct MovieDetailsSheet: View {
         self.onPlayEpisodeStream = onPlayEpisodeStream
         self.onToggleWatchlist = onToggleWatchlist
         self.onDismiss = onDismiss
+        self.onSelectSimilar = onSelectSimilar
     }
 
     private var isTV: Bool {
@@ -102,6 +106,10 @@ public struct MovieDetailsSheet: View {
                             castSection(cast)
                         }
 
+                        if !similar.isEmpty, onSelectSimilar != nil {
+                            similarSection
+                        }
+
                         if isTV {
                             seriesSection
                         }
@@ -121,7 +129,10 @@ public struct MovieDetailsSheet: View {
             let skip = AppConfig.seriesSkip(for: item.rawId)
             skipIntroSec = skip.intro
             skipOutroSec = skip.outro
+            similar = []
+            async let more: Void = loadSimilar()
             await loadData()
+            _ = await more
         }
     }
 
@@ -467,6 +478,69 @@ public struct MovieDetailsSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: - More Like This (vault-raggae /v1/catalog/similar)
+
+    private var similarSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(tr("More like this", "Dans le même genre"))
+                .font(.headline.bold())
+                .foregroundColor(Theme.textPrimary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(similar) { other in
+                        Button {
+                            onSelectSimilar?(other)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                AsyncImage(url: other.posterURL) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    default:
+                                        ZStack {
+                                            Theme.cardBackground
+                                            Image(systemName: "film")
+                                                .font(.title3)
+                                                .foregroundColor(Theme.textTertiary)
+                                        }
+                                    }
+                                }
+                                .frame(width: 92, height: 138)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.cardBorder, lineWidth: 1))
+
+                                Text(other.displayTitle)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(Theme.textPrimary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+
+                                if !other.releaseYear.isEmpty {
+                                    Text(other.releaseYear)
+                                        .font(.caption2)
+                                        .foregroundColor(Theme.textSecondary)
+                                }
+                            }
+                            .frame(width: 92, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(other.displayTitle)
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadSimilar() async {
+        let forItem = item.rawId
+        let found = (try? await Api.shared.fetchSimilar(for: item)) ?? []
+        guard forItem == item.rawId else { return }   // another title opened meanwhile
+        similar = found.filter { $0.rawId != item.rawId }
     }
 
     // MARK: - Series Section (Skip Timers, Seasons & Episodes)
