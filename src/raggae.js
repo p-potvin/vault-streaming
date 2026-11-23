@@ -119,9 +119,10 @@ async function byExternal(source, category, extId, { raw = false } = {}) {
 /**
  * "More like this" (GET /v1/catalog/similar/{id}): the titles nearest to one catalog item by meaning, same kind by
  * default. `minVotes` keeps obscure entries out (without it, neighbours lean on title words: The Matrix ->
- * "Matrix Zone"). Resolves the result list, [] when the item has no vector or on any failure.
+ * "Matrix Zone"). Resolves the result list, [] when the item has no vector or on any failure. 30 s: a title's first
+ * call can take 6-20 s while the gateway is busy (the row fills in late rather than not at all).
  */
-async function similar(catalogId, { category, k = 12, minVotes = 5000, timeoutMs = 10000 } = {}) {
+async function similar(catalogId, { category, k = 12, minVotes = 5000, timeoutMs = 30000 } = {}) {
     if (!catalogId) return [];
     let route = `/v1/catalog/similar/${encodeURIComponent(catalogId).replace(/%3A/gi, ':')}?k=${k}`;
     if (category) route += `&category=${encodeURIComponent(category)}`;
