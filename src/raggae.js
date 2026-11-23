@@ -300,14 +300,14 @@ async function ingest(items, { timeoutMs, tripOnTimeout = true } = {}) {
 }
 
 /**
- * The poster to show for a catalog item: its own URL when it has one (an https URL works in the Electron window
- * and for web-mode clients alike), else the gateway's cached copy (local only: a web-mode client cannot reach
- * 127.0.0.1:8750), else null.
+ * The poster to show for a catalog item, local copies first (operator, Mon 23 Nov 2026): the gateway's own artwork
+ * when the item has one, else its poster URL, which is never loaded from TMDB as is: the window redirects it to the
+ * gateway's kept copy and web / iOS clients get it through web/server.js (src/image-links.js). Else null.
  */
 function posterFor(item) {
     if (!item) return null;
-    if (item.poster_url && /^https?:\/\//.test(item.poster_url)) return item.poster_url;
     if (item.poster_local_path && item.catalog_id) return `${RAGGAE_URL}/v1/artwork/${item.catalog_id}`;
+    if (item.poster_url && /^https?:\/\//.test(item.poster_url)) return item.poster_url;
     return null;
 }
 

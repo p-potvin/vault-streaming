@@ -239,7 +239,7 @@ public struct DiscoverView: View {
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .bottomLeading) {
-                    AsyncImage(url: rec.posterUrl.flatMap(URL.init(string:))) { phase in
+                    VaultImage(url: rec.posterUrl.flatMap(URL.init(string:))) { phase in
                         switch phase {
                         case .success(let img):
                             img.resizable().aspectRatio(contentMode: .fill)
@@ -304,7 +304,7 @@ public struct DiscoverView: View {
 
     private func featuredHeroBanner(_ item: MediaItem) -> some View {
         ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: item.backdropURL ?? item.posterURL) { phase in
+            VaultImage(url: item.backdropURL ?? item.posterURL) { phase in
                 switch phase {
                 case .success(let image):
                     image
