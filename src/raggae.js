@@ -3,6 +3,7 @@
 //   GET  /v1/catalog/search     full-text search (one category at a time)
 //   GET  /v1/catalog/{id}       one item (e.g. imdb:tt0133093); ?raw=true adds raw_enrichment (TMDB extras)
 //   GET  /v1/catalog/xref/tmdb/{movie|tv}/{id}   the item carrying a TMDB id
+//   GET  /v1/catalog/similar/{id} "more like this": nearest titles by the item's own stored vector
 //   POST /v1/moments/stream     queue the Moments + transcript of a stream being played (loopback only)
 //   GET  /v1/catalog/lists/{key} an ordered list (the Discover front page); POST replaces it (loopback only)
 //   GET  /v1/catalog/browse     a sorted page of a category (the offline "popular" list)
@@ -113,6 +114,68 @@ async function byExternal(source, category, extId, { raw = false } = {}) {
     if (!source || !category || extId === null || extId === undefined || extId === '') return null;
     return call('GET', `/v1/catalog/xref/${encodeURIComponent(source)}/${encodeURIComponent(category)}/` +
         `${encodeURIComponent(String(extId))}${raw ? '?raw=true' : ''}`, { quiet404: true });
+}
+
+/**
+ * "More like this" (GET /v1/catalog/similar/{id}): the titles nearest to one catalog item by meaning, same kind by
+ * default. `minVotes` keeps obscure entries out (without it, neighbours lean on title words: The Matrix ->
+ * "Matrix Zone"). Resolves the result list, [] when the item has no vector or on any failure.
+ */
+async function similar(catalogId, { category, k = 12, minVotes = 5000, timeoutMs = 10000 } = {}) {
+    if (!catalogId) return [];
+    let route = `/v1/catalog/similar/${encodeURIComponent(catalogId).replace(/%3A/gi, ':')}?k=${k}`;
+    if (category) route += `&category=${encodeURIComponent(category)}`;
+    if (minVotes) route += `&min_votes=${minVotes}`;
+    const data = await call('GET', route, { quiet404: true, timeoutMs, tripOnTimeout: false });
+    return Array.isArray(data && data.results) ? data.results : [];
+}
+
+/** TMDB's id for a catalog item ({id, media_type}), or null when the catalog does not know it. */
+function tmdbRef(item) {
+    const x = (item && item.external_ids) || {};
+    const id = Number(x.tmdb);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    const type = x.tmdb_type === 'tv' || item.category === 'tv' ? 'tv' : 'movie';
+    return { id, media_type: type };
+}
+
+/**
+ * "More like this" for a title the app knows by its TMDB id: the catalog item carrying that id, then its nearest
+ * titles, shaped as the app's cards ({ id, media_type, title, year, poster, overview, genres, rating }). Titles
+ * without a TMDB id are left out (the details modal opens by TMDB id). Resolves [] when the gateway has nothing.
+ */
+async function similarToTmdb(mediaType, tmdbId, { imdbId, k = 12, minVotes } = {}) {
+    const category = mediaType === 'tv' ? 'tv' : 'movie';
+    let catalogId = imdbId && /^tt\d+$/.test(imdbId) ? `imdb:${imdbId}` : null;
+    if (!catalogId) {
+        const item = await byExternal('tmdb', category, tmdbId);
+        catalogId = item && item.catalog_id;
+    }
+    if (!catalogId) return [];
+    // series gather fewer votes than films: the same floor would leave most of them out
+    const floor = minVotes !== undefined ? minVotes : (category === 'tv' ? 2000 : 5000);
+    const results = await similar(catalogId, { category, k: k + 4, minVotes: floor });
+    const cards = [];
+    const seen = new Set([`${category}:${tmdbId}`]);
+    for (const r of results) {
+        const ref = tmdbRef(r);
+        if (!ref || seen.has(`${ref.media_type}:${ref.id}`)) continue;
+        seen.add(`${ref.media_type}:${ref.id}`);
+        cards.push({
+            id: ref.id,
+            media_type: ref.media_type,
+            title: r.title,
+            year: r.year || null,
+            poster: posterFor(r),
+            overview: r.overview || '',
+            genres: Array.isArray(r.genres) ? r.genres.join(', ') : (r.genres || ''),
+            rating: r.rating != null ? Number(r.rating).toFixed(1) : null,
+            similarity: r.similarity,
+            catalog_id: r.catalog_id,
+        });
+        if (cards.length >= k) break;
+    }
+    return cards;
 }
 
 /** One ordered list (the Discover front page): { key, total, updated_at, items } or null. */
@@ -255,6 +318,8 @@ module.exports = {
     search,
     searchTitles,
     browse,
+    similar,
+    similarToTmdb,
     ingest,
     posterFor,
     isOffline,

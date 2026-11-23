@@ -64,6 +64,8 @@ window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted 
 
     const isTV = movie.media_type === 'tv';
 
+    _loadSimilar(movie);   // not awaited: the row fills in when the gateway answers
+
     if (isTV) {
         await _setupTVModal(movie);
     } else {
@@ -148,6 +150,62 @@ window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted 
     // Fetch trailer asynchronously
     _fetchAndInjectTrailer(movie.id, movie.media_type);
 };
+
+// ─── More like this ──────────────────────────────────────────────────────────
+// The nearest titles by meaning (vault-raggae's /v1/catalog/similar, known titles only), as one row of small
+// posters; a click opens that title in this modal. Hidden when the gateway is down or the title has no vector.
+let _similarToken = 0;
+
+async function _loadSimilar(movie) {
+    const box = el('streaming-similar');
+    const row = el('streaming-similar-row');
+    if (!box || !row) return;
+    const token = ++_similarToken;
+    box.hidden = true;
+    row.innerHTML = '';
+    if (!window.electronAPI || !window.electronAPI.raggaeSimilar || !movie || !movie.id) return;
+    let cards = [];
+    try {
+        cards = await window.electronAPI.raggaeSimilar({
+            mediaType: movie.media_type === 'tv' ? 'tv' : 'movie',
+            tmdbId: movie.id,
+            imdbId: movie.imdb_id || null,
+        });
+    } catch (e) {
+        console.warn('[streaming] More like this unavailable:', e);
+    }
+    if (token !== _similarToken || !Array.isArray(cards) || !cards.length) return;   // another title opened meanwhile
+    for (const card of cards) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'streaming-similar-card';
+        btn.title = card.year ? `${card.title} (${card.year})` : card.title;
+        const img = document.createElement('img');
+        img.loading = 'lazy';
+        img.alt = '';
+        img.src = card.poster || 'public/poster_placeholder.svg';
+        img.onerror = () => { img.onerror = null; img.src = 'public/poster_placeholder.svg'; };
+        const name = document.createElement('span');
+        name.className = 'streaming-similar-title';
+        name.textContent = card.title;
+        btn.append(img, name);
+        if (card.year) {
+            const year = document.createElement('span');
+            year.className = 'streaming-similar-year';
+            year.textContent = String(card.year);
+            btn.append(year);
+        }
+        btn.onclick = () => {
+            if (typeof window.destroyTrailer === 'function') window.destroyTrailer();
+            const modal = el('streaming-details-modal');
+            if (modal) modal.scrollTop = 0;
+            window.showMediaDetails(card);
+        };
+        row.append(btn);
+    }
+    row.scrollLeft = 0;
+    box.hidden = false;
+}
 
 async function _setupMovieModal(movie) {
     _tvModalToken++;   // a series still loading in the background no longer fills the modal

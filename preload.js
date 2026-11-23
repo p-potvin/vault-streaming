@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   raggaeSearch: (data) => ipcRenderer.invoke('raggae-search', data),
   raggaeIngest: (items) => ipcRenderer.invoke('raggae-ingest', items),
   raggaeHealth: () => ipcRenderer.invoke('raggae-health'),
+  raggaeSimilar: (data) => ipcRenderer.invoke('raggae-similar', data),
   searchTorrents: (movieTitle) => ipcRenderer.invoke('search-torrents', movieTitle),
   streamRDTorrent: (data) => ipcRenderer.invoke('rd-stream-torrent', data),
   // Deepbrid: the fallback when no Real-Debrid / Comet source plays (src/deepbrid/client.js)

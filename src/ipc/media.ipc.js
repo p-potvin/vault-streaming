@@ -270,6 +270,17 @@ function registerMediaIpc(ipcMain) {
         }
     });
 
+    // "More like this" in the title modal: { mediaType, tmdbId, imdbId? } -> cards ([] on any failure)
+    ipcMain.handle('raggae-similar', async (_event, data) => {
+        try {
+            const { mediaType, tmdbId, imdbId } = data || {};
+            if (!tmdbId) return [];
+            return await raggae.similarToTmdb(mediaType, tmdbId, { imdbId });
+        } catch (err) {
+            return [];
+        }
+    });
+
     ipcMain.handle('raggae-health', async () => {
         return await raggae.health();
     });

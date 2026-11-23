@@ -290,6 +290,7 @@ window.translationsFr = {
   playMovie: "Lire le film",
   watchTrailerYoutube: "Voir la bande-annonce sur YouTube",
   externalLinks: "Liens externes : visionnement et bandes-annonces",
+  moreLikeThis: "Dans le même genre",
   endedNextIn: "Vidéo suivante dans {n} secondes… (cliquez pour lire maintenant)",
   navHistory: "Historique",
   qsPlayNow: "Lire maintenant",
