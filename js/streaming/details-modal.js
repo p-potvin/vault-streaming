@@ -64,13 +64,12 @@ window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted 
 
     const isTV = movie.media_type === 'tv';
 
+    const openToken = ++_openToken;
     _loadSimilar(movie);   // not awaited: the row fills in when the gateway answers
 
-    if (isTV) {
-        await _setupTVModal(movie);
-    } else {
-        _setupMovieModal(movie);
-    }
+    // started now, awaited after the library button is bound to this title: a series loads its episodes first, and
+    // a click on the button meanwhile must save this title, not the one shown before (review of #31)
+    const setupDone = isTV ? _setupTVModal(movie) : (_setupMovieModal(movie), null);
 
     // Setup Add to Library visual state and click handler
     const btnLib = el('btn-modal-library');
@@ -147,6 +146,9 @@ window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted 
         };
     }
 
+    await setupDone;
+    if (openToken !== _openToken) return;   // another title was opened while this one loaded
+
     // Fetch trailer asynchronously
     _fetchAndInjectTrailer(movie.id, movie.media_type);
 };
@@ -155,6 +157,7 @@ window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted 
 // The nearest titles by meaning (vault-raggae's /v1/catalog/similar, known titles only), as one row of small
 // posters; a click opens that title in this modal. Hidden when the gateway is down or the title has no vector.
 let _similarToken = 0;
+let _openToken = 0;     // bumps on every title opened (showMediaDetails); stale openings stop after their awaits
 
 async function _loadSimilar(movie) {
     const box = el('streaming-similar');
@@ -166,10 +169,13 @@ async function _loadSimilar(movie) {
     if (!window.electronAPI || !window.electronAPI.raggaeSimilar || !movie || !movie.id) return;
     let cards = [];
     try {
+        const tt = String(movie.id).startsWith('tt') ? String(movie.id) : null;   // a catalog card may carry tt… as id
         cards = await window.electronAPI.raggaeSimilar({
+            catalogId: movie.catalog_id || null,
             mediaType: movie.media_type === 'tv' ? 'tv' : 'movie',
-            tmdbId: movie.id,
-            imdbId: movie.imdb_id || null,
+            tmdbId: tt ? null : movie.id,
+            imdbId: movie.imdb_id || tt,
+            language: typeof window.tmdbLanguage === 'function' ? window.tmdbLanguage() : null,
         });
     } catch (e) {
         console.warn('[streaming] More like this unavailable:', e);
@@ -189,7 +195,7 @@ async function _loadSimilar(movie) {
         name.className = 'streaming-similar-title';
         name.textContent = card.title;
         btn.append(img, name);
-        if (card.year) {
+        if (card.year && card.year !== '—') {
             const year = document.createElement('span');
             year.className = 'streaming-similar-year';
             year.textContent = String(card.year);

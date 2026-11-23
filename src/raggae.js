@@ -130,52 +130,24 @@ async function similar(catalogId, { category, k = 12, minVotes = 5000, timeoutMs
     return Array.isArray(data && data.results) ? data.results : [];
 }
 
-/** TMDB's id for a catalog item ({id, media_type}), or null when the catalog does not know it. */
-function tmdbRef(item) {
-    const x = (item && item.external_ids) || {};
-    const id = Number(x.tmdb);
-    if (!Number.isInteger(id) || id <= 0) return null;
-    const type = x.tmdb_type === 'tv' || item.category === 'tv' ? 'tv' : 'movie';
-    return { id, media_type: type };
-}
-
 /**
- * "More like this" for a title the app knows by its TMDB id: the catalog item carrying that id, then its nearest
- * titles, shaped as the app's cards ({ id, media_type, title, year, poster, overview, genres, rating }). Titles
- * without a TMDB id are left out (the details modal opens by TMDB id). Resolves [] when the gateway has nothing.
+ * "More like this" for a title the app shows: its catalog item (the card's own `catalogId` when it has one, else
+ * the item carrying its TMDB id, else its IMDb id as a last guess), then that item's nearest titles of its own kind.
+ * Resolves raw catalog items (the source left out), [] when the gateway has nothing.
  */
-async function similarToTmdb(mediaType, tmdbId, { imdbId, k = 12, minVotes } = {}) {
+async function similarTo({ catalogId, mediaType, tmdbId, imdbId, k = 12, minVotes } = {}) {
     const category = mediaType === 'tv' ? 'tv' : 'movie';
-    let catalogId = imdbId && /^tt\d+$/.test(imdbId) ? `imdb:${imdbId}` : null;
-    if (!catalogId) {
+    let id = catalogId || null;
+    if (!id && tmdbId && /^\d+$/.test(String(tmdbId))) {
         const item = await byExternal('tmdb', category, tmdbId);
-        catalogId = item && item.catalog_id;
+        id = item && item.catalog_id;
     }
-    if (!catalogId) return [];
+    if (!id && imdbId && /^tt\d+$/.test(imdbId)) id = `imdb:${imdbId}`;
+    if (!id) return [];
     // series gather fewer votes than films: the same floor would leave most of them out
     const floor = minVotes !== undefined ? minVotes : (category === 'tv' ? 2000 : 5000);
-    const results = await similar(catalogId, { category, k: k + 4, minVotes: floor });
-    const cards = [];
-    const seen = new Set([`${category}:${tmdbId}`]);
-    for (const r of results) {
-        const ref = tmdbRef(r);
-        if (!ref || seen.has(`${ref.media_type}:${ref.id}`)) continue;
-        seen.add(`${ref.media_type}:${ref.id}`);
-        cards.push({
-            id: ref.id,
-            media_type: ref.media_type,
-            title: r.title,
-            year: r.year || null,
-            poster: posterFor(r),
-            overview: r.overview || '',
-            genres: Array.isArray(r.genres) ? r.genres.join(', ') : (r.genres || ''),
-            rating: r.rating != null ? Number(r.rating).toFixed(1) : null,
-            similarity: r.similarity,
-            catalog_id: r.catalog_id,
-        });
-        if (cards.length >= k) break;
-    }
-    return cards;
+    const results = await similar(id, { k, minVotes: floor });   // the item's own kind (the gateway's default)
+    return results.filter(r => r && r.catalog_id && r.catalog_id !== id);
 }
 
 /** One ordered list (the Discover front page): { key, total, updated_at, items } or null. */
@@ -319,7 +291,7 @@ module.exports = {
     searchTitles,
     browse,
     similar,
-    similarToTmdb,
+    similarTo,
     ingest,
     posterFor,
     isOffline,

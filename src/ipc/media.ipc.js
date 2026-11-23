@@ -270,12 +270,13 @@ function registerMediaIpc(ipcMain) {
         }
     });
 
-    // "More like this" in the title modal: { mediaType, tmdbId, imdbId? } -> cards ([] on any failure)
+    // "More like this" in the title modal: { catalogId?, mediaType, tmdbId?, imdbId?, language? } -> cards ([] on
+    // any failure); shaped by src/tmdb.js like every other catalog row
     ipcMain.handle('raggae-similar', async (_event, data) => {
         try {
-            const { mediaType, tmdbId, imdbId } = data || {};
-            if (!tmdbId) return [];
-            return await raggae.similarToTmdb(mediaType, tmdbId, { imdbId });
+            const { catalogId, mediaType, tmdbId, imdbId, language } = data || {};
+            if (!catalogId && !tmdbId && !imdbId) return [];
+            return await require('../tmdb').similarCards({ catalogId, mediaType, tmdbId, imdbId, language });
         } catch (err) {
             return [];
         }
