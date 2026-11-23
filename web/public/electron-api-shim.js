@@ -452,6 +452,7 @@
     detectAudioLanguage: inv('detect-audio-language'),
     indexPlayback: inv('moments:index-playback'),
     jumpSearch: inv('moments:jump-search'),
+    whoIsThis: inv('raggae-who'),
 
     getDebridStats: inv('debrid-stats-get'),
     getDebridStatsReport: inv('debrid-stats-report'),
