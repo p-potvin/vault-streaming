@@ -191,16 +191,19 @@ async function _loadSimilar(movie) {
         img.alt = '';
         img.src = card.poster || 'public/poster_placeholder.svg';
         img.onerror = () => { img.onerror = null; img.src = 'public/poster_placeholder.svg'; };
+        const caption = document.createElement('span');
+        caption.className = 'streaming-similar-caption';
         const name = document.createElement('span');
         name.className = 'streaming-similar-title';
         name.textContent = card.title;
-        btn.append(img, name);
+        caption.append(name);
         if (card.year && card.year !== '—') {
             const year = document.createElement('span');
             year.className = 'streaming-similar-year';
             year.textContent = String(card.year);
-            btn.append(year);
+            caption.append(year);
         }
+        btn.append(img, caption);
         btn.onclick = () => {
             if (typeof window.destroyTrailer === 'function') window.destroyTrailer();
             const modal = el('streaming-details-modal');
@@ -209,9 +212,55 @@ async function _loadSimilar(movie) {
         };
         row.append(btn);
     }
-    row.scrollLeft = 0;
     box.hidden = false;
+    _similarPage = 0;
+    _layoutSimilar();
 }
+
+// Paging: as many whole cards as the row shows; an arrow slides the track by that many (no scrollbar).
+let _similarPage = 0;
+
+const SIMILAR_MIN_CARD = 112;   // px: a page holds as many cards of at least this width as fit, stretched to fill it
+
+function _layoutSimilar() {
+    const row = el('streaming-similar-row');
+    const prev = el('streaming-similar-prev');
+    const next = el('streaming-similar-next');
+    const viewport = row && row.parentElement;
+    if (!row || !prev || !next || !viewport) return;
+    const count = row.children.length;
+    const gap = parseFloat(getComputedStyle(row).columnGap) || 10;
+    const width = viewport.clientWidth;
+    const per = Math.max(1, Math.floor((width + gap) / (SIMILAR_MIN_CARD + gap)));
+    const card = (width - gap * (per - 1)) / per;
+    row.style.setProperty('--similar-card', `${card}px`);
+    const pages = Math.max(1, Math.ceil(count / per));
+    _similarPage = Math.min(Math.max(0, _similarPage), pages - 1);
+    // the last page ends on the last card rather than leaving a gap after it
+    const startIndex = Math.min(_similarPage * per, Math.max(0, count - per));
+    row.style.transform = `translateX(${-startIndex * (card + gap)}px)`;
+    prev.hidden = next.hidden = pages <= 1;
+    prev.disabled = _similarPage === 0;
+    next.disabled = _similarPage >= pages - 1;
+}
+
+function _pageSimilar(delta) {
+    _similarPage += delta;
+    _layoutSimilar();
+}
+
+(function _wireSimilarPager() {
+    const wire = () => {
+        const prev = el('streaming-similar-prev');
+        const next = el('streaming-similar-next');
+        if (!prev || !next) return;
+        prev.onclick = (e) => { e.stopPropagation(); _pageSimilar(-1); };
+        next.onclick = (e) => { e.stopPropagation(); _pageSimilar(1); };
+        window.addEventListener('resize', () => { if (!el('streaming-similar').hidden) _layoutSimilar(); });
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+    else wire();
+})();
 
 async function _setupMovieModal(movie) {
     _tvModalToken++;   // a series still loading in the background no longer fills the modal
