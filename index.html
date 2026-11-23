@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.14.0 -->
+<!-- v2.15.0 -->
 <html lang="en">
 
 <head>
@@ -698,7 +698,12 @@
       <div class="tv-season-row">
         <label for="tv-season-select" class="tv-season-label" data-i18n="selectSeason">Select Season:</label>
         <select id="tv-season-select"></select>
+        <!-- find an episode by scene (vault-raggae's episode stills); hidden when the catalog is not reachable -->
+        <input type="search" id="tv-episode-find" class="tv-episode-find" autocomplete="off" spellcheck="false"
+          data-i18n-placeholder="findEpisodePlaceholder" placeholder="Find an episode…"
+          aria-controls="tv-episode-find-results" />
       </div>
+      <div id="tv-episode-find-results" class="tv-episode-find-results" role="status" aria-live="polite" hidden></div>
 
       <!-- Episode List Container -->
       <div class="tv-episodes-container">

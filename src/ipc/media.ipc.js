@@ -282,6 +282,21 @@ function registerMediaIpc(ipcMain) {
         }
     });
 
+    // Find an episode by scene, in a series' modal: { catalogId?, tmdbId?, imdbId?, query } -> { success, hits }
+    ipcMain.handle('raggae-episodes', async (_event, data) => {
+        try {
+            const { catalogId, tmdbId, imdbId, query } = data || {};
+            return await raggae.episodesByScene({
+                catalogId: typeof catalogId === 'string' ? catalogId : null,
+                tmdbId: tmdbId != null ? String(tmdbId) : null,
+                imdbId: typeof imdbId === 'string' ? imdbId : null,
+                query: typeof query === 'string' ? query : '',
+            });
+        } catch (err) {
+            return { success: false, error: err.message, hits: [] };
+        }
+    });
+
     // The Ask bar: { look, mediaType, yearMin, yearMax, genres, language } -> { success, results } (cards)
     ipcMain.handle('raggae-ask', async (_event, data) => {
         try {

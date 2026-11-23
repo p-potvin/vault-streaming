@@ -264,6 +264,7 @@ function _pageSimilar(delta) {
 
 async function _setupMovieModal(movie) {
     _tvModalToken++;   // a series still loading in the background no longer fills the modal
+    _resetEpisodeFind();
     const movieActions = el('movie-actions-container');
     if (!movieActions) return;
     movieActions.style.display = 'flex';
@@ -352,6 +353,7 @@ async function _setupTVModal(movie) {
     }
 
     const token = ++_tvModalToken;
+    _resetEpisodeFind();      // before any early return: the previous series' results must not stay clickable
     // skip intro / credits seconds for every episode of this series (js/player/series-controls.js)
     const skipIntro = el('tv-skip-intro'), skipOutro = el('tv-skip-outro');
     if (skipIntro && skipOutro && window.seriesSkipFor) {
@@ -423,6 +425,8 @@ async function _setupTVModal(movie) {
         }
         _renderResumeRow(movie.id);
 
+        _wireEpisodeFind(movie, tvData, seasons, token);
+
         // Load episodes for the remembered (or first) season
         await _loadSeasonEpisodes(movie.id, defaultSeason);
 
@@ -440,6 +444,132 @@ async function _setupTVModal(movie) {
         seasonSelect.innerHTML = '<option value="">Error loading seasons</option>';
         episodesList.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--vault-signal-alert,#FF6B7A);padding:16px;">${window.escapeHtml(e.message)}</td></tr>`;
     }
+}
+
+// ─── Find an episode by scene ────────────────────────────────────────────────
+// "the one where they're on a boat": vault-raggae ranks the series' episodes by their TMDB still and their name /
+// overview (GET /v1/pictures/episodes). One small box beside the season picker; Enter lists a few episodes, a click
+// opens that season and marks the episode. Hidden when the IPC is missing (iOS has no channel yet).
+let _episodeFindToken = 0;
+
+/** Empty, hidden and unwired until a series with seasons wires it again; a search still running is dropped. */
+function _resetEpisodeFind() {
+    _episodeFindToken++;
+    const input = el('tv-episode-find');
+    const box = el('tv-episode-find-results');
+    if (input) {
+        input.value = '';
+        input.hidden = true;
+        input.onkeydown = null;
+    }
+    if (box) {
+        box.hidden = true;
+        box.innerHTML = '';
+        box.onkeydown = null;
+    }
+}
+
+function _wireEpisodeFind(movie, tvData, seasons, modalToken) {
+    const input = el('tv-episode-find');
+    const box = el('tv-episode-find-results');
+    if (!input || !box) return;
+    _resetEpisodeFind();
+    const api = window.electronAPI;
+    input.hidden = !(api && api.raggaeEpisodes);
+    if (input.hidden) return;
+    const known = new Set(seasons.map(s => s.season_number));
+    const imdbId = (tvData && tvData.external_ids && tvData.external_ids.imdb_id) || movie.imdb_id || null;
+
+    const note = (text) => {
+        box.innerHTML = '';
+        const p = document.createElement('div');
+        p.className = 'tv-episode-find-note';
+        p.textContent = text;
+        box.append(p);
+        box.hidden = false;
+    };
+
+    // Escape clears the search (field) or closes the list (a result row) without closing the modal; with nothing to
+    // clear it reaches the modal's own Escape
+    box.onkeydown = (e) => {
+        if (e.key !== 'Escape' || box.hidden) return;
+        e.stopPropagation();
+        box.hidden = true;
+        input.focus();
+    };
+
+    input.onkeydown = async (e) => {
+        if (e.key === 'Escape') {
+            if (!input.value && box.hidden) return;
+            e.stopPropagation();
+            input.value = '';
+            box.hidden = true;
+            _episodeFindToken++;          // a search still running does not reopen the list
+            return;
+        }
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const query = input.value.trim();
+        if (!query) { box.hidden = true; return; }
+        const token = ++_episodeFindToken;
+        note(tr('findEpisodeSearching', 'Searching…'));
+        let res = null;
+        try {
+            res = await api.raggaeEpisodes({ catalogId: movie.catalog_id || null, tmdbId: movie.id, imdbId, query });
+        } catch (_) { /* shown below */ }
+        if (token !== _episodeFindToken || modalToken !== _tvModalToken) return;   // a newer search or another title
+        if (!res || !res.success) { note(tr('findEpisodeUnreachable', 'The catalog did not answer. Try again in a moment.')); return; }
+        const hits = (res.hits || []).filter(h => known.has(h.season)).slice(0, 5);
+        if (!hits.length) { note(tr('findEpisodeNothing', 'No episode found for this.')); return; }
+        box.innerHTML = '';
+        for (const h of hits) {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'tv-episode-find-row';
+            const img = document.createElement('img');
+            img.alt = '';
+            img.loading = 'lazy';
+            if (h.still) img.src = h.still; else img.className = 'empty';
+            img.onerror = () => { img.onerror = null; img.removeAttribute('src'); img.className = 'empty'; };
+            const text = document.createElement('span');
+            text.className = 'tv-episode-find-text';
+            const head = document.createElement('span');
+            head.className = 'tv-episode-find-head';
+            head.textContent = `S${h.season}E${h.episode}${h.name ? ` · ${h.name}` : ''}`;
+            text.append(head);
+            if (h.overview) {
+                const ov = document.createElement('span');
+                ov.className = 'tv-episode-find-overview';
+                ov.textContent = h.overview;
+                text.append(ov);
+            }
+            row.append(img, text);
+            row.onclick = async (ev) => {
+                ev.stopPropagation();
+                box.hidden = true;
+                const select = el('tv-season-select');
+                if (select && select.value !== String(h.season)) {
+                    select.value = String(h.season);
+                    await _loadSeasonEpisodes(movie.id, h.season);
+                }
+                _markEpisode(h.episode);
+            };
+            box.append(row);
+        }
+        box.hidden = false;
+    };
+}
+
+/** Bring one episode row of the list into view and mark it briefly. */
+function _markEpisode(episode) {
+    const list = el('tv-episodes-list');
+    const row = list && list.querySelector(`tr[data-episode="${episode}"]`);
+    const container = list && list.closest('.tv-episodes-container');
+    if (!row || !container) return;
+    container.scrollTop = Math.max(0, row.offsetTop - container.clientHeight / 2 + row.offsetHeight / 2);
+    row.classList.remove('tv-ep-found');
+    void row.offsetWidth;                 // restart the mark's animation on a second pick
+    row.classList.add('tv-ep-found');
 }
 
 function _epKey(season, episode) {

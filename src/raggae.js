@@ -5,6 +5,7 @@
 //   GET  /v1/catalog/xref/tmdb/{movie|tv}/{id}   the item carrying a TMDB id
 //   GET  /v1/catalog/search?mode=hybrid  the Ask bar: words + meaning, with year / genre / vote filters
 //   GET  /v1/catalog/similar/{id} "more like this": nearest titles by the item's own stored vector
+//   GET  /v1/pictures/episodes/{id} find an episode of a series by a scene described in words (its TMDB stills)
 //   POST /v1/moments/stream     queue the Moments + transcript of a stream being played (loopback only)
 //   GET  /v1/catalog/lists/{key} an ordered list (the Discover front page); POST replaces it (loopback only)
 //   GET  /v1/catalog/browse     a sorted page of a category (the offline "popular" list)
@@ -150,6 +151,42 @@ async function similarTo({ catalogId, mediaType, tmdbId, imdbId, k = 12, minVote
     const floor = minVotes !== undefined ? minVotes : (category === 'tv' ? 2000 : 5000);
     const results = await similar(id, { k, minVotes: floor });   // the item's own kind (the gateway's default)
     return results.filter(r => r && r.catalog_id && r.catalog_id !== id);
+}
+
+/** A TMDB picture URL at another of TMDB's sizes (the gateway serves its kept copy at any size), else unchanged. */
+function tmdbSize(url, size) {
+    return typeof url === 'string' ? url.replace(/^(https:\/\/image\.tmdb\.org\/t\/p\/)[a-z]+\d*\//, `$1${size}/`) : null;
+}
+
+/**
+ * Find an episode by scene (vault-raggae 0.41.0, GET /v1/pictures/episodes/{id}): the episodes of one series whose
+ * TMDB still looks like `query` ("the one where they're on a boat"), nudged by its words in the episode's name /
+ * overview; specials left out. The series is the card's `catalogId`, else the item carrying its TMDB id, else its
+ * IMDb id. Resolves { success, hits }: hits { season, episode, name, overview, airDate, still } with `still` the TMDB
+ * still at w300 (the window and web/server.js load it from the gateway's kept copy); success false when the gateway
+ * did not answer.
+ */
+async function episodesByScene({ catalogId, tmdbId, imdbId, query, k = 6, timeoutMs = 20000 } = {}) {
+    const q = typeof query === 'string' ? query.trim().slice(0, 300) : '';
+    if (!q) return { success: true, hits: [] };
+    let id = catalogId || null;
+    if (!id && tmdbId && /^\d+$/.test(String(tmdbId))) {
+        const item = await byExternal('tmdb', 'tv', tmdbId);
+        id = item && item.catalog_id;
+    }
+    if (!id && imdbId && /^tt\d+$/.test(imdbId)) id = `imdb:${imdbId}`;
+    if (!id) return { success: true, hits: [] };
+    const n = Math.max(1, Math.min(Number.isInteger(k) ? k : 6, 20));
+    const data = await call('GET', `/v1/pictures/episodes/${encodeURIComponent(id).replace(/%3A/gi, ':')}` +
+        `?q=${encodeURIComponent(q)}&k=${n}`, { quiet404: true, timeoutMs, tripOnTimeout: false });
+    if (!data || !Array.isArray(data.hits)) return { success: false, hits: [] };
+    return {
+        success: true,
+        hits: data.hits.filter(h => h && Number.isInteger(h.season) && Number.isInteger(h.episode)).map(h => ({
+            season: h.season, episode: h.episode, name: h.name || null, overview: h.overview || null,
+            airDate: h.air_date || null, still: h.url ? tmdbSize(h.url, 'w300') : null,
+        })),
+    };
 }
 
 /**
@@ -341,6 +378,7 @@ module.exports = {
     browse,
     similar,
     similarTo,
+    episodesByScene,
     ask,
     ingest,
     posterFor,
