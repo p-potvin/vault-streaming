@@ -341,6 +341,19 @@ async function similarCards(params = {}) {
     return localizeCards(items.map(it => catalogToCard(it, language)), language);
 }
 
+/**
+ * The Ask bar's cards (raggae.ask), shaped and localized like every other catalog row; titles without a poster go
+ * last, in their rank order. Resolves { success, results } like searchTMDB, success false when the gateway is down.
+ */
+async function askCards(params = {}) {
+    const items = await raggae.ask(params);
+    if (!items) return { success: false, error: 'catalog unavailable', results: [] };
+    const language = params.language || null;
+    const cards = await localizeCards(items.map(it => catalogToCard(it, language)), language);
+    const withPoster = cards.filter(c => c.poster !== PLACEHOLDER_POSTER);
+    return { success: true, results: [...withPoster, ...cards.filter(c => c.poster === PLACEHOLDER_POSTER)] };
+}
+
 async function searchLocalCatalog(query, options = {}) {
     if (!query) return [];
     const hits = await raggae.searchTitles(query, { limit: options.limit || 20 });
@@ -1357,6 +1370,7 @@ module.exports = {
     readThroughSeason,
     findCatalogItem,
     similarCards,
+    askCards,
     // for tests/test_raggae_integration.js
     _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, toTmdbRef, localSearchCache, tmdbIdCache,
                   slimDetails, slimSeason, slimCredits, slimPerson, catalogDetails, listItemMatches, GENRE_CODES, genreSpec, isReleased, decadeRange, discoverFromCatalog,

@@ -1070,3 +1070,83 @@ body:not(.is-mobile) .tmdb-search-wrapper > .mobile-search-clear {
   height: 100%;
   background: var(--vault-accent);
 }
+
+/* ── The Ask bar (js/streaming/ask.js) ─────────────────────────────────────── */
+.ask-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  background: var(--vt-primary);
+  border: 1px solid var(--vault-border);
+  border-radius: 4px;
+  margin-left: 6px;
+}
+.ask-wrapper:focus-within,
+.ask-wrapper.active {
+  border-color: var(--vault-accent);
+}
+.ask-icon {
+  flex-shrink: 0;
+  color: var(--vault-accent);
+}
+.ask-input {
+  width: 190px;
+  border: none;
+  background: transparent;
+  color: var(--vault-text);
+  outline: none;
+  height: 100%;
+  font-size: 12px;
+  font-family: var(--font-sans);
+}
+.ask-clear {
+  border: none;
+  background: transparent;
+  color: var(--vault-slate);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.ask-clear:hover { color: var(--vault-text); }
+
+.ask-readas {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 12px 2px;
+}
+.ask-readas-label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--vault-slate);
+}
+.ask-readas-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ask-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--vault-text);
+  background: transparent;
+  border: 1px solid var(--vault-border);
+  border-radius: 11px;
+  cursor: pointer;
+}
+.ask-chip.look {
+  border-color: var(--vault-accent);
+  color: var(--vault-accent);
+}
+.ask-chip:hover { background: rgba(255, 255, 255, 0.06); }
+.ask-chip .ask-chip-x { opacity: 0.6; }

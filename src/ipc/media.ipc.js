@@ -282,6 +282,23 @@ function registerMediaIpc(ipcMain) {
         }
     });
 
+    // The Ask bar: { look, mediaType, yearMin, yearMax, genres, language } -> { success, results } (cards)
+    ipcMain.handle('raggae-ask', async (_event, data) => {
+        try {
+            const { look, mediaType, yearMin, yearMax, genres, language } = data || {};
+            const num = v => (Number.isInteger(v) ? v : undefined);
+            return await require('../tmdb').askCards({
+                look: typeof look === 'string' ? look.slice(0, 300) : '',
+                mediaType: mediaType === 'tv' ? 'tv' : 'movie',
+                yearMin: num(yearMin), yearMax: num(yearMax),
+                genres: Array.isArray(genres) ? genres.filter(g => typeof g === 'string').slice(0, 6) : [],
+                language,
+            });
+        } catch (err) {
+            return { success: false, error: err.message, results: [] };
+        }
+    });
+
     ipcMain.handle('raggae-health', async () => {
         return await raggae.health();
     });
