@@ -117,6 +117,9 @@ public struct ContentView: View {
                 },
                 onDismiss: {
                     selectedMedia = nil
+                },
+                onSelectSimilar: { other in
+                    selectedMedia = other   // the sheet swaps to that title
                 }
             )
         }

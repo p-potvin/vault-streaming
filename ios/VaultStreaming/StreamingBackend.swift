@@ -9,6 +9,7 @@ public enum IpcChannel: String, Sendable {
     case getTmdbMovie = "get-tmdb-movie"
     case getTmdbTv = "get-tmdb-tv"
     case getTmdbTvSeason = "get-tmdb-tv-season"
+    case raggaeSimilar = "raggae-similar"
 
     // Trailers
     case trailerGet = "trailer:get"
@@ -302,6 +303,28 @@ public class StreamingBackend: ObservableObject {
             return []
         }
 
+        let data = try JSONSerialization.data(withJSONObject: resultsArray, options: [])
+        return try JSONDecoder().decode([MediaItem].self, from: data)
+    }
+
+    /// "More like this" for a title: its nearest titles by meaning from vault-raggae's catalog (known titles only),
+    /// as the same cards Discover returns. `[]` when the gateway has nothing for it.
+    public func fetchSimilar(for item: MediaItem) async throws -> [MediaItem] {
+        var params: [String: Any] = [
+            "mediaType": item.effectiveMediaType,
+            "language": AppConfig.serverLanguage
+        ]
+        if let cid = item.catalog_id, !cid.isEmpty { params["catalogId"] = cid }
+        if let tmdb = item.tmdbId { params["tmdbId"] = tmdb }
+        if let imdb = item.imdb_id, !imdb.isEmpty {
+            params["imdbId"] = imdb
+        } else if item.rawId.hasPrefix("tt") {
+            params["imdbId"] = item.rawId
+        }
+        let json = try await invoke(.raggaeSimilar, args: [params])
+        guard let resultsArray = json["result"] as? [[String: Any]], !resultsArray.isEmpty else {
+            return []
+        }
         let data = try JSONSerialization.data(withJSONObject: resultsArray, options: [])
         return try JSONDecoder().decode([MediaItem].self, from: data)
     }

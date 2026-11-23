@@ -11,7 +11,10 @@
 // --interval-ms (default 250 ms, 4/s; TMDB allows ~40/s), no retries; a list whose pages did not all arrive is not
 // written, so the previous copy stays. --dry-run makes no TMDB request and prints the plan.
 //
-//   node scripts/ingest-front-page.js [--dry-run] [--regions CA,US] [--pages 3] [--max-requests 1500]
+//   node scripts/ingest-front-page.js [--dry-run] [--regions CA,US] [--pages 10] [--max-requests 1500]
+//
+// 10 pages = 200 titles a list, so Discover keeps loading past the first 60 as the page is scrolled (operator, Mon
+// 23 Nov 2026). A run that hits the cap still stores the titles it looked up (not the list), so the next run goes on.
 //
 // Scheduled by scripts/Register-FrontPageTask.ps1 (twice a day). Stop: disable the task
 // "\VaultWares\Vault Streaming Front Page" (Disable-ScheduledTask), or unregister it.
@@ -40,7 +43,7 @@ function arg(name, fallback) {
 }
 const DRY_RUN = process.argv.includes('--dry-run');
 const REGIONS = String(arg('regions', process.env.FRONT_PAGE_REGIONS || 'CA,US')).split(',').map(s => s.trim().toUpperCase()).filter(r => /^[A-Z]{2}$/.test(r));
-const PAGES = Math.max(1, Math.min(5, parseInt(arg('pages', '3'), 10) || 3));
+const PAGES = Math.max(1, Math.min(10, parseInt(arg('pages', '10'), 10) || 10));
 const MAX_REQUESTS = Math.max(1, parseInt(arg('max-requests', '1500'), 10) || 1500);
 const INTERVAL_MS = Math.max(100, parseInt(arg('interval-ms', '250'), 10) || 250);
 const LANGUAGE = 'en-US';
@@ -191,10 +194,9 @@ async function main() {
             }
             batch.push({ k, item: { ...toIngest(hit, category, imdb), ...(cid ? { catalog_id: cid } : {}) } });
         }
-        if (stopped) {
-            console.warn(`  ${list.key}: incomplete, the stored list is kept`);
-            break;
-        }
+        // stopped mid-list: the titles looked up so far are still stored (their /external_ids are not asked again
+        // next run), but not the list, which would be short
+        const partial = !!stopped;
         let ingestFailed = false;
         for (let i = 0; i < batch.length; i += 100) {
             const chunk = batch.slice(i, i + 100);
@@ -208,6 +210,10 @@ async function main() {
                     if (s.created) created++;
                 }
             });
+        }
+        if (partial) {
+            console.warn(`  ${list.key}: incomplete (${batch.length} titles stored), the stored list is kept`);
+            break;
         }
         for (const b of batch) {
             const cid = known.get(b.k);

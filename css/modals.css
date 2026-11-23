@@ -513,6 +513,158 @@
   border: none;
 }
 
+/* More like this (vault-raggae's /v1/catalog/similar): one row of small posters under the details */
+#streaming-similar {
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  margin-top: 16px;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#streaming-similar[hidden] {
+  display: none;
+}
+
+/* One page of cards at a time (as many as fit); the arrows slide the track by a page (js/streaming/details-modal.js) */
+.streaming-similar-pager {
+  position: relative;
+}
+
+.streaming-similar-viewport {
+  overflow: hidden;
+}
+
+.streaming-similar-row {
+  --similar-gap: 10px;
+  display: flex;
+  gap: var(--similar-gap);
+  transition: transform 0.35s ease;
+  will-change: transform;
+}
+
+/* Poster with the title and year over its bottom on a fade, like the Discover cards (css/header.css) */
+.streaming-similar-card {
+  position: relative;
+  flex: 0 0 var(--similar-card, 112px);   /* set by the pager so a page holds whole cards */
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  border: 1px solid var(--vault-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+
+.streaming-similar-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.25s ease;
+}
+
+.streaming-similar-card:hover,
+.streaming-similar-card:focus-visible {
+  border-color: var(--vault-gold);
+  outline: none;
+}
+
+.streaming-similar-card:hover img,
+.streaming-similar-card:focus-visible img {
+  transform: scale(1.04);
+}
+
+.streaming-similar-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 28px 8px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: linear-gradient(to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--vault-console-bg, #0b0a10) 72%, transparent) 40%,
+    color-mix(in srgb, var(--vault-console-bg, #0b0a10) 94%, transparent) 100%);
+}
+
+.streaming-similar-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.streaming-similar-year {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.streaming-similar-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 6;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--vault-border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--vault-console-bg, #0b0a10) 88%, transparent);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.streaming-similar-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+.streaming-similar-arrow.prev {
+  left: 4px;
+}
+
+.streaming-similar-arrow.next {
+  right: 4px;
+}
+
+.streaming-similar-arrow:hover,
+.streaming-similar-arrow:focus-visible {
+  border-color: var(--vault-gold);
+  color: var(--vault-gold);
+  outline: none;
+}
+
+.streaming-similar-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+  border-color: var(--vault-border);
+  color: #fff;
+}
+
+.streaming-similar-arrow[hidden] {
+  display: none;
+}
+
 /* TV Series selector */
 #tv-actions-container {
   display: none;

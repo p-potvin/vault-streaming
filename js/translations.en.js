@@ -288,6 +288,7 @@ window.translationsEn = {
   playMovie: "Play Movie",
   watchTrailerYoutube: "Watch Trailer on YouTube",
   externalLinks: "External Watch & Trailer Links",
+  moreLikeThis: "More like this",
   endedNextIn: "Next video in {n} seconds... (Click to play now)",
   navHistory: "History",
   qsPlayNow: "Play Now (Instant Stream)",

@@ -334,6 +334,13 @@ async function localizeCards(cards, language) {
     }));
 }
 
+/** "More like this" cards for a title (raggae.similarTo), shaped and localized like every other catalog row. */
+async function similarCards(params = {}) {
+    const items = await raggae.similarTo(params);
+    const language = params.language || null;
+    return localizeCards(items.map(it => catalogToCard(it, language)), language);
+}
+
 async function searchLocalCatalog(query, options = {}) {
     if (!query) return [];
     const hits = await raggae.searchTitles(query, { limit: options.limit || 20 });
@@ -1349,6 +1356,7 @@ module.exports = {
     readThroughDetails,
     readThroughSeason,
     findCatalogItem,
+    similarCards,
     // for tests/test_raggae_integration.js
     _internals: { catalogToCard, localIsEnough, mergeAfterLocal, redact, toTmdbId, toTmdbRef, localSearchCache, tmdbIdCache,
                   slimDetails, slimSeason, slimCredits, slimPerson, catalogDetails, listItemMatches, GENRE_CODES, genreSpec, isReleased, decadeRange, discoverFromCatalog,

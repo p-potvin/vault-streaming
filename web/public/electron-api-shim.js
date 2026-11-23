@@ -401,6 +401,7 @@
     raggaeSearch: inv('raggae-search'),
     raggaeIngest: inv('raggae-ingest'),
     raggaeHealth: inv('raggae-health'),
+    raggaeSimilar: inv('raggae-similar'),
     getTorrentStatus: inv('rd-torrent-status'),
     debridURL: inv('rd-unrestrict-url'),
     downloadDebridFile: inv('rd-download-file'),

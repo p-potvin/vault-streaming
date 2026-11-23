@@ -50,8 +50,9 @@ When you start a stream, a Python daemon is spawned that processes audio via FFm
   and episodes are read through it: on a miss TMDB is asked once, the answer is ingested (TMDB's extras under the
   item's `raw_enrichment.tmdb[<language>]`) and the catalog's copy is served (`src/tmdb.js`).
 - **Discover and trending** read ordered catalog lists. `scripts/ingest-front-page.js` fills them from TMDB (trending,
-  and each provider's popular titles per watch region); `scripts/Register-FrontPageTask.ps1` schedules it at 06:30 and
-  18:30 (at most 1500 TMDB requests a run, 4/s). Dry run: `node scripts/ingest-front-page.js --dry-run`.
+  and each provider's popular titles per watch region, 10 TMDB pages = 200 titles a list, so Discover keeps loading
+  as it is scrolled); `scripts/Register-FrontPageTask.ps1` schedules it at 06:30 and 18:30 (at most 1500 TMDB
+  requests a run, 4/s). Dry run: `node scripts/ingest-front-page.js --dry-run`.
 - **Trailers** are looked up (KinoCheck, then the catalog's TMDB videos) and downloaded with yt-dlp once, then played
   from `TRAILER_CACHE_DIR` (default `G:\VaultStreaming\trailers`, `src/trailers.js`); the web client gets them at
   `/trailers/<id>.mp4`.

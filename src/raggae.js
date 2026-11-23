@@ -3,6 +3,7 @@
 //   GET  /v1/catalog/search     full-text search (one category at a time)
 //   GET  /v1/catalog/{id}       one item (e.g. imdb:tt0133093); ?raw=true adds raw_enrichment (TMDB extras)
 //   GET  /v1/catalog/xref/tmdb/{movie|tv}/{id}   the item carrying a TMDB id
+//   GET  /v1/catalog/similar/{id} "more like this": nearest titles by the item's own stored vector
 //   POST /v1/moments/stream     queue the Moments + transcript of a stream being played (loopback only)
 //   GET  /v1/catalog/lists/{key} an ordered list (the Discover front page); POST replaces it (loopback only)
 //   GET  /v1/catalog/browse     a sorted page of a category (the offline "popular" list)
@@ -113,6 +114,41 @@ async function byExternal(source, category, extId, { raw = false } = {}) {
     if (!source || !category || extId === null || extId === undefined || extId === '') return null;
     return call('GET', `/v1/catalog/xref/${encodeURIComponent(source)}/${encodeURIComponent(category)}/` +
         `${encodeURIComponent(String(extId))}${raw ? '?raw=true' : ''}`, { quiet404: true });
+}
+
+/**
+ * "More like this" (GET /v1/catalog/similar/{id}): the titles nearest to one catalog item by meaning, same kind by
+ * default. `minVotes` keeps obscure entries out (without it, neighbours lean on title words: The Matrix ->
+ * "Matrix Zone"). Resolves the result list, [] when the item has no vector or on any failure. 30 s: a title's first
+ * call can take 6-20 s while the gateway is busy (the row fills in late rather than not at all).
+ */
+async function similar(catalogId, { category, k = 12, minVotes = 5000, timeoutMs = 30000 } = {}) {
+    if (!catalogId) return [];
+    let route = `/v1/catalog/similar/${encodeURIComponent(catalogId).replace(/%3A/gi, ':')}?k=${k}`;
+    if (category) route += `&category=${encodeURIComponent(category)}`;
+    if (minVotes) route += `&min_votes=${minVotes}`;
+    const data = await call('GET', route, { quiet404: true, timeoutMs, tripOnTimeout: false });
+    return Array.isArray(data && data.results) ? data.results : [];
+}
+
+/**
+ * "More like this" for a title the app shows: its catalog item (the card's own `catalogId` when it has one, else
+ * the item carrying its TMDB id, else its IMDb id as a last guess), then that item's nearest titles of its own kind.
+ * Resolves raw catalog items (the source left out), [] when the gateway has nothing.
+ */
+async function similarTo({ catalogId, mediaType, tmdbId, imdbId, k = 12, minVotes } = {}) {
+    const category = mediaType === 'tv' ? 'tv' : 'movie';
+    let id = catalogId || null;
+    if (!id && tmdbId && /^\d+$/.test(String(tmdbId))) {
+        const item = await byExternal('tmdb', category, tmdbId);
+        id = item && item.catalog_id;
+    }
+    if (!id && imdbId && /^tt\d+$/.test(imdbId)) id = `imdb:${imdbId}`;
+    if (!id) return [];
+    // series gather fewer votes than films: the same floor would leave most of them out
+    const floor = minVotes !== undefined ? minVotes : (category === 'tv' ? 2000 : 5000);
+    const results = await similar(id, { k, minVotes: floor });   // the item's own kind (the gateway's default)
+    return results.filter(r => r && r.catalog_id && r.catalog_id !== id);
 }
 
 /** One ordered list (the Discover front page): { key, total, updated_at, items } or null. */
@@ -255,6 +291,8 @@ module.exports = {
     search,
     searchTitles,
     browse,
+    similar,
+    similarTo,
     ingest,
     posterFor,
     isOffline,

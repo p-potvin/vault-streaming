@@ -64,11 +64,12 @@ window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted 
 
     const isTV = movie.media_type === 'tv';
 
-    if (isTV) {
-        await _setupTVModal(movie);
-    } else {
-        _setupMovieModal(movie);
-    }
+    const openToken = ++_openToken;
+    _loadSimilar(movie);   // not awaited: the row fills in when the gateway answers
+
+    // started now, awaited after the library button is bound to this title: a series loads its episodes first, and
+    // a click on the button meanwhile must save this title, not the one shown before (review of #31)
+    const setupDone = isTV ? _setupTVModal(movie) : (_setupMovieModal(movie), null);
 
     // Setup Add to Library visual state and click handler
     const btnLib = el('btn-modal-library');
@@ -145,9 +146,121 @@ window.showMediaDetails = async function(movie, startAtTime = 0, { trailerMuted 
         };
     }
 
+    await setupDone;
+    if (openToken !== _openToken) return;   // another title was opened while this one loaded
+
     // Fetch trailer asynchronously
     _fetchAndInjectTrailer(movie.id, movie.media_type);
 };
+
+// ─── More like this ──────────────────────────────────────────────────────────
+// The nearest titles by meaning (vault-raggae's /v1/catalog/similar, known titles only), as one row of small
+// posters; a click opens that title in this modal. Hidden when the gateway is down or the title has no vector.
+let _similarToken = 0;
+let _openToken = 0;     // bumps on every title opened (showMediaDetails); stale openings stop after their awaits
+
+async function _loadSimilar(movie) {
+    const box = el('streaming-similar');
+    const row = el('streaming-similar-row');
+    if (!box || !row) return;
+    const token = ++_similarToken;
+    box.hidden = true;
+    row.innerHTML = '';
+    if (!window.electronAPI || !window.electronAPI.raggaeSimilar || !movie || !movie.id) return;
+    let cards = [];
+    try {
+        const tt = String(movie.id).startsWith('tt') ? String(movie.id) : null;   // a catalog card may carry tt… as id
+        cards = await window.electronAPI.raggaeSimilar({
+            catalogId: movie.catalog_id || null,
+            mediaType: movie.media_type === 'tv' ? 'tv' : 'movie',
+            tmdbId: tt ? null : movie.id,
+            imdbId: movie.imdb_id || tt,
+            language: typeof window.tmdbLanguage === 'function' ? window.tmdbLanguage() : null,
+        });
+    } catch (e) {
+        console.warn('[streaming] More like this unavailable:', e);
+    }
+    if (token !== _similarToken || !Array.isArray(cards) || !cards.length) return;   // another title opened meanwhile
+    for (const card of cards) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'streaming-similar-card';
+        btn.title = card.year ? `${card.title} (${card.year})` : card.title;
+        const img = document.createElement('img');
+        img.loading = 'lazy';
+        img.alt = '';
+        img.src = card.poster || 'public/poster_placeholder.svg';
+        img.onerror = () => { img.onerror = null; img.src = 'public/poster_placeholder.svg'; };
+        const caption = document.createElement('span');
+        caption.className = 'streaming-similar-caption';
+        const name = document.createElement('span');
+        name.className = 'streaming-similar-title';
+        name.textContent = card.title;
+        caption.append(name);
+        if (card.year && card.year !== '—') {
+            const year = document.createElement('span');
+            year.className = 'streaming-similar-year';
+            year.textContent = String(card.year);
+            caption.append(year);
+        }
+        btn.append(img, caption);
+        btn.onclick = () => {
+            if (typeof window.destroyTrailer === 'function') window.destroyTrailer();
+            const modal = el('streaming-details-modal');
+            if (modal) modal.scrollTop = 0;
+            window.showMediaDetails(card);
+        };
+        row.append(btn);
+    }
+    box.hidden = false;
+    _similarPage = 0;
+    _layoutSimilar();
+}
+
+// Paging: as many whole cards as the row shows; an arrow slides the track by that many (no scrollbar).
+let _similarPage = 0;
+
+const SIMILAR_MIN_CARD = 112;   // px: a page holds as many cards of at least this width as fit, stretched to fill it
+
+function _layoutSimilar() {
+    const row = el('streaming-similar-row');
+    const prev = el('streaming-similar-prev');
+    const next = el('streaming-similar-next');
+    const viewport = row && row.parentElement;
+    if (!row || !prev || !next || !viewport) return;
+    const count = row.children.length;
+    const gap = parseFloat(getComputedStyle(row).columnGap) || 10;
+    const width = viewport.clientWidth;
+    const per = Math.max(1, Math.floor((width + gap) / (SIMILAR_MIN_CARD + gap)));
+    const card = (width - gap * (per - 1)) / per;
+    row.style.setProperty('--similar-card', `${card}px`);
+    const pages = Math.max(1, Math.ceil(count / per));
+    _similarPage = Math.min(Math.max(0, _similarPage), pages - 1);
+    // the last page ends on the last card rather than leaving a gap after it
+    const startIndex = Math.min(_similarPage * per, Math.max(0, count - per));
+    row.style.transform = `translateX(${-startIndex * (card + gap)}px)`;
+    prev.hidden = next.hidden = pages <= 1;
+    prev.disabled = _similarPage === 0;
+    next.disabled = _similarPage >= pages - 1;
+}
+
+function _pageSimilar(delta) {
+    _similarPage += delta;
+    _layoutSimilar();
+}
+
+(function _wireSimilarPager() {
+    const wire = () => {
+        const prev = el('streaming-similar-prev');
+        const next = el('streaming-similar-next');
+        if (!prev || !next) return;
+        prev.onclick = (e) => { e.stopPropagation(); _pageSimilar(-1); };
+        next.onclick = (e) => { e.stopPropagation(); _pageSimilar(1); };
+        window.addEventListener('resize', () => { if (!el('streaming-similar').hidden) _layoutSimilar(); });
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+    else wire();
+})();
 
 async function _setupMovieModal(movie) {
     _tvModalToken++;   // a series still loading in the background no longer fills the modal
