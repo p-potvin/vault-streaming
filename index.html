@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v2.15.0 -->
+<!-- v2.16.0 -->
 <html lang="en">
 
 <head>
@@ -38,6 +38,7 @@
   <script src="js/player/series-controls.js" defer></script>
   <script src="js/player/player.js" defer></script>
   <script src="js/player/jump-to.js" defer></script>
+  <script src="js/player/who-is-this.js" defer></script>
   <script src="js/progress.js" defer></script>
   <script src="js/streaming/ranking.js" defer></script>
   <script src="js/streaming/badges.js" defer></script>
@@ -756,6 +757,8 @@
     <button id="pip-close-btn" data-i18n-title="tipClose" aria-label="Close" title="Close"><span data-icon="close"></span></button>
     <div class="video-wrapper">
       <video id="video-player" autoplay></video>
+      <!-- Who is this: faces of the paused frame, named (js/player/who-is-this.js) -->
+      <div id="who-overlay" aria-live="polite"></div>
       <!-- Shown while the player shell is up but the stream is still being
            prepared, so the search dialog can hand over directly instead of
            flashing the grid in between. -->
@@ -859,6 +862,18 @@
                   data-i18n-placeholder="jumpPlaceholder" placeholder="A line, or a scene…" />
                 <div id="jump-results"></div>
               </div>
+            </div>
+
+            <!-- Who is this, on the paused frame (js/player/who-is-this.js; streams of catalog titles only) -->
+            <div id="who-container" style="display:none;">
+              <button id="btn-who" data-i18n-title="tipWhoIsThis" class="ctrl-btn-sm" title="Who is this?"
+                aria-label="Who is this?">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" style="width:14px; height:14px; display:block;">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+              </button>
             </div>
 
             <!-- Stream quality picker -->

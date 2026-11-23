@@ -73,7 +73,65 @@ async function jumpSearch(p = {}) {
     };
 }
 
+/**
+ * One frame of the playing source as JPEG bytes, read by ffmpeg at `t` seconds: the window cannot read the pixels of a
+ * cross-origin <video> (a tainted canvas), ffmpeg can. http(s) sources only; null on any failure.
+ */
+function grabFrame(url, t, { timeoutMs = 20000 } = {}) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url) || !Number.isFinite(Number(t)) || Number(t) < 0) {
+        return Promise.resolve(null);
+    }
+    const { spawn } = require('child_process');
+    const { getFFmpegPath } = require('../utils');
+    return new Promise((resolve) => {
+        let proc;
+        try {
+            proc = spawn(getFFmpegPath(), ['-hide_banner', '-loglevel', 'error', '-ss', Number(t).toFixed(3), '-i', url,
+                '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q:v', '3', 'pipe:1'],
+            { windowsHide: true });
+        } catch (_) {
+            resolve(null);
+            return;
+        }
+        const chunks = [];
+        let size = 0;
+        const timer = setTimeout(() => { try { proc.kill(); } catch (_) { /* gone */ } }, timeoutMs);
+        proc.stdout.on('data', (c) => { size += c.length; if (size <= 16 * 2 ** 20) chunks.push(c); });
+        proc.on('error', () => { clearTimeout(timer); resolve(null); });
+        proc.on('close', (code) => {
+            clearTimeout(timer);
+            resolve(code === 0 && size > 0 && size <= 16 * 2 ** 20 ? Buffer.concat(chunks) : null);
+        });
+    });
+}
+
+/**
+ * Who is this, on the paused frame (semantic plan section 3.5). { image?: base64 JPEG (the window's canvas), url?, t?
+ * (ffmpeg reads the source when the canvas could not), tmdbId, mediaType, season, episode } -> raggae.facesWho's
+ * answer, scored against the playing title's cast too.
+ */
+async function whoIsThis(p = {}) {
+    let jpeg = null;
+    if (typeof p.image === 'string' && p.image) {
+        jpeg = Buffer.from(p.image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+        if (jpeg.length > 16 * 2 ** 20) return { success: false, error: 'too-big', faces: [] };
+    } else {
+        jpeg = await grabFrame(p.url, p.t);
+    }
+    if (!jpeg || !jpeg.length) return { success: false, error: 'no-frame', faces: [] };
+    const sk = await streamKeyFor(p).catch(() => null);
+    return raggae.facesWho(jpeg, { catalogId: sk ? sk.catalogId : null });
+}
+
 function registerMomentsIpc(ipcMain) {
+    ipcMain.handle('raggae-who', async (_e, p = {}) => {
+        try {
+            return await whoIsThis(p);
+        } catch (e) {
+            return { success: false, error: e.message, faces: [] };
+        }
+    });
+
     ipcMain.handle('moments:jump-search', async (_e, p = {}) => {
         try {
             return await jumpSearch(p);
@@ -107,4 +165,4 @@ function registerMomentsIpc(ipcMain) {
     });
 }
 
-module.exports = { registerMomentsIpc, streamKeyFor, jumpSearch, _episodeSuffix: episodeSuffix };
+module.exports = { registerMomentsIpc, streamKeyFor, jumpSearch, whoIsThis, grabFrame, _episodeSuffix: episodeSuffix };

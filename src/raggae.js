@@ -189,6 +189,60 @@ async function episodesByScene({ catalogId, tmdbId, imdbId, query, k = 6, timeou
     };
 }
 
+/** A gateway picture link (/v1/img?u=<TMDB URL>) as the TMDB URL at `size` (the window and web/server.js load
+ *  TMDB pictures from the gateway's kept copy), else null. */
+function profilePicture(img, size = 'w185') {
+    if (typeof img !== 'string' || !img) return null;
+    try {
+        const u = new URL(img, RAGGAE_URL).searchParams.get('u');
+        return u && /^https:\/\/image\.tmdb\.org\//.test(u) ? tmdbSize(u, size) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
+ * Who is this (vault-raggae 0.42.0, POST /v1/faces/who): the faces in a paused frame (JPEG bytes) matched against
+ * the Celebrities gallery, and against the playing title's cast when `catalogId` is given. Resolves { success,
+ * width, height, castLinked, faces: [{ bbox: [x1, y1, x2, y2] in the frame's pixels, name, character, inCast,
+ * match, score, picture }] }: `name` null when no one is likely; success false when the gateway did not answer.
+ */
+async function facesWho(jpeg, { catalogId = null, timeoutMs = 30000 } = {}) {
+    if (!jpeg || !jpeg.length) return { success: false, error: 'no-frame', faces: [] };
+    if (isOffline()) return { success: false, error: 'unreachable', faces: [] };
+    const qs = catalogId ? `?title=${encodeURIComponent(catalogId)}` : '';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(`${RAGGAE_URL}/v1/faces/who${qs}`, {
+            method: 'POST', headers: { 'X-VW-Project': PROJECT, 'Content-Type': 'image/jpeg' },
+            body: jpeg, signal: controller.signal,
+        });
+        markOnline();
+        if (!res.ok) {
+            console.warn(`[raggae] POST /v1/faces/who -> HTTP ${res.status}`);
+            return { success: false, error: res.status === 404 ? 'not-live' : `http-${res.status}`, faces: [] };
+        }
+        const data = await res.json();
+        const faces = (Array.isArray(data && data.faces) ? data.faces : []).filter(f => f && Array.isArray(f.bbox)
+            && f.bbox.length === 4).map(f => {
+            const b = f.best || null;
+            return {
+                bbox: f.bbox.map(Number), name: b ? b.name || null : null, character: b ? b.character || null : null,
+                inCast: !!(b && b.in_cast), match: !!(b && b.match), score: b ? b.score : null,
+                picture: b ? profilePicture(b.img) : null,
+            };
+        });
+        return { success: true, width: data.width, height: data.height, castLinked: data.cast_linked || 0, faces };
+    } catch (err) {
+        if (err && err.name === 'AbortError') return { success: false, error: 'timeout', faces: [] };
+        markOffline(err);
+        return { success: false, error: 'unreachable', faces: [] };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 /**
  * The Ask bar (js/streaming/ask.js parses the sentence): `look` is searched by words and meaning together
  * (GET /v1/catalog/search?mode=hybrid), the named year / genres filter it; with no `look`, the filters alone list the
@@ -379,6 +433,8 @@ module.exports = {
     similar,
     similarTo,
     episodesByScene,
+    facesWho,
+    _profilePicture: profilePicture,
     ask,
     ingest,
     posterFor,
