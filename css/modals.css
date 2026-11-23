@@ -1387,6 +1387,10 @@
 }
 
 /* Jump to a line or a scene (js/player/jump-to.js): a compact box above its button, like the quality menu */
+#jump-dropdown-container {
+  position: relative;
+}
+
 #jump-menu {
   display: none;
   position: absolute;
@@ -1466,6 +1470,10 @@
   padding: 4px 2px;
   font: 11px var(--font-body);
   color: var(--vault-slate);
+}
+
+.jump-note.warn {
+  color: var(--vault-gold, #F5B929);
 }
 
 /* Subtitle dropdown */

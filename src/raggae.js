@@ -222,12 +222,13 @@ async function resumeStreams() {
 /** The Moments job of a played stream (GET /v1/moments/stream/{key}): { state: 'queued' | 'starting' | 'reading' |
  *  'done' | 'failed', read_s?, duration?, transcript? } or null (no job yet / gateway down). */
 /** Moments of one video (a stream key, stream:imdb:tt…[:sNNeNN]): GET /v1/moments/search?video=. What is said, seen
- *  and heard, fused; each hit has t0 / t1 (seconds) and said. Resolves [] on any failure. */
+ *  and heard, fused; each hit has t0 / t1 (seconds) and said. Resolves null when the gateway did not answer (so a
+ *  failure is not read as "nothing found"). */
 async function momentsSearch(q, video, { mode = 'all', k = 6, timeoutMs = 20000 } = {}) {
     if (!q || !video) return [];
     const data = await call('GET', `/v1/moments/search?q=${encodeURIComponent(q)}&mode=${mode}&k=${k}` +
         `&video=${encodeURIComponent(video)}`, { timeoutMs, tripOnTimeout: false });
-    return Array.isArray(data && data.hits) ? data.hits : [];
+    return Array.isArray(data && data.hits) ? data.hits : null;
 }
 
 async function streamStatus(key) {

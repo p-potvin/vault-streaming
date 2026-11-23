@@ -34,8 +34,11 @@
 
     function close() {
         const { menu, btn } = els();
+        const wasOpen = isOpen();
         if (menu) menu.style.display = 'none';
         if (btn) btn.setAttribute('aria-expanded', 'false');
+        // the idle timer kept the controls while the box was open: start it again (js/player/player.js)
+        if (wasOpen) document.dispatchEvent(new MouseEvent('mousemove'));
     }
 
     function open() {
@@ -70,13 +73,25 @@
             });
         } catch (_) { res = null; }
         if (id !== reqId || !list) return;
-        const hits = (res && Array.isArray(res.hits)) ? res.hits.slice(0, MAX_ROWS) : [];
+        if (!res || res.error) {
+            note(tr('jumpUnreachable', 'The catalog did not answer. Try again in a moment.'));
+            return;
+        }
+        const hits = Array.isArray(res.hits) ? res.hits.slice(0, MAX_ROWS) : [];
         if (!hits.length) {
-            note(res && res.indexed ? tr('jumpNothing', 'Nothing matches in this title.')
+            note(res.indexed ? tr('jumpNothing', 'Nothing matches in this title.')
                 : tr('jumpNotIndexed', 'This title becomes searchable after it has played for a little while.'));
             return;
         }
         list.innerHTML = '';
+        // the times come from the source Moments read; another cut of the title (a longer opening, say) shifts them
+        if (Number.isFinite(res.duration) && vp && Number.isFinite(vp.duration) && vp.duration > 0
+            && Math.abs(vp.duration - res.duration) > 30) {
+            const warn = document.createElement('div');
+            warn.className = 'jump-note warn';
+            warn.textContent = tr('jumpOtherCut', 'Read from another cut of this title: the times may be off.');
+            list.append(warn);
+        }
         for (const h of hits) {
             const row = document.createElement('button');
             row.type = 'button';
@@ -129,10 +144,20 @@
             if (isOpen()) close(); else open();
         });
         menu.addEventListener('click', (e) => e.stopPropagation());
+        // Escape anywhere in the box (the field, a result) closes it and gives the focus back to its button
+        el('jump-dropdown-container').addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isOpen()) {
+                e.preventDefault();
+                e.stopPropagation();
+                close();
+                btn.focus();
+            }
+        });
         input.addEventListener('keydown', (e) => {
             e.stopPropagation();                  // typing here is not a player shortcut
             if (e.key === 'Enter') { e.preventDefault(); search(); }
             if (e.key === 'Escape') { e.preventDefault(); close(); btn.focus(); }
+            document.dispatchEvent(new MouseEvent('mousemove'));   // typing is activity: the controls stay
         });
         document.addEventListener('click', () => { if (isOpen()) close(); });
         if (vp) ['loadstart', 'loadedmetadata', 'playing', 'emptied'].forEach(ev => vp.addEventListener(ev, refresh));

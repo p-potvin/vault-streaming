@@ -1147,7 +1147,7 @@ function initPlayer() {
         _idleTimer = setTimeout(() => {
             // Never hide while a player menu is open — otherwise the menu vanishes
             // (opacity 0) or becomes unclickable (pointer-events:none) mid-use.
-            const menuOpen = ['quality-menu', 'subtitles-menu', 'audio-menu', 'speed-menu'].some(id => {
+            const menuOpen = ['quality-menu', 'subtitles-menu', 'audio-menu', 'speed-menu', 'jump-menu'].some(id => {
                 const m = el(id);
                 return m && m.style.display && m.style.display !== 'none';
             });
@@ -1397,6 +1397,7 @@ function initPlayer() {
     document.addEventListener('keydown', (e) => {
         if (el('video-modal').style.display === 'flex') {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.target.closest && e.target.closest('#jump-dropdown-container')) return;   // Space activates its buttons
             switch (e.key.toLowerCase()) {
                 case ' ':
                     e.preventDefault();
@@ -1508,6 +1509,7 @@ function initPlayer() {
         // Don't intercept while the user is typing in an input/textarea.
         const t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (t && t.closest && t.closest('#jump-dropdown-container')) return;   // the jump box handles its own keys
         if (e.key === 'Escape' && !e.shiftKey && !e.ctrlKey) {
             e.preventDefault();
             e.stopPropagation();

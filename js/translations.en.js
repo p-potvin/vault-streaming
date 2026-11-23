@@ -327,6 +327,8 @@ window.translationsEn = {
   jumpNothing: "Nothing matches in this title.",
   jumpNotIndexed: "This title becomes searchable after it has played for a little while.",
   jumpScene: "Scene",
+  jumpUnreachable: "The catalog did not answer. Try again in a moment.",
+  jumpOtherCut: "Read from another cut of this title: the times may be off.",
   tipAudio: "Audio track",
   tipSubtitles: "Subtitles (CC)",
   tipSyncShift: "Shift subtitle timing to fix A/V sync",

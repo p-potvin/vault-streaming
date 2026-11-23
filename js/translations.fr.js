@@ -329,6 +329,8 @@ window.translationsFr = {
   jumpNothing: "Rien de tel dans ce titre.",
   jumpNotIndexed: "Ce titre devient consultable après avoir joué un petit moment.",
   jumpScene: "Scène",
+  jumpUnreachable: "Le catalogue n’a pas répondu. Réessayez dans un moment.",
+  jumpOtherCut: "Lu depuis une autre version de ce titre : les temps peuvent être décalés.",
   tipAudio: "Piste audio",
   tipSubtitles: "Sous-titres (CC)",
   tipSyncShift: "Décaler les sous-titres pour corriger la synchronisation",

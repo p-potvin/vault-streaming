@@ -39,7 +39,8 @@ async function streamKeyFor({ tmdbId, mediaType, season, episode } = {}) {
 
 /**
  * Jump-to inside the playing title (semantic plan section 3.3): a line, a scene or a sound in this stream's Moments.
- * { tmdbId, mediaType, season, episode, q } -> { indexed, state, hits: [{ kind: 'said' | 'seen', t0, t1, said }] }. `indexed` false: the
+ * { tmdbId, mediaType, season, episode, q } -> { indexed, state, duration, hits: [{ kind: 'said' | 'seen', t0, t1,
+ *   said }], error? }. `indexed` false: the
  * title has not been read yet (it is after 15 s of playback, src/ipc/moments.ipc.js above).
  */
 async function jumpSearch(p = {}) {
@@ -53,9 +54,10 @@ async function jumpSearch(p = {}) {
         raggae.momentsSearch(q, sk.key, { mode: 'look', k: 4 }),
         raggae.streamStatus(sk.key).catch(() => null),
     ]);
+    if (said === null && seen === null) return { key: sk.key, indexed: false, state: null, hits: [], error: 'unreachable' };
     const hits = [];
     const near = (t) => hits.some(h => Math.abs(h.t0 - t) < 10);
-    for (const [kind, list] of [['said', said], ['seen', seen]]) {
+    for (const [kind, list] of [['said', said || []], ['seen', seen || []]]) {
         for (const h of list) {
             if (!Number.isFinite(h.t0) || near(h.t0)) continue;
             hits.push({ kind, t0: h.t0, t1: h.t1, said: h.said || '' });
@@ -65,6 +67,8 @@ async function jumpSearch(p = {}) {
         key: sk.key,
         indexed: hits.length > 0 || !!(status && (status.windows || status.state === 'done')),
         state: status ? status.state || null : null,
+        // the length of the source Moments read: its times only match a playing source of the same cut
+        duration: status && Number.isFinite(status.duration) ? status.duration : null,
         hits,
     };
 }
