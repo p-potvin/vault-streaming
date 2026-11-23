@@ -389,7 +389,7 @@ public struct NativePlayerView: View {
     private func upNextCard(next: (season: Int, episode: Int, info: EpisodeItem?)) -> some View {
         HStack(spacing: 12) {
             if let stillURL = next.info?.stillURL {
-                AsyncImage(url: stillURL) { phase in
+                VaultImage(url: stillURL) { phase in
                     if let img = phase.image {
                         img.resizable().scaledToFill()
                     } else {
@@ -519,7 +519,7 @@ public struct NativePlayerView: View {
             HStack(spacing: 10) {
                 ZStack(alignment: .bottom) {
                     if let stillURL = ep.stillURL {
-                        AsyncImage(url: stillURL) { phase in
+                        VaultImage(url: stillURL) { phase in
                             if let img = phase.image {
                                 img.resizable().scaledToFill()
                             } else {

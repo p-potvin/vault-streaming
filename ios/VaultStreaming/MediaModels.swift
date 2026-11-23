@@ -262,6 +262,11 @@ public struct MediaItem: Identifiable, Hashable, Codable {
             if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
                 return URL(string: raw)
             }
+            // the server's own picture routes (`/api/img`, `/api/artwork`): VaultImage loads them against the server
+            if raw.hasPrefix("/api/") {
+                return URL(string: raw)
+            }
+            // a bare TMDB path: VaultImage sends it through the server's local copies (ImageRoute), never to TMDB
             if raw.hasPrefix("/") {
                 return URL(string: "https://image.tmdb.org/t/p/\(tmdbSize)\(raw)")
             }

@@ -10,7 +10,7 @@
 (function () {
     const fr = () => window.currentLang === 'fr';
     const tx = (en, frText) => (fr() ? frText : en);
-    const STILL = (p, size = 'w300') => (p ? `https://image.tmdb.org/t/p/${size}${p}` : '');
+    const STILL = (p, size = 'w300') => (p ? window.vwImage(`https://image.tmdb.org/t/p/${size}${p}`) : '');
     const UP_NEXT_DEFAULT = 40;
 
     let vp = null;

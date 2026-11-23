@@ -347,6 +347,11 @@ function getTabDefaultFolder(tabName) {
 
 // Bind globals for accessibility
 window.el = el;
+
+/** A TMDB picture URL the renderer builds itself, from the local copies: the web client gets it through its server's
+ *  /api/img (the desktop window redirects image.tmdb.org to the gateway itself, main.js). */
+window.vwImage = (url) => (url && window.__VW_WEB__ && /^https:\/\/image\.tmdb\.org\/t\/p\//.test(url)
+    ? `/api/img?u=${encodeURIComponent(url)}` : url);
 window.escapeHtml = escapeHtml;
 window.formatBytes = formatBytes;
 window.formatDuration = formatDuration;

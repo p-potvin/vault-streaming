@@ -245,6 +245,14 @@ function createWindow() {
     // Reveal once the renderer has painted; the splash enforces a min display time.
     mainWindow.once('ready-to-show', finishSplash);
 
+    // Pictures from the local copies first (src/image-links.js): every image.tmdb.org request goes to the gateway's
+    // kept copy instead. While the gateway is down (the client's circuit breaker), TMDB still answers.
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['https://image.tmdb.org/t/p/*'] }, (details, callback) => {
+        const raggae = require('./src/raggae');
+        if (raggae.isOffline()) return callback({});
+        callback({ redirectURL: require('./src/image-links').gatewayImage(details.url) });
+    });
+
     // YouTube Referer & Origin overrides to fix Error 152/153/4 (domain embedding restrictions)
     // Apply to ALL sessions to cover iframe requests
     const youtubeUrls = ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.googlevideo.com/*'];

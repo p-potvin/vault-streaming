@@ -157,7 +157,7 @@ public struct MediaCardView: View {
     @ViewBuilder
     private var posterImage: some View {
         if let url = item.posterURL {
-            AsyncImage(url: url) { phase in
+            VaultImage(url: url) { phase in
                 switch phase {
                 case .empty:
                     ZStack {

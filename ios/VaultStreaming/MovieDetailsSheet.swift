@@ -442,7 +442,7 @@ public struct MovieDetailsSheet: View {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(cast) { member in
                         VStack(spacing: 6) {
-                            AsyncImage(url: member.profileURL) { phase in
+                            VaultImage(url: member.profileURL) { phase in
                                 switch phase {
                                 case .success(let image):
                                     image
@@ -495,7 +495,7 @@ public struct MovieDetailsSheet: View {
                             onSelectSimilar?(other)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                AsyncImage(url: other.posterURL) { phase in
+                                VaultImage(url: other.posterURL) { phase in
                                     switch phase {
                                     case .success(let image):
                                         image
@@ -693,7 +693,7 @@ public struct MovieDetailsSheet: View {
 
         return HStack(spacing: 12) {
             ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: ep.stillURL) { phase in
+                VaultImage(url: ep.stillURL) { phase in
                     switch phase {
                     case .success(let img):
                         img.resizable().aspectRatio(contentMode: .fill)

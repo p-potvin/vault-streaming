@@ -79,7 +79,7 @@ public struct HistoryView: View {
             handleTap(entry)
         } label: {
             HStack(spacing: 14) {
-                AsyncImage(url: record.posterUrl.flatMap(URL.init(string:))) { phase in
+                VaultImage(url: record.posterUrl.flatMap(URL.init(string:))) { phase in
                     switch phase {
                     case .success(let img):
                         img.resizable().aspectRatio(contentMode: .fill)

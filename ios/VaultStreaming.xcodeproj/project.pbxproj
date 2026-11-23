@@ -28,6 +28,7 @@
 		300000000000000000000023 /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000023 /* L10n.swift */; };
 		300000000000000000000024 /* StreamPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000024 /* StreamPicker.swift */; };
 		300000000000000000000025 /* WebVTTParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000025 /* WebVTTParser.swift */; };
+		300000000000000000000031 /* VaultImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000031 /* VaultImage.swift */; };
 		300000000000000000000026 /* SeriesFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000026 /* SeriesFlow.swift */; };
 		300000000000000000000027 /* TrailerPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000027 /* TrailerPlayerView.swift */; };
 		300000000000000000000028 /* AdaptiveGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000028 /* AdaptiveGrid.swift */; };
@@ -60,6 +61,7 @@
 		200000000000000000000023 /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
 		200000000000000000000024 /* StreamPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamPicker.swift; sourceTree = "<group>"; };
 		200000000000000000000025 /* WebVTTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebVTTParser.swift; sourceTree = "<group>"; };
+		200000000000000000000031 /* VaultImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultImage.swift; sourceTree = "<group>"; };
 		200000000000000000000026 /* SeriesFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesFlow.swift; sourceTree = "<group>"; };
 		200000000000000000000027 /* TrailerPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailerPlayerView.swift; sourceTree = "<group>"; };
 		200000000000000000000028 /* AdaptiveGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveGrid.swift; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 				200000000000000000000023 /* L10n.swift */,
 				200000000000000000000024 /* StreamPicker.swift */,
 				200000000000000000000025 /* WebVTTParser.swift */,
+				200000000000000000000031 /* VaultImage.swift */,
 				200000000000000000000026 /* SeriesFlow.swift */,
 				200000000000000000000027 /* TrailerPlayerView.swift */,
 				200000000000000000000028 /* AdaptiveGrid.swift */,
@@ -225,6 +228,7 @@
 				300000000000000000000023 /* L10n.swift in Sources */,
 				300000000000000000000024 /* StreamPicker.swift in Sources */,
 				300000000000000000000025 /* WebVTTParser.swift in Sources */,
+				300000000000000000000031 /* VaultImage.swift in Sources */,
 				300000000000000000000026 /* SeriesFlow.swift in Sources */,
 				300000000000000000000027 /* TrailerPlayerView.swift in Sources */,
 				300000000000000000000028 /* AdaptiveGrid.swift in Sources */,
