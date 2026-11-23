@@ -264,6 +264,7 @@ function _pageSimilar(delta) {
 
 async function _setupMovieModal(movie) {
     _tvModalToken++;   // a series still loading in the background no longer fills the modal
+    _resetEpisodeFind();
     const movieActions = el('movie-actions-container');
     if (!movieActions) return;
     movieActions.style.display = 'flex';
@@ -352,6 +353,7 @@ async function _setupTVModal(movie) {
     }
 
     const token = ++_tvModalToken;
+    _resetEpisodeFind();      // before any early return: the previous series' results must not stay clickable
     // skip intro / credits seconds for every episode of this series (js/player/series-controls.js)
     const skipIntro = el('tv-skip-intro'), skipOutro = el('tv-skip-outro');
     if (skipIntro && skipOutro && window.seriesSkipFor) {
@@ -450,13 +452,28 @@ async function _setupTVModal(movie) {
 // opens that season and marks the episode. Hidden when the IPC is missing (iOS has no channel yet).
 let _episodeFindToken = 0;
 
+/** Empty, hidden and unwired until a series with seasons wires it again; a search still running is dropped. */
+function _resetEpisodeFind() {
+    _episodeFindToken++;
+    const input = el('tv-episode-find');
+    const box = el('tv-episode-find-results');
+    if (input) {
+        input.value = '';
+        input.hidden = true;
+        input.onkeydown = null;
+    }
+    if (box) {
+        box.hidden = true;
+        box.innerHTML = '';
+        box.onkeydown = null;
+    }
+}
+
 function _wireEpisodeFind(movie, tvData, seasons, modalToken) {
     const input = el('tv-episode-find');
     const box = el('tv-episode-find-results');
     if (!input || !box) return;
-    input.value = '';
-    box.hidden = true;
-    box.innerHTML = '';
+    _resetEpisodeFind();
     const api = window.electronAPI;
     input.hidden = !(api && api.raggaeEpisodes);
     if (input.hidden) return;
@@ -472,11 +489,22 @@ function _wireEpisodeFind(movie, tvData, seasons, modalToken) {
         box.hidden = false;
     };
 
+    // Escape clears the search (field) or closes the list (a result row) without closing the modal; with nothing to
+    // clear it reaches the modal's own Escape
+    box.onkeydown = (e) => {
+        if (e.key !== 'Escape' || box.hidden) return;
+        e.stopPropagation();
+        box.hidden = true;
+        input.focus();
+    };
+
     input.onkeydown = async (e) => {
         if (e.key === 'Escape') {
-            e.stopPropagation();          // closes the list, not the modal
+            if (!input.value && box.hidden) return;
+            e.stopPropagation();
             input.value = '';
             box.hidden = true;
+            _episodeFindToken++;          // a search still running does not reopen the list
             return;
         }
         if (e.key !== 'Enter') return;

@@ -41,6 +41,12 @@ const raggae = require('../src/raggae');
     assert.strictEqual(res.hits[0].airDate, '2009-05-03');
     assert.strictEqual(res.hits[1].still, null);
 
+    // web / iOS clients get the still through web/server.js's /api/img (the gateway's kept copy), never from TMDB
+    const { toWebLinks } = require('../src/image-links');
+    const web = JSON.parse(toWebLinks(JSON.stringify(res)));
+    assert.strictEqual(web.hits[0].still,
+        `/api/img?u=${encodeURIComponent('https://image.tmdb.org/t/p/w300/abc.jpg')}`);
+
     // the card's own catalog id goes straight to the route; an IMDb id is the last guess
     calls.length = 0;
     await raggae.episodesByScene({ catalogId: 'imdb:tt0903747', tmdbId: '1396', query: 'boat' });
