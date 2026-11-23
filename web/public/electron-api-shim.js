@@ -450,6 +450,7 @@
     probeAudioTracks: inv('probe-audio-tracks'),
     detectAudioLanguage: inv('detect-audio-language'),
     indexPlayback: inv('moments:index-playback'),
+    jumpSearch: inv('moments:jump-search'),
 
     getDebridStats: inv('debrid-stats-get'),
     getDebridStatsReport: inv('debrid-stats-report'),

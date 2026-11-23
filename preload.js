@@ -135,6 +135,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectAudioLanguage: (data) => ipcRenderer.invoke('detect-audio-language', data),
   // what plays becomes searchable: queued with vault-raggae after two minutes (src/ipc/moments.ipc.js)
   indexPlayback: (data) => ipcRenderer.invoke('moments:index-playback', data),
+  jumpSearch: (data) => ipcRenderer.invoke('moments:jump-search', data),
 
   // Per-debrid-service counters. `getDebridStatsReport()` returns a printable
   // table — run it in the console to decide which service is worth keeping.

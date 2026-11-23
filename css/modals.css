@@ -1386,6 +1386,96 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
 }
 
+/* Jump to a line or a scene (js/player/jump-to.js): a compact box above its button, like the quality menu */
+#jump-dropdown-container {
+  position: relative;
+}
+
+#jump-menu {
+  display: none;
+  position: absolute;
+  bottom: 38px;
+  right: 0;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  padding: 8px;
+  background: var(--vt-surface);
+  border: 1px solid var(--vault-border);
+  border-radius: 4px;
+  z-index: 210;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+#jump-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--vault-border);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--vault-text, #e8e8ee);
+  font: 12px var(--font-body);
+  outline: none;
+}
+
+#jump-input:focus {
+  border-color: var(--vault-accent, #B07CFF);
+}
+
+#jump-results:not(:empty) {
+  margin-top: 6px;
+}
+
+.jump-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--vault-text, #e8e8ee);
+  font: 12px var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.jump-row:hover,
+.jump-row:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+}
+
+.jump-time {
+  flex: 0 0 auto;
+  min-width: 44px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--vault-accent, #B07CFF);
+}
+
+.jump-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jump-text.scene {
+  color: var(--vault-slate);
+  font-style: italic;
+}
+
+.jump-note {
+  padding: 4px 2px;
+  font: 11px var(--font-body);
+  color: var(--vault-slate);
+}
+
+.jump-note.warn {
+  color: var(--vault-gold, #F5B929);
+}
+
 /* Subtitle dropdown */
 .subtitle-dropdown-container {
   position: relative;
