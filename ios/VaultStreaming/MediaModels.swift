@@ -907,7 +907,8 @@ public struct WatchProgressRecord: Identifiable, Codable {
 
         let rawPoster = (try? c.decodeIfPresent(String.self, forKey: .poster))
             ?? (try? c.decodeIfPresent(String.self, forKey: .posterUrl))
-        if let rawPoster, rawPoster.hasPrefix("http") {
+        // absolute links, or the server's own picture routes (`/api/img`, `/api/artwork`: VaultImage resolves them)
+        if let rawPoster, rawPoster.hasPrefix("http") || rawPoster.hasPrefix("/api/") {
             self.posterUrl = rawPoster
         } else {
             self.posterUrl = nil

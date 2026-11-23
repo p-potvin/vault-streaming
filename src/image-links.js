@@ -13,7 +13,10 @@ const { RAGGAE_URL } = require('./raggae');
 
 const TMDB_PICTURE = /^https:\/\/image\.tmdb\.org\/t\/p\//;
 const TMDB_PICTURE_IN_TEXT = /https:\/\/image\.tmdb\.org\/t\/p\/[A-Za-z0-9_/.-]+/g;
-const WEB_IMG_IN_TEXT = /\/api\/img\?u=([A-Za-z0-9%._~-]+)/g;
+// a client may send a link back absolute (the page's origin in front, e.g. an <img>.src): the origin goes too
+const WEB_ORIGIN = String.raw`(?:https?://(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d+)?)?`;
+const WEB_IMG_IN_TEXT = new RegExp(String.raw`${WEB_ORIGIN}/api/img\?u=([A-Za-z0-9%._~-]+)`, 'g');
+const WEB_ARTWORK_IN_TEXT = new RegExp(String.raw`${WEB_ORIGIN}/api/artwork/`, 'g');
 const ARTWORK = `${RAGGAE_URL}/v1/artwork/`;
 
 /** The gateway URL serving a TMDB picture from its kept copy (other URLs unchanged). */
@@ -34,7 +37,7 @@ function fromWebLinks(json) {
         let url;
         try { url = decodeURIComponent(enc); } catch (_) { return whole; }
         return TMDB_PICTURE.test(url) && !/["\\\s]/.test(url) ? url : whole;
-    }).split('/api/artwork/').join(ARTWORK);
+    }).replace(WEB_ARTWORK_IN_TEXT, ARTWORK);
 }
 
 module.exports = { gatewayImage, toWebLinks, fromWebLinks, TMDB_PICTURE };
