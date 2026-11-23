@@ -199,8 +199,42 @@ app.use('/trailers', (req, res, next) => (/^\/[A-Za-z0-9_-]{6,20}\.mp4$/.test(re
     express.static(require('../src/trailers').cacheDir(), { index: false, dotfiles: 'deny', fallthrough: false, maxAge: '30d' }));
 
 // ── IPC over HTTP ───────────────────────────────────────────────────────────
+// ── pictures from the gateway's local copies (src/image-links.js): clients never reach the gateway themselves ──
+const imageLinks = require('../src/image-links');
+const { RAGGAE_URL } = require('../src/raggae');
+
+async function proxyGatewayImage(gatewayPath, res) {
+    try {
+        const r = await fetch(`${RAGGAE_URL}${gatewayPath}`, {
+            headers: { 'X-VW-Project': 'vault-streaming' }, signal: AbortSignal.timeout(30000),
+        });
+        res.status(r.status);
+        for (const h of ['content-type', 'cache-control', 'x-content-type-options', 'content-security-policy']) {
+            const v = r.headers.get(h);
+            if (v) res.setHeader(h, v);
+        }
+        res.send(Buffer.from(await r.arrayBuffer()));
+    } catch (_) {
+        res.status(502).end();
+    }
+}
+
+app.get('/api/img', (req, res) => {
+    const u = String(req.query.u || '');
+    if (!imageLinks.TMDB_PICTURE.test(u)) return res.status(400).end('Only catalog pictures');
+    const w = parseInt(req.query.w, 10);
+    proxyGatewayImage(`/v1/img?u=${encodeURIComponent(u)}${w > 0 && w <= 2000 ? `&w=${w}` : ''}`, res);
+});
+
+app.get(/^\/api\/artwork\/([A-Za-z0-9:._-]{1,120})$/, (req, res) => proxyGatewayImage(`/v1/artwork/${req.params[0]}`, res));
+
 app.post('/api/invoke', async (req, res) => {
-    const { channel, args } = req.body || {};
+    const { channel } = req.body || {};
+    // picture links come back from clients as this server's routes: stored data keeps the canonical URLs
+    let args = (req.body || {}).args;
+    if (Array.isArray(args)) {
+        try { args = JSON.parse(imageLinks.fromWebLinks(JSON.stringify(args))); } catch (_) { /* sent as is */ }
+    }
     if (typeof channel !== 'string') {
         return res.status(400).json({ ok: false, error: 'Missing channel' });
     }
@@ -213,7 +247,7 @@ app.post('/api/invoke', async (req, res) => {
         payload.result = limitSearchResult(payload.result);
     }
 
-    res.type('application/json').send(encode(payload));
+    res.type('application/json').send(imageLinks.toWebLinks(encode(payload)));
 });
 
 app.get('/api/channels', (_req, res) => res.json(bridge.channels()));

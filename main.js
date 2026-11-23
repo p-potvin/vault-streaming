@@ -245,6 +245,21 @@ function createWindow() {
     // Reveal once the renderer has painted; the splash enforces a min display time.
     mainWindow.once('ready-to-show', finishSplash);
 
+    // Pictures from the local copies first (src/image-links.js): every image.tmdb.org request goes to the gateway's
+    // kept copy instead. While the gateway is down (the client's circuit breaker), TMDB still answers.
+    // A screen that only shows pictures (History reads local records) makes no gateway call that would notice it is
+    // down, so the redirect itself probes it, at most every 15 s; a failed probe opens the client's breaker.
+    let gatewayProbedAt = 0;
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['https://image.tmdb.org/t/p/*'] }, (details, callback) => {
+        const raggae = require('./src/raggae');
+        if (Date.now() - gatewayProbedAt > 15000) {
+            gatewayProbedAt = Date.now();
+            raggae.health().catch(() => {});
+        }
+        if (raggae.isOffline()) return callback({});
+        callback({ redirectURL: require('./src/image-links').gatewayImage(details.url) });
+    });
+
     // YouTube Referer & Origin overrides to fix Error 152/153/4 (domain embedding restrictions)
     // Apply to ALL sessions to cover iframe requests
     const youtubeUrls = ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.googlevideo.com/*'];

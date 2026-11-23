@@ -105,7 +105,7 @@ public struct TrailerPlayerView: View {
         ZStack {
             if let key = trailerKey, playbackFailed,
                let thumbURL = URL(string: "https://img.youtube.com/vi/\(key)/hqdefault.jpg") {
-                AsyncImage(url: thumbURL) { phase in
+                VaultImage(url: thumbURL) { phase in
                     if let img = phase.image {
                         img.resizable().scaledToFill().opacity(0.45)
                     } else {
@@ -144,7 +144,7 @@ public struct TrailerPlayerView: View {
     @ViewBuilder
     private var backdropImage: some View {
         if let url = fallbackImageURL {
-            AsyncImage(url: url) { phase in
+            VaultImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
                     image
