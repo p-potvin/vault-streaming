@@ -366,6 +366,8 @@
 
     transcodeStreamStart: inv('transcode-stream-start'),
     transcodeStreamStop: inv('transcode-stream-stop'),
+    transcodeStreamPause: inv('transcode-stream-pause'),
+    transcodeStreamResume: inv('transcode-stream-resume'),
     onTranscodeChunk: (cb) => on('transcode-chunk', cb),
     offTranscodeChunk: () => off('transcode-chunk'),
     onTranscodeStatus: (cb) => on('transcode-status', cb),

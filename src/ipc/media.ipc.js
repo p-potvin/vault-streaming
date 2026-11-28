@@ -9,7 +9,8 @@ const { cleanupTemp, promoteTempFile } = utils;
 
 function getFullProbeMetadata(filePath) {
     return new Promise((resolve) => {
-        child_process.execFile('ffprobe', ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', filePath], (err, stdout) => {
+        const ffprobeCmd = utils.getFFprobePath ? utils.getFFprobePath() : 'ffprobe';
+        child_process.execFile(ffprobeCmd, ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', filePath], (err, stdout) => {
             if (err) {
                 console.error('[media.ipc:ffprobe] Failed to probe:', err);
                 resolve(null);

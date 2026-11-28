@@ -813,8 +813,8 @@ function initPlayer() {
         //     reset vp.src to '' on close. These aren't user-actionable.
         const modalHidden = el('video-modal').style.display !== 'flex';
         const srcEmpty = !vp.src || vp.src === window.location.href;
-        if (modalHidden || srcEmpty) {
-            console.log('[Video Player] Ignoring error during close/reset:', err && err.code);
+        if (modalHidden || srcEmpty || window._isSwitchingSource) {
+            console.log('[Video Player] Ignoring error during close/reset/switch:', err && err.code);
             return;
         }
         let errMsg = 'Unknown playback error.';
@@ -1345,10 +1345,34 @@ function initPlayer() {
 
     seekArea.addEventListener('click', (e) => {
         const rect = seekArea.getBoundingClientRect();
+        if (!rect.width) return;
+
+        // In web transcode streams, duration is piped/infinite; seek by restarting transcode at offset
+        const isWeb = !!(window.__VW_WEB__ || document.documentElement.classList.contains('vw-web-client'));
+        if (window._transcodePlay && isWeb) {
+            const knownDur = (window.activeStreamingMedia && window.activeStreamingMedia.durationSec)
+                || (window._audioTracks && window._audioTracks.durationSeconds)
+                || 0;
+            if (knownDur > 0) {
+                const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                const target = ratio * knownDur;
+                const url = window.activeStreamingMedia && window.activeStreamingMedia.streamUrl;
+                if (url && Number.isFinite(target)) {
+                    window.startTranscodePlayback(
+                        url,
+                        window.qualityToHeight ? (window.qualityToHeight(window._activeStreamLabel) || 1080) : 1080,
+                        target,
+                        { audioIndex: window._activeAudioIndex }
+                    );
+                }
+                return;
+            }
+        }
+
         // duration is NaN until metadata loads, and stays NaN when the source
         // failed — clicking the bar then threw "The provided double value is
         // non-finite" and left the player wedged on the previous title's frame.
-        if (!rect.width || !Number.isFinite(vp.duration) || vp.duration <= 0) return;
+        if (!Number.isFinite(vp.duration) || vp.duration <= 0) return;
         const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
         const target = ratio * vp.duration;
         if (Number.isFinite(target)) vp.currentTime = target;
@@ -1633,35 +1657,6 @@ async function playStream(url, title) {
         return;
     }
 
-    vp.src = url;
-
-    // Arm the overlay teardown HERE, immediately after the source is assigned.
-    // Attaching it at the end of this function raced against the media element:
-    // playStream still has async work to do (subtitle lookup, audio probe), so
-    // loadeddata — or an early error — had usually already fired by then and
-    // only the 15s timeout cleared the spinner, leaving it over playing video.
-    const clearOverlay = () => {
-        endPlayerHandoff();
-        vp.removeEventListener('loadeddata', clearOverlay);
-        vp.removeEventListener('playing', clearOverlay);
-        vp.removeEventListener('error', clearOverlay);
-        clearTimeout(window._handoffTimeout);
-    };
-    clearTimeout(window._handoffTimeout);
-    window._handoffTimeout = setTimeout(clearOverlay, 15000);
-    if (vp.readyState >= 2 || vp.error) {
-        clearOverlay();
-    } else {
-        vp.addEventListener('loadeddata', clearOverlay);
-        vp.addEventListener('playing', clearOverlay);
-        vp.addEventListener('error', clearOverlay);
-    }
-    vp.muted = false;
-    if (lastScrubSrc !== url) {
-        scrubVideo.src = url;
-        lastScrubSrc = url;
-    }
-
     const titleEl = el('player-title');
     if (titleEl) titleEl.innerHTML = `${window.icons.lightning('', 'width:13px;height:13px;vertical-align:middle;')} RD Stream: ${window.escapeHtml(String(title || ''))}`;
     const tbTitle = el('titlebar-video-title');
@@ -1744,6 +1739,9 @@ async function playStream(url, title) {
     }
 
     {
+        const isWeb = !!(window.__VW_WEB__ || document.documentElement.classList.contains('vw-web-client'));
+        const isNative = isWeb && typeof window.isBrowserNative === 'function' ? window.isBrowserNative(url) : true;
+
         const srcQ = window.activeStreamingMedia && window.activeStreamingMedia.quality;
         const tHeight = window.decideTranscodeHeight ? window.decideTranscodeHeight(srcQ) : null;
         window._qualityOverride = null; // one-shot; consumed after the decision
@@ -1765,7 +1763,9 @@ async function playStream(url, title) {
                 audioProbe.remuxReason, '-> a:' + audioIdx);
         }
 
-        if (tHeight || needAudioFix) {
+        const shouldTranscode = tHeight || needAudioFix || (isWeb && !isNative);
+
+        if (shouldTranscode) {
             const resumeAt = (typeof window._resumePosAfterSwitch === 'number' && window._resumePosAfterSwitch > 0)
                 ? window._resumePosAfterSwitch
                 : (prog && !prog.completed && prog.positionSec > 0 ? prog.positionSec : 0);
@@ -1779,6 +1779,31 @@ async function playStream(url, title) {
         } else {
             window._transcodePlay = false;
             if (window.stopTranscode) window.stopTranscode(); // tear down any prior session
+            vp.src = url;
+        }
+
+        vp.muted = false;
+        if (!isWeb && !window._transcodePlay && lastScrubSrc !== url) {
+            scrubVideo.src = url;
+            lastScrubSrc = url;
+        }
+
+        // Arm the overlay teardown immediately after the single definitive source assignment.
+        const clearOverlay = () => {
+            endPlayerHandoff();
+            vp.removeEventListener('loadeddata', clearOverlay);
+            vp.removeEventListener('playing', clearOverlay);
+            vp.removeEventListener('error', clearOverlay);
+            clearTimeout(window._handoffTimeout);
+        };
+        clearTimeout(window._handoffTimeout);
+        window._handoffTimeout = setTimeout(clearOverlay, 15000);
+        if (vp.readyState >= 2 || vp.error) {
+            clearOverlay();
+        } else {
+            vp.addEventListener('loadeddata', clearOverlay);
+            vp.addEventListener('playing', clearOverlay);
+            vp.addEventListener('error', clearOverlay);
         }
     }
 

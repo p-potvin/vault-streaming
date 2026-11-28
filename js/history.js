@@ -13,7 +13,9 @@ window.renderWatchHistoryTab = async function() {
     try {
         const res = await window.electronAPI.getWatchHistory();
         if (!res || !res.success || !res.items || res.items.length === 0) {
-            const histIcon = window.icons ? window.icons.history('', 'width: 48px; height: 48px; margin-bottom: 12px; display: inline-block; stroke: var(--vault-gold);') : '';
+            const histIcon = (window.icons && typeof window.icons.history === 'function')
+                ? window.icons.history('', 'width: 48px; height: 48px; margin-bottom: 12px; display: inline-block; stroke: var(--vault-gold);')
+                : `<svg viewBox="0 0 24 24" fill="none" stroke="var(--vault-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 48px; height: 48px; margin-bottom: 12px; display: inline-block;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 15"/></svg>`;
             grid.innerHTML = `
                 <div class="empty-state">
                    ${histIcon}

@@ -1,20 +1,45 @@
 # VaultStreaming iOS App & Unsigned Build Pipeline
 
-Native iOS container app for Vault Streaming, packaged with SwiftUI and WebKit, providing persistent streaming storage, video playback optimizations (inline playback, PiP, AirPlay, full landscape rotation), native Face ID biometric locking, pull-to-refresh, Tailnet connectivity diagnostics, and an automated unsigned build pipeline.
+100% native SwiftUI application for Vault Streaming, crafted in accordance with Apple Human Interface Guidelines (HIG). Features a 5-tab native navigation hierarchy, native TMDB catalog discovery, seamless Comet stream resolution, native Face ID biometric locking, full-screen AVPlayer video playback with PiP/AirPlay, and an automated GitHub Actions CI pipeline producing unsigned `.ipa` packages for direct sideloading.
 
 ---
 
 ## Architecture Overview
 
-- **Engine**: Pure native Swift / SwiftUI hosting a high-performance `WKWebView` with `WKWebsiteDataStore.default()` (preventing iOS Safari 7-day storage eviction for watch history and favorites).
-- **Streaming Optimizations**: Inline media playback enabled without requiring user tap initiation, Picture-in-Picture (PiP), AirPlay route pickers, and complete portrait + landscape rotation support for full-screen movie viewing.
-- **Tailnet-First**: Preconfigured by default for `http://100.67.25.118:5173` (Comet instance running on OVH VPS). Media streams and indexer queries resolve directly against Comet. When transcoding is required for formats incompatible with iOS WebKit, jobs are dispatched through the VaultWares API gateway on OVH (`https://api.vaultwares.ca`) to the operator's desktop workstation (`100.71.101.21`).
+VaultStreaming iOS has transitioned from a WebKit/WKWebView hybrid container to a **100% native Swift & SwiftUI architecture**:
+
+- **Native UI & Navigation (Apple HIG)**:
+  - **Discover (`DiscoverView.swift`)**: Trending movies and TV shows powered by TMDB, featured hero banner with high-resolution backdrops, horizontal media carousels, genre filter chips, and one-tap quick playback.
+  - **Search (`SearchView.swift`)**: Live instant search querying TMDB with automatic debouncing, filter chips (Movies, TV Shows, All), and responsive media grid.
+  - **Library (`LibraryView.swift`)**: Persistent local watchlist stored on-device (`UserDefaults`), poster card grid, and quick toggle/remove actions.
+  - **History (`HistoryView.swift`)**: Watch progress tracking with visual percentage bars, playback timestamp retention, and one-tap resume.
+  - **Settings (`SettingsView.swift`)**: Tailnet server endpoint configuration, Comet resolution endpoints, Biometric Face ID / Touch ID toggle, cache management, and application build metadata.
+
+- **Details & Presentation (`MovieDetailsSheet.swift`)**:
+  - Native bottom sheet presentation (`.sheet(item: $selectedMedia)`) replacing legacy web hover cards and modal overlays.
+  - Prevents double-popup collisions on touch devices.
+  - Displays backdrop, synopses, cast/crew, release dates, runtime, genres, and live Real-Debrid / Comet cached torrent streams tagged by quality (4K, 1080p, HDR), file size, and seeders.
+
+- **Native Video Playback (`NativePlayerView.swift`)**:
+  - Full-screen `AVPlayer` presentation (`.fullScreenCover(item: $activeStream)`), bypassing WebKit video restrictions.
+  - Native playback controls, edge-to-edge rendering (`.ignoresSafeArea()`), automatic portrait and landscape auto-rotation.
+  - Native Picture-in-Picture (PiP) and AirPlay route pickers.
+  - Continuous playback progress tracking automatically synchronizing back to `HistoryView` upon dismissal.
+
+- **Biometric Security (`LAContext`)**:
+  - Native Face ID / Touch ID biometric authentication via Apple's `LocalAuthentication` framework.
+  - Full-screen biometric lock overlay requiring authentication on application launch and foreground resume when enabled in Settings.
+
+- **Tailnet-First Streaming**:
+  - Configured by default for Tailscale node `http://100.67.25.118:5173` (Comet instance running on OVH VPS).
+  - Media streams and indexer queries resolve directly against Comet using Cinemeta/Kitsu identifiers with provider tag `comet`.
+  - When transcoding is required for legacy containers incompatible with iOS `AVPlayer`, jobs route through the VaultWares API gateway on OVH (`https://api.vaultwares.ca`) to the local desktop GPU node (`100.71.101.21`).
 
 ---
 
-## Automated CI Pipeline (GitHub Actions)
+## Non-Automated CI Pipeline (GitHub Actions)
 
-Every push to `main` or `vw-codex-*` branches triggers `.github/workflows/ios-unsigned-build.yml`:
+Manually trigger `.github/workflows/ios-unsigned-build.yml`:
 
 1. Boots a clean `macos-14` (Apple Silicon M1) runner with Xcode 15/16.
 2. Compiles `ios/VaultStreaming.xcodeproj` with `CODE_SIGNING_ALLOWED=NO`.

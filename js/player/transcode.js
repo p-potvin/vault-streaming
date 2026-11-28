@@ -36,12 +36,135 @@
 
     // ── MediaSource plumbing ────────────────────────────────────────────────
     let ms = null, sb = null, queue = [], appending = false, active = false;
+    let currentUrl = null;
+    let isEvicting = false;
+    let isTranscodePaused = false;
+    let vpTimeUpdateHandler = null;
+    let vpWaitingHandler = null;
+
+    function toCleanArrayBuffer(buf) {
+        if (!buf) return null;
+        if (buf instanceof ArrayBuffer) return buf;
+        if (ArrayBuffer.isView(buf)) {
+            // Buffer, Uint8Array, etc.
+            // Slice out strictly the valid bytes so no underlying pool memory is included.
+            return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+        }
+        if (buf && buf.buffer && typeof buf.byteOffset === 'number' && typeof buf.byteLength === 'number') {
+            return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+        }
+        if (buf && buf.data && Array.isArray(buf.data)) {
+            return new Uint8Array(buf.data).buffer;
+        }
+        return new Uint8Array(buf).buffer;
+    }
+
+    async function pauseTranscode() {
+        if (!active || isTranscodePaused) return;
+        isTranscodePaused = true;
+        try {
+            if (window.electronAPI && window.electronAPI.transcodeStreamPause) {
+                await window.electronAPI.transcodeStreamPause();
+            }
+        } catch (_) {}
+    }
+
+    async function resumeTranscode() {
+        if (!active || !isTranscodePaused) return;
+        isTranscodePaused = false;
+        try {
+            if (window.electronAPI && window.electronAPI.transcodeStreamResume) {
+                await window.electronAPI.transcodeStreamResume();
+            }
+        } catch (_) {}
+    }
+
+    function getForwardBufferSeconds() {
+        const vp = el('video-player');
+        if (!sb || !vp || !sb.buffered || sb.buffered.length === 0) return 0;
+        const cur = vp.currentTime;
+        let maxForward = 0;
+        for (let i = 0; i < sb.buffered.length; i++) {
+            const start = sb.buffered.start(i);
+            const end = sb.buffered.end(i);
+            if (start <= cur + 2 && cur <= end) {
+                const forward = end - cur;
+                if (forward > maxForward) maxForward = forward;
+            }
+        }
+        if (maxForward === 0 && sb.buffered.length > 0 && cur <= sb.buffered.start(0) + 1) {
+            maxForward = sb.buffered.end(0) - cur;
+        }
+        return maxForward;
+    }
+
+    function checkWatermarks() {
+        if (!active) return;
+        const fwd = getForwardBufferSeconds();
+        // Pause ffmpeg encoding when forward buffer is large (>35s) or queue has many pending chunks (>30)
+        if (fwd > 35 || queue.length > 30) {
+            pauseTranscode();
+        } else if (fwd < 18 && queue.length < 15) {
+            resumeTranscode();
+        }
+    }
+
+    function pruneOldBuffer() {
+        const vp = el('video-player');
+        if (!sb || isEvicting || sb.updating || !vp) return;
+        try {
+            const cur = vp.currentTime;
+            if (sb.buffered && sb.buffered.length > 0) {
+                const bufStart = sb.buffered.start(0);
+                // Keep 20 seconds behind playhead for smooth rewind/scrub
+                const removeEnd = cur - 20;
+                // Only prune if at least 15 seconds of expired buffer can be freed
+                if (removeEnd > bufStart + 15) {
+                    isEvicting = true;
+                    sb.remove(bufStart, removeEnd);
+                }
+            }
+        } catch (e) {
+            isEvicting = false;
+            console.warn('[transcode] pruneOldBuffer warning:', e.message);
+        }
+    }
 
     function flush() {
-        if (!sb || appending || sb.updating || queue.length === 0) return;
+        if (!sb || appending || isEvicting || sb.updating || queue.length === 0) return;
+        const chunk = queue[0];
         appending = true;
-        try { sb.appendBuffer(queue.shift()); }
-        catch (e) { appending = false; /* QuotaExceeded etc. — drop and continue */ }
+        try {
+            sb.appendBuffer(chunk);
+            // CRITICAL: only shift chunk from queue once appendBuffer accepts it without throwing!
+            queue.shift();
+            checkWatermarks();
+        } catch (e) {
+            appending = false;
+            if (e.name === 'QuotaExceededError') {
+                console.warn('[transcode] QuotaExceededError in appendBuffer, evicting old buffer...');
+                pauseTranscode();
+                const vp = el('video-player');
+                const cur = vp ? vp.currentTime : 0;
+                if (!sb.updating && sb.buffered && sb.buffered.length > 0) {
+                    const bStart = sb.buffered.start(0);
+                    const rEnd = cur - 5;
+                    if (rEnd > bStart + 2) {
+                        try {
+                            isEvicting = true;
+                            sb.remove(bStart, rEnd);
+                            return; // updateend will call flush()
+                        } catch (evictErr) {
+                            isEvicting = false;
+                        }
+                    }
+                }
+                setTimeout(() => { if (active) flush(); }, 400);
+                return;
+            }
+            console.error('[transcode] SourceBuffer append fatal error:', e);
+            fallbackDirect(currentUrl, 'SourceBuffer append failed: ' + e.message);
+        }
     }
 
     function teardownListeners() {
@@ -54,9 +177,29 @@
     window.stopTranscode = async function () {
         active = false;
         teardownListeners();
-        queue = []; appending = false;
+        const vp = el('video-player');
+        if (vpTimeUpdateHandler && vp) {
+            vp.removeEventListener('timeupdate', vpTimeUpdateHandler);
+            vpTimeUpdateHandler = null;
+        }
+        if (vpWaitingHandler && vp) {
+            vp.removeEventListener('waiting', vpWaitingHandler);
+            vpWaitingHandler = null;
+        }
+        queue = [];
+        appending = false;
+        isEvicting = false;
+        isTranscodePaused = false;
+        currentUrl = null;
         try { await window.electronAPI.transcodeStreamStop(); } catch (_) {}
-        try { if (sb && ms && ms.readyState === 'open') ms.removeSourceBuffer(sb); } catch (_) {}
+        try {
+            if (sb && ms && ms.readyState === 'open') {
+                if (sb.updating) {
+                    try { sb.abort(); } catch (_) {}
+                }
+                ms.removeSourceBuffer(sb);
+            }
+        } catch (_) {}
         sb = null; ms = null;
         hideBadge();
     };
@@ -66,7 +209,7 @@
         console.warn('[transcode] falling back to direct playback:', reason);
         window.stopTranscode();
         const vp = el('video-player');
-        if (vp) { vp.src = url; vp.play().catch(() => {}); }
+        if (vp && url) { vp.src = url; vp.play().catch(() => {}); }
         if (window.showToast) window.showToast(tr('toastTranscodeUnavailable', 'Transcoding unavailable — playing original'), 'warning');
     }
 
@@ -97,17 +240,45 @@
             return false;
         }
 
+        currentUrl = url;
         active = true;
+        isEvicting = false;
+        isTranscodePaused = false;
+        queue = [];
+        appending = false;
         ms = new MediaSource();
         vp.src = URL.createObjectURL(ms);
+
+        const onTimeUpdate = () => {
+            if (!active) return;
+            checkWatermarks();
+            pruneOldBuffer();
+        };
+        const onWaiting = () => {
+            if (!active) return;
+            resumeTranscode();
+        };
+        vp.addEventListener('timeupdate', onTimeUpdate);
+        vp.addEventListener('waiting', onWaiting);
+        vpTimeUpdateHandler = onTimeUpdate;
+        vpWaitingHandler = onWaiting;
 
         ms.addEventListener('sourceopen', () => {
             if (!active) return;
             try {
                 sb = ms.addSourceBuffer(res.codec);
                 sb.mode = 'sequence';
-                sb.addEventListener('updateend', () => { appending = false; flush(); });
-                sb.addEventListener('error', (e) => console.error('[transcode] SourceBuffer error', e));
+                sb.addEventListener('updateend', () => {
+                    appending = false;
+                    isEvicting = false;
+                    checkWatermarks();
+                    pruneOldBuffer();
+                    flush();
+                });
+                sb.addEventListener('error', (e) => {
+                    console.error('[transcode] SourceBuffer error event', e);
+                    fallbackDirect(url, 'SourceBuffer error event fired');
+                });
                 flush();
             } catch (e) {
                 fallbackDirect(url, 'addSourceBuffer failed: ' + e.message);
@@ -117,10 +288,12 @@
         teardownListeners();
         window.electronAPI.onTranscodeChunk(({ buffer }) => {
             if (!active) return;
-            const ab = buffer instanceof ArrayBuffer ? buffer
-                : (buffer && buffer.buffer) ? buffer.buffer
-                : buffer;
-            if (ab) { queue.push(ab); flush(); }
+            const ab = toCleanArrayBuffer(buffer);
+            if (ab && ab.byteLength > 0) {
+                queue.push(ab);
+                checkWatermarks();
+                flush();
+            }
         });
         window.electronAPI.onTranscodeStatus(({ type, error }) => {
             if (!active) return;

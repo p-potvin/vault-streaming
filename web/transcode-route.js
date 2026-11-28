@@ -52,7 +52,7 @@ function registerTranscodeRoute(app) {
         }
 
         const encoder = pickH264Encoder();
-        const args = buildArgs({ url: src, startTime, targetHeight, encoder, audioIndex, copyVideo: false });
+        const args = buildArgs({ url: src, startTime, targetHeight, encoder, audioIndex, copyVideo: false, emptyMoov: false });
 
         // NOTE for whoever adds seeking: `-ss` restarts output timestamps at
         // zero, so with t>0 video.currentTime reports time-since-seek, not
@@ -76,8 +76,6 @@ function registerTranscodeRoute(app) {
 
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Cache-Control', 'no-store');
-        // The stream is generated live: length is unknown and ranges are unsupported.
-        res.setHeader('Accept-Ranges', 'none');
 
         proc.stdout.pipe(res);
 

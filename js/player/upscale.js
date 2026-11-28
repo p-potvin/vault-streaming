@@ -31,11 +31,24 @@ function setUpscaleActive(val) {
 function upscaleFlushQueue() {
     if (upscaleAppending || upscaleQueue.length === 0 || !upscaleSB) return;
     if (upscaleSB.updating) return;
+    const chunk = upscaleQueue[0];
     upscaleAppending = true;
     try {
-        upscaleSB.appendBuffer(upscaleQueue.shift());
+        upscaleSB.appendBuffer(chunk);
+        upscaleQueue.shift();
     } catch(e) {
         upscaleAppending = false;
+        if (e.name === 'QuotaExceededError') {
+            console.warn('[upscale] QuotaExceededError in appendBuffer');
+            const vp = el('video-player');
+            if (vp && !upscaleSB.updating && upscaleSB.buffered && upscaleSB.buffered.length > 0) {
+                const bStart = upscaleSB.buffered.start(0);
+                const rEnd = vp.currentTime - 10;
+                if (rEnd > bStart + 5) {
+                    try { upscaleSB.remove(bStart, rEnd); } catch(_) {}
+                }
+            }
+        }
     }
 }
 
@@ -116,7 +129,10 @@ async function startUpscaleMode() {
     window.electronAPI.onUpscaleChunk(({ chunk, buffer }) => {
         upscaleChunkCount++;
         upscaleSetStatus(`RTX VSR  ·  buf ${upscaleChunkCount} chunk(s)`, '#0d3349');
-        const ab = buffer instanceof ArrayBuffer ? buffer : buffer.buffer || Buffer.from(buffer).buffer;
+        const ab = buffer instanceof ArrayBuffer ? buffer
+            : (ArrayBuffer.isView(buffer) ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+            : (buffer && buffer.buffer ? buffer.buffer.slice(buffer.byteOffset || 0, (buffer.byteOffset || 0) + (buffer.byteLength || buffer.buffer.byteLength))
+            : new Uint8Array(buffer).buffer));
         upscaleQueue.push(ab);
         upscaleFlushQueue();
     });

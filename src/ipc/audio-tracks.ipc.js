@@ -63,7 +63,7 @@ function normLang(tag) {
 }
 
 function ffprobePath() {
-    return utils.getFFmpegPath().replace('ffmpeg.exe', 'ffprobe.exe').replace(/ffmpeg$/, 'ffprobe');
+    return utils.getFFprobePath ? utils.getFFprobePath() : utils.getFFmpegPath().replace('ffmpeg.exe', 'ffprobe.exe').replace(/ffmpeg$/, 'ffprobe');
 }
 
 // Strip the Comet base64 config segment (it embeds the debrid API keys).

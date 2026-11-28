@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Real-time down-transcode (Max Stream Quality ceiling → h264_nvenc/libx264)
   transcodeStreamStart: (opts) => ipcRenderer.invoke('transcode-stream-start', opts),
   transcodeStreamStop: () => ipcRenderer.invoke('transcode-stream-stop'),
+  transcodeStreamPause: () => ipcRenderer.invoke('transcode-stream-pause'),
+  transcodeStreamResume: () => ipcRenderer.invoke('transcode-stream-resume'),
   onTranscodeChunk: (cb) => ipcRenderer.on('transcode-chunk', (_, data) => cb(data)),
   offTranscodeChunk: () => ipcRenderer.removeAllListeners('transcode-chunk'),
   onTranscodeStatus: (cb) => ipcRenderer.on('transcode-status', (_, data) => cb(data)),

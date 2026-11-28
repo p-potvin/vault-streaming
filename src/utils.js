@@ -170,7 +170,7 @@ function runLowPriorityProcess(command, args) {
         if (command === 'ffmpeg') {
             execCmd = getFFmpegPath();
         } else if (command === 'ffprobe') {
-            execCmd = getFFmpegPath().replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe');
+            execCmd = getFFprobePath();
         }
 
         const child = spawn(execCmd, args, { windowsHide: true });
@@ -240,7 +240,7 @@ function runLowPriorityProcess(command, args) {
 
 function getVideoDuration(videoPath) {
     return new Promise((resolve) => {
-        const ffprobe = getFFmpegPath().replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe');
+        const ffprobe = getFFprobePath();
         execFile(ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', videoPath], (err, stdout) => {
             if (err) resolve(0);
             else {
@@ -253,7 +253,7 @@ function getVideoDuration(videoPath) {
 
 function checkAudioStream(videoPath) {
     return new Promise((resolve) => {
-        const ffprobe = getFFmpegPath().replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe');
+        const ffprobe = getFFprobePath();
         execFile(ffprobe, ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_name', '-of', 'default=noprint_wrappers=1:nokey=1', videoPath], (_err, stdout) => {
             resolve(!!stdout.trim());
         });
@@ -471,10 +471,19 @@ function getFFmpegPath() {
     const path = require('path');
     const os = require('os');
 
+    if (process.env.VW_FFMPEG_PATH && fs.existsSync(process.env.VW_FFMPEG_PATH)) {
+        return process.env.VW_FFMPEG_PATH;
+    }
+    if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
+        return process.env.FFMPEG_PATH;
+    }
+
     const homeDir = os.homedir();
     const searchPaths = [
         // WinGet shims (common on modern Windows installs)
+        'C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe',
         path.join(homeDir, 'AppData', 'Local', 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe'),
+        process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local', 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe') : null,
         // Standard install locations
         'C:\\ffmpeg\\bin\\ffmpeg.exe',
         'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
@@ -482,6 +491,7 @@ function getFFmpegPath() {
         path.join(process.env['ProgramW6432'] || 'C:\\Program Files', 'ffmpeg', 'bin', 'ffmpeg.exe'),
         path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'ffmpeg', 'bin', 'ffmpeg.exe'),
         // Scoop / Chocolatey common paths
+        'C:\\Users\\Administrator\\scoop\\shims\\ffmpeg.exe',
         path.join(homeDir, 'scoop', 'shims', 'ffmpeg.exe'),
         path.join('C:\\ProgramData', 'chocolatey', 'bin', 'ffmpeg.exe'),
         // Portable / local project paths
@@ -490,7 +500,7 @@ function getFFmpegPath() {
         path.join(__dirname, '..', 'ffmpeg.exe'),
         path.join(__dirname, '..', 'bin', 'ffmpeg.exe'),
         resolveToolsDir('ffmpeg.exe')
-    ];
+    ].filter(Boolean);
 
     for (const p of searchPaths) {
         if (fs.existsSync(p)) {
@@ -500,6 +510,55 @@ function getFFmpegPath() {
 
     // Fallback: rely on PATH resolution (execFile will find it)
     return 'ffmpeg';
+}
+
+function getFFprobePath() {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+
+    if (process.env.VW_FFPROBE_PATH && fs.existsSync(process.env.VW_FFPROBE_PATH)) {
+        return process.env.VW_FFPROBE_PATH;
+    }
+    if (process.env.FFPROBE_PATH && fs.existsSync(process.env.FFPROBE_PATH)) {
+        return process.env.FFPROBE_PATH;
+    }
+
+    const ffmpeg = getFFmpegPath();
+    if (ffmpeg && ffmpeg !== 'ffmpeg') {
+        const probeCandidate = ffmpeg.replace(/ffmpeg\.exe$/i, 'ffprobe.exe').replace(/ffmpeg$/i, 'ffprobe');
+        if (fs.existsSync(probeCandidate)) {
+            return probeCandidate;
+        }
+    }
+
+    const homeDir = os.homedir();
+    const searchPaths = [
+        'C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffprobe.exe',
+        path.join(homeDir, 'AppData', 'Local', 'Microsoft', 'WinGet', 'Links', 'ffprobe.exe'),
+        process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local', 'Microsoft', 'WinGet', 'Links', 'ffprobe.exe') : null,
+        'C:\\Users\\Administrator\\scoop\\shims\\ffprobe.exe',
+        path.join(homeDir, 'scoop', 'shims', 'ffprobe.exe'),
+        'C:\\ffmpeg\\bin\\ffprobe.exe',
+        'C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe',
+        'C:\\Program Files (x86)\\ffmpeg\\bin\\ffprobe.exe',
+        path.join(process.env['ProgramW6432'] || 'C:\\Program Files', 'ffmpeg', 'bin', 'ffprobe.exe'),
+        path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'ffmpeg', 'bin', 'ffprobe.exe'),
+        path.join('C:\\ProgramData', 'chocolatey', 'bin', 'ffprobe.exe'),
+        path.join(process.cwd(), 'ffprobe.exe'),
+        path.join(process.cwd(), 'bin', 'ffprobe.exe'),
+        path.join(__dirname, '..', 'ffprobe.exe'),
+        path.join(__dirname, '..', 'bin', 'ffprobe.exe'),
+        resolveToolsDir('ffprobe.exe')
+    ].filter(Boolean);
+
+    for (const p of searchPaths) {
+        if (fs.existsSync(p)) {
+            return p;
+        }
+    }
+
+    return 'ffprobe';
 }
 
 function cleanupTemp(tempPath) {
@@ -541,6 +600,7 @@ module.exports = {
     getRobustPythonExe,
     getPythonEnv,
     getFFmpegPath,
+    getFFprobePath,
     getSystemMemoryInfo,
     cleanupTemp,
     promoteTempFile,

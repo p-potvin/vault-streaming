@@ -38,7 +38,7 @@ function pickH264Encoder() {
     return _cachedEncoder;
 }
 
-function buildArgs({ url, startTime, targetHeight, encoder, audioIndex = null, copyVideo = false }) {
+function buildArgs({ url, startTime, targetHeight, encoder, audioIndex = null, copyVideo = false, emptyMoov = true }) {
     const nv = encoder === 'h264_nvenc';
     const args = [];
     // Fast input-seek (RD supports range requests). Placed before -i.
@@ -58,7 +58,7 @@ function buildArgs({ url, startTime, targetHeight, encoder, audioIndex = null, c
     // Explicit stream selection when switching audio track. Without -map, ffmpeg
     // picks the highest-channel audio, which is exactly the foreign-dub trap.
     if (audioIndex !== null && audioIndex !== undefined) {
-        args.push('-map', '0:v:0', '-map', `0:a:${audioIndex}`);
+        args.push('-map', '0:v:0?', '-map', `0:a:${audioIndex}?`);
     }
 
     if (copyVideo) {
@@ -78,11 +78,15 @@ function buildArgs({ url, startTime, targetHeight, encoder, audioIndex = null, c
         );
     }
 
+    const movflags = emptyMoov
+        ? 'frag_keyframe+empty_moov+default_base_moof'
+        : 'frag_keyframe+default_base_moof';
+
     args.push(
         // Re-encode audio to AAC-LC (source is often EAC3/DTS — not MSE-playable).
         '-c:a', 'aac', '-b:a', '160k', '-ac', '2',
-        // Fragmented MP4 so it can be fed to MediaSource as it is produced.
-        '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+        // Fragmented MP4 so it can be fed to MediaSource or native HTML5 video as it is produced.
+        '-movflags', movflags,
         '-f', 'mp4',
         'pipe:1'
     );
@@ -184,7 +188,31 @@ function registerTranscodeIpc(ipcMain) {
         return { success: true };
     });
 
-    console.log('[transcode] IPC handlers registered (transcode-stream-start/stop).');
+    ipcMain.handle('transcode-stream-pause', async () => {
+        if (transcodeProcess && transcodeProcess.stdout && !transcodeProcess.stdout.isPaused()) {
+            try {
+                transcodeProcess.stdout.pause();
+                console.log('[transcode] stdout paused for backpressure');
+            } catch (err) {
+                console.warn('[transcode] pause error:', err.message);
+            }
+        }
+        return { success: true };
+    });
+
+    ipcMain.handle('transcode-stream-resume', async () => {
+        if (transcodeProcess && transcodeProcess.stdout && transcodeProcess.stdout.isPaused()) {
+            try {
+                transcodeProcess.stdout.resume();
+                console.log('[transcode] stdout resumed from backpressure');
+            } catch (err) {
+                console.warn('[transcode] resume error:', err.message);
+            }
+        }
+        return { success: true };
+    });
+
+    console.log('[transcode] IPC handlers registered (transcode-stream-start/stop/pause/resume).');
 }
 
 // buildArgs/pickH264Encoder are also used by the web client (web/transcode-route.js),
