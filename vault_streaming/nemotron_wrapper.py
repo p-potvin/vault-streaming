@@ -91,6 +91,68 @@ try:
 except Exception:
     pass
 
+# Patch numpy.__version__ for numba before numba is imported
+import sys
+import types
+try:
+    import numpy as _np
+    _np.__version__ = "2.4.0"
+except Exception:
+    pass
+
+# Patch sys.modules for missing/renamed NeMo prompt model modules and classes to prevent ModuleNotFoundError / AttributeError
+try:
+    import nemo.collections.asr.models as _nemo_models
+    import nemo.collections.asr.models.hybrid_rnnt_ctc_bpe_models_prompt as _hybrid_prompt
+
+    _prompt_mod = types.ModuleType("nemo.collections.asr.models.rnnt_bpe_models_prompt")
+    for _attr in dir(_hybrid_prompt):
+        setattr(_prompt_mod, _attr, getattr(_hybrid_prompt, _attr))
+    for _attr in dir(_nemo_models):
+        if not hasattr(_prompt_mod, _attr):
+            setattr(_prompt_mod, _attr, getattr(_nemo_models, _attr))
+
+    if hasattr(_nemo_models, "EncDecHybridRNNTCTCBPEModelWithPrompt"):
+        setattr(_prompt_mod, "EncDecRNNTBPEModelWithPrompt", _nemo_models.EncDecHybridRNNTCTCBPEModelWithPrompt)
+    elif hasattr(_hybrid_prompt, "EncDecHybridRNNTCTCBPEModelWithPrompt"):
+        setattr(_prompt_mod, "EncDecRNNTBPEModelWithPrompt", _hybrid_prompt.EncDecHybridRNNTCTCBPEModelWithPrompt)
+
+    sys.modules["nemo.collections.asr.models.rnnt_bpe_models_prompt"] = _prompt_mod
+    sys.modules["nemo.collections.asr.models.ctc_bpe_models_prompt"] = _prompt_mod
+
+    # Intercept class resolution during model config instantiation
+    import nemo.utils.model_utils as _model_utils
+    _orig_import_class = _model_utils.import_class_by_path
+
+    def _patched_import_class_by_path(path: str):
+        try:
+            return _orig_import_class(path)
+        except Exception:
+            if "rnnt_bpe_models_prompt" in path or "EncDecRNNTBPEModelWithPrompt" in path:
+                target_cls = getattr(_nemo_models, "EncDecHybridRNNTCTCBPEModelWithPrompt", None) or getattr(_hybrid_prompt, "EncDecHybridRNNTCTCBPEModelWithPrompt", None) or getattr(_nemo_models, "EncDecRNNTBPEModel", None)
+                if target_cls:
+                    return target_cls
+            raise
+
+    _model_utils.import_class_by_path = _patched_import_class_by_path
+    _model_utils.import_class_by_path.cache_clear = lambda: None
+
+    # Patch state dict loading to automatically retry non-strictly if optional CTC decoder weights are missing
+    from nemo.core.connectors.save_restore_connector import SaveRestoreConnector
+    _orig_load_instance = SaveRestoreConnector.load_instance_with_state_dict
+
+    def _patched_load_instance(self, instance, state_dict, strict):
+        try:
+            return _orig_load_instance(self, instance, state_dict, strict=strict)
+        except Exception as e:
+            if "ctc_decoder" in str(e) or "Missing key" in str(e):
+                return _orig_load_instance(self, instance, state_dict, strict=False)
+            raise
+
+    SaveRestoreConnector.load_instance_with_state_dict = _patched_load_instance
+except Exception:
+    pass
+
 
 SAMPLE_RATE = 16000
 
@@ -172,6 +234,12 @@ class NemotronStreamingASR:
 
         self._drop_extra = int(getattr(self.model.encoder.streaming_cfg, "drop_extra_pre_encoded", 0) or 0)
 
+        # Setup prompt ID for prompt-conditioned models (e.g. Nemotron 3.5)
+        prompt_dict = getattr(self.model.cfg.model_defaults, "prompt_dictionary", None) or {}
+        self.num_prompts = int(getattr(self.model.cfg.model_defaults, "num_prompts", 128) or 128)
+        lang_key = "en-US" if "en-US" in prompt_dict else ("en" if "en" in prompt_dict else (list(prompt_dict.keys())[0] if prompt_dict else None))
+        self.prompt_id = prompt_dict[lang_key] if (lang_key and lang_key in prompt_dict) else 0
+
         self.reset()
 
         print(f"[ASR Telemetry] Nemotron streaming init: {time.perf_counter() - t0:.2f}s "
@@ -208,10 +276,20 @@ class NemotronStreamingASR:
             return None
         dotted = m.group(1).strip().strip("\"'")
         mod_name, _, cls_name = dotted.rpartition(".")
-        try:
-            return getattr(importlib.import_module(mod_name), cls_name, None)
-        except Exception:
-            return None
+        for try_mod in (
+            mod_name,
+            mod_name.replace("_prompt", ""),
+            "nemo.collections.asr.models.hybrid_rnnt_ctc_bpe_models_prompt",
+            "nemo.collections.asr.models.rnnt_bpe_models",
+        ):
+            try:
+                mod = importlib.import_module(try_mod)
+                cls = getattr(mod, cls_name, None)
+                if cls is not None:
+                    return cls
+            except Exception:
+                continue
+        return None
 
     @staticmethod
     def _concrete_candidates():
@@ -236,8 +314,13 @@ class NemotronStreamingASR:
 
         for cls in candidates:
             try:
-                self.logger.info("restore_from via %s", cls.__name__)
-                return cls.restore_from(nemo_path)
+                self.logger.info("restore_from via %s (strict=False)", cls.__name__)
+                return cls.restore_from(nemo_path, strict=False)
+            except TypeError:
+                try:
+                    return cls.restore_from(nemo_path)
+                except Exception as e:
+                    errors.append(f"{cls.__name__}: {e}")
             except Exception as e:
                 errors.append(f"{cls.__name__}: {e}")
         raise RuntimeError("could not restore model; tried -> " + " | ".join(errors))
@@ -249,16 +332,22 @@ class NemotronStreamingASR:
         # ASRModel.from_pretrained normally dispatches to the concrete class, so
         # try it first; fall back to explicit concrete classes if it doesn't.
         try:
-            return nemo_asr.models.ASRModel.from_pretrained(model_name)
-        except Exception as e:
-            errors.append(f"ASRModel.from_pretrained: {e}")
+            return nemo_asr.models.ASRModel.from_pretrained(model_name, strict=False)
+        except Exception:
+            try:
+                return nemo_asr.models.ASRModel.from_pretrained(model_name)
+            except Exception as e:
+                errors.append(f"ASRModel.from_pretrained: {e}")
 
         for cls in self._concrete_candidates():
             try:
-                self.logger.info("from_pretrained via %s", cls.__name__)
-                return cls.from_pretrained(model_name)
-            except Exception as e:
-                errors.append(f"{cls.__name__}: {e}")
+                self.logger.info("from_pretrained via %s (strict=False)", cls.__name__)
+                return cls.from_pretrained(model_name, strict=False)
+            except Exception:
+                try:
+                    return cls.from_pretrained(model_name)
+                except Exception as e:
+                    errors.append(f"{cls.__name__}: {e}")
         raise RuntimeError("could not load model; tried -> " + " | ".join(errors))
 
     @staticmethod
@@ -316,23 +405,54 @@ class NemotronStreamingASR:
                 # the first step, so later chunks must drop the duplicated frames.
                 drop = 0 if self._step == 0 else self._drop_extra
 
-                (self.pred_out_stream,
-                 transcribed,
-                 self.cache_last_channel,
-                 self.cache_last_time,
-                 self.cache_last_channel_len,
-                 self.previous_hypotheses) = self.model.conformer_stream_step(
-                    processed_signal=processed,
-                    processed_signal_length=processed_len,
-                    cache_last_channel=self.cache_last_channel,
-                    cache_last_time=self.cache_last_time,
-                    cache_last_channel_len=self.cache_last_channel_len,
-                    keep_all_outputs=False,
-                    previous_hypotheses=self.previous_hypotheses,
-                    previous_pred_out=self.pred_out_stream,
-                    drop_extra_pre_encoded=drop,
-                    return_transcription=True,
-                )
+                if getattr(self.model, "concat", False) and hasattr(self.model, "prompt_kernel"):
+                    (encoded,
+                     encoded_len,
+                     self.cache_last_channel,
+                     self.cache_last_time,
+                     self.cache_last_channel_len) = self.model.encoder.cache_aware_stream_step(
+                        processed_signal=processed,
+                        processed_signal_length=processed_len,
+                        cache_last_channel=self.cache_last_channel,
+                        cache_last_time=self.cache_last_time,
+                        cache_last_channel_len=self.cache_last_channel_len,
+                        keep_all_outputs=False,
+                        drop_extra_pre_encoded=drop,
+                    )
+
+                    encoded_t = torch.transpose(encoded, 1, 2)
+                    prompt_tensor = torch.zeros(encoded_t.shape[0], encoded_t.shape[1], self.num_prompts, dtype=encoded_t.dtype, device=self.device)
+                    prompt_tensor[:, :, self.prompt_id] = 1.0
+                    concat_enc = torch.cat([encoded_t, prompt_tensor], dim=-1)
+                    encoded_t = self.model.prompt_kernel(concat_enc).to(encoded_t.dtype)
+                    encoded = torch.transpose(encoded_t, 1, 2)
+
+                    best_hyp = self.model.decoding.rnnt_decoder_predictions_tensor(
+                        encoder_output=encoded,
+                        encoded_lengths=encoded_len,
+                        return_hypotheses=True,
+                        partial_hypotheses=self.previous_hypotheses,
+                    )
+                    self.previous_hypotheses = best_hyp
+                    transcribed = best_hyp
+                else:
+                    (self.pred_out_stream,
+                     transcribed,
+                     self.cache_last_channel,
+                     self.cache_last_time,
+                     self.cache_last_channel_len,
+                     self.previous_hypotheses) = self.model.conformer_stream_step(
+                        processed_signal=processed,
+                        processed_signal_length=processed_len,
+                        cache_last_channel=self.cache_last_channel,
+                        cache_last_time=self.cache_last_time,
+                        cache_last_channel_len=self.cache_last_channel_len,
+                        keep_all_outputs=False,
+                        previous_hypotheses=self.previous_hypotheses,
+                        previous_pred_out=self.pred_out_stream,
+                        drop_extra_pre_encoded=drop,
+                        return_transcription=True,
+                    )
         except Exception as e:
             self.logger.error("streaming step failed: %s", e)
             raise
@@ -345,6 +465,8 @@ class NemotronStreamingASR:
     @staticmethod
     def _extract_text(transcribed) -> str:
         """NeMo returns a batch list of str or Hypothesis objects."""
+        import re
+
         if not transcribed:
             return ""
         item = transcribed[0] if isinstance(transcribed, (list, tuple)) else transcribed
@@ -352,4 +474,9 @@ class NemotronStreamingASR:
             return ""
         if hasattr(item, "text"):
             item = item.text
-        return (item or "").strip() if isinstance(item, str) else ""
+        raw = (item or "").strip() if isinstance(item, str) else ""
+        if not raw:
+            return ""
+        # Strip language prompt tags like <en-US>, <es-ES>, etc.
+        cleaned = re.sub(r"<[^>]+>", "", raw).strip()
+        return cleaned

@@ -231,7 +231,7 @@ def run_session(model, opts, stop_event):
     max_utt_s = max(4.0, float(opts.get("maxUtt") or 12.0))
 
     sample_rate = 16000
-    silence_rms = 0.006
+    silence_rms = 0.001
 
     translator = Translator(translate_to) if translate_to else None
 
@@ -340,12 +340,7 @@ def run_session(model, opts, stop_event):
             return True
 
         if not utt_text:
-            # Idle silence: keep the origin current so the next cue starts at the
-            # speech, and periodically clear state during long quiet stretches.
             utt_start = stream_pos
-            if silence_run >= max(4.0, min_silence * 3):
-                model.reset()
-                silence_run = 0.0
         return False
 
     dbg(f"reading ffmpeg audio stream (chunk={chunk_dur:.2f}s / {chunk_samples} samples)...")
